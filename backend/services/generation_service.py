@@ -1,0 +1,141 @@
+from sqlalchemy.orm import Session
+
+from backend.core.config import settings
+from backend.db.repositories.generation_jobs import GenerationJobRepository
+from backend.integrations.ai.kling_motion import KlingMotionProvider
+from backend.integrations.ai.nanobanana import NanoBananaProvider
+from backend.integrations.ai.veo import VeoProvider
+from backend.services.balance_service import BalanceService
+from backend.services.user_service import UserService
+from shared.enums.credit_transaction_type import CreditTransactionType
+from shared.enums.job_status import JobStatus
+from shared.enums.providers import AIProvider
+
+
+GENERATION_CREDIT_COSTS = {
+    AIProvider.NANO_BANANA: 12,
+    AIProvider.KLING: 24,
+    AIProvider.VEO: 36,
+}
+
+
+class GenerationService:
+    def __init__(self, db: Session) -> None:
+        self.repo = GenerationJobRepository(db)
+        self.user_service = UserService(db)
+        self.balance_service = BalanceService(db)
+
+    def _get_provider_client(self, provider: str):
+        if provider == AIProvider.NANO_BANANA:
+            return NanoBananaProvider()
+        if provider == AIProvider.KLING:
+            return KlingMotionProvider()
+        if provider == AIProvider.VEO:
+            return VeoProvider()
+        raise ValueError("Unsupported AI provider")
+
+    def _get_credit_cost(self, provider: str) -> int:
+        try:
+            return GENERATION_CREDIT_COSTS[AIProvider(provider)]
+        except (KeyError, ValueError) as exc:
+            raise ValueError("Unsupported AI provider") from exc
+
+    def create_job_for_user(
+        self,
+        *,
+        telegram_user_id: int,
+        provider: str,
+        prompt: str,
+        source_image_url: str | None = None,
+        process_now: bool | None = None,
+    ):
+        if not prompt.strip():
+            raise ValueError("Prompt is required")
+
+        user = self.user_service.get_user_by_telegram_id(telegram_user_id)
+        if not user:
+            raise ValueError("User not found")
+
+        cost = self._get_credit_cost(provider)
+        current_balance = self.balance_service.get_balance_value(user.id)
+        if current_balance < cost:
+            raise ValueError("Not enough credits")
+
+        job = self.repo.create_job(
+            user_id=user.id,
+            provider=provider,
+            prompt=prompt.strip(),
+            source_image_url=source_image_url,
+            status=JobStatus.PENDING,
+            credits_reserved=cost,
+        )
+        self.balance_service.subtract_credits(
+            user_id=user.id,
+            amount=cost,
+            transaction_type=CreditTransactionType.RESERVE,
+            reference_type="generation_job",
+            reference_id=str(job.id),
+            comment=f"Credits reserved for {provider} generation job",
+        )
+
+        should_process_now = settings.generation_process_now if process_now is None else process_now
+        if should_process_now:
+            return self.process_job(job.id)
+        self.enqueue_job(job.id)
+        return job
+
+    def enqueue_job(self, job_id: int) -> None:
+        from worker.tasks.generation_tasks import run_generation_job
+
+        run_generation_job.delay(job_id)
+
+    def process_job(self, job_id: int):
+        job = self.repo.get_by_id(job_id)
+        if not job:
+            raise ValueError("Job not found")
+
+        if job.status == JobStatus.COMPLETED:
+            return job
+        if job.status in (JobStatus.FAILED, JobStatus.CANCELLED):
+            return job
+
+        provider = self._get_provider_client(job.provider)
+        self.repo.update_job(job, status=JobStatus.PROCESSING)
+
+        try:
+            result = provider.generate(
+                prompt=job.prompt,
+                source_image_url=job.source_image_url,
+            )
+            return self.repo.update_job(
+                job,
+                status=JobStatus.COMPLETED,
+                external_job_id=result.external_job_id,
+                result_url=result.result_url,
+                result_payload=result.result_payload,
+                completed=True,
+            )
+        except Exception as exc:
+            self.balance_service.add_credits(
+                user_id=job.user_id,
+                amount=job.credits_reserved,
+                transaction_type=CreditTransactionType.REFUND,
+                reference_type="generation_job",
+                reference_id=str(job.id),
+                comment=f"Refund after failed generation job {job.id}",
+            )
+            return self.repo.update_job(
+                job,
+                status=JobStatus.FAILED,
+                error_message=str(exc),
+                completed=True,
+            )
+
+    def get_job(self, job_id: int):
+        return self.repo.get_by_id(job_id)
+
+    def get_user_jobs(self, telegram_user_id: int, limit: int = 20):
+        user = self.user_service.get_user_by_telegram_id(telegram_user_id)
+        if not user:
+            raise ValueError("User not found")
+        return self.repo.get_by_user_id(user.id, limit=limit)
