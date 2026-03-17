@@ -2,7 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "python -m pip install -r requirements.txt",
+    "buildCommand": "python -m pip install -r ../requirements.txt",
     "watchPatterns": [
       "/backend/**",
       "/worker/**",
@@ -11,7 +11,7 @@
     ]
   },
   "deploy": {
-    "startCommand": "sh scripts/railway/start-worker.sh",
+    "startCommand": "PYTHONPATH=.. python -m celery -A worker.main.celery_app worker -l info",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10,
     "runtime": "V2"
