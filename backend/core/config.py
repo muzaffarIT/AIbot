@@ -44,9 +44,22 @@ class Settings(BaseSettings):
     payme_merchant_id: str | None = None
     payme_secret_key: str | None = None
 
+    payment_provider: str = "stars"
+    admin_ids: str = ""
+
     click_merchant_id: str | None = None
     click_service_id: str | None = None
     click_secret_key: str | None = None
+
+    @field_validator("secret_key", mode="before")
+    @classmethod
+    def validate_secret_key(cls, value: Any) -> Any:
+        if not value or value == "muzaffar":
+            raise ValueError(
+                "SECRET_KEY не задан! Сгенерируй командой: "
+                "python -c 'import secrets; print(secrets.token_hex(32))'"
+            )
+        return value
 
     @field_validator("debug", mode="before")
     @classmethod
