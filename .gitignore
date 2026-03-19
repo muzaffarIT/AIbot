@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Env files
+.env
+.env.local
+*.env.local
+miniapp/.env.local
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Pytest
+.pytest_cache/
+
+# Mypy
+.mypy_cache/
+
+# Alembic / migrations cache
+*.sqlite3
+
+# Build
+build/
+dist/
+*.egg-info/
+miniapp/.next/
+miniapp/node_modules/
+
+# Local storage
+storage/
+tmp/
+*.db

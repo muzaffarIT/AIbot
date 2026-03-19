@@ -1,0 +1,19 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "python -m pip install -r ../requirements.txt",
+    "watchPatterns": [
+      "/backend/**",
+      "/worker/**",
+      "/shared/**",
+      "/requirements.txt"
+    ]
+  },
+  "deploy": {
+    "startCommand": "PYTHONPATH=.. python -m celery -A worker.main.celery_app worker -l info",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "runtime": "V2"
+  }
+}
