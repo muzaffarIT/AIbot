@@ -36,5 +36,7 @@
   "orders.paid": "Заказ успешно оплачен",
   "menu.open_cabinet": "Открыть кабинет",
   "jobs.history.title": "Последние генерации:",
-  "jobs.history.empty": "У вас пока нет генераций"
+  "jobs.history.empty": "У вас пока нет генераций",
+  "menu.support": "Поддержка",
+  "start.launch_app": "👇 Нажмите кнопку ниже, чтобы открыть Mini App и начать работу!"
 }

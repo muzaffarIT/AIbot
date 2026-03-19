@@ -2,6 +2,7 @@ import time
 import requests
 import asyncio
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from backend.db.session import SessionLocal
 from backend.services.generation_service import GenerationService
@@ -156,7 +157,7 @@ def run_generation_job(job_id: int) -> dict:
                     result_url=final_result_url,
                     completed=True
                 )
-                if chat_id and bot_token:
+                if chat_id and bot_token and isinstance(final_result_url, str):
                     asyncio.run(_notify_success(chat_id, bot_token, job.provider, job.prompt, final_result_url, is_video))
                 return {"job_id": job.id, "status": "completed", "result_url": final_result_url}
             else:
@@ -184,10 +185,18 @@ async def _notify_success(chat_id: int, bot_token: str, provider: str, prompt: s
     bot = Bot(token=bot_token)
     try:
         text = f"✅ Ваша генерация ({provider}) готова!\nПромпт: {prompt}"
+        
+        markup = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 Сгенерировать ещё", callback_data=f"gen_again:{provider}")],
+                [InlineKeyboardButton(text="🏠 Главное меню", callback_data="start_menu")]
+            ]
+        )
+        
         if is_video:
-            await bot.send_video(chat_id=chat_id, video=url, caption=text)
+            await bot.send_video(chat_id=chat_id, video=url, caption=text, reply_markup=markup)
         else:
-            await bot.send_photo(chat_id=chat_id, photo=url, caption=text)
+            await bot.send_photo(chat_id=chat_id, photo=url, caption=text, reply_markup=markup)
     finally:
         await bot.session.close()
 

@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from bot.keyboards.language import language_keyboard
 from bot.keyboards.main_menu import main_menu_keyboard
+from bot.keyboards.start import welcome_inline_keyboard
 from bot.keyboards.webapp import open_cabinet_keyboard
 from bot.services.db_session import get_db_session
 from backend.services.user_service import UserService
@@ -48,9 +49,16 @@ async def process_language(callback: CallbackQuery) -> None:
         user_service = UserService(db)
         user_service.set_user_language(callback.from_user.id, lang)
 
+        # Send the standard reply keyboard as a fallback Menu (can be invisible if we want, but keeping it visible is standard)
         await callback.message.answer(
             i18n.t(lang, "start.welcome"),
             reply_markup=main_menu_keyboard(lang),
+        )
+        
+        # Send the rich inline keyboard
+        await callback.message.answer(
+            "👇",
+            reply_markup=welcome_inline_keyboard(lang),
         )
         await callback.answer()
     finally:

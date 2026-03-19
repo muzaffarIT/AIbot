@@ -8,6 +8,8 @@ from bot.services.db_session import get_db_session
 from bot.states.veo_states import VeoStates
 from shared.enums.providers import AIProvider
 from shared.utils.i18n import I18n
+from bot.services.progress import track_generation_progress
+import asyncio
 
 router = Router()
 i18n = I18n()
@@ -26,6 +28,11 @@ async def ask_for_prompt(message: Message, state: FSMContext) -> None:
 
 @router.message(VeoStates.waiting_for_prompt)
 async def create_veo_job(message: Message, state: FSMContext) -> None:
+    prompt = message.text or ""
+    if len(prompt) < 3 or len(prompt) > 500:
+        await message.answer("❌ Длина промпта должна быть от 3 до 500 символов. Пожалуйста, отправьте другой промпт.")
+        return
+
     db = get_db_session()
     try:
         user = UserService(db).get_or_create_user(
@@ -41,15 +48,15 @@ async def create_veo_job(message: Message, state: FSMContext) -> None:
         )
 
         lines = [
-            "Задача на Veo создана.",
-            f"Job ID: {job.id}",
-            f"Статус: {job.status}",
-            f"Списано кредитов: {job.credits_reserved}",
+            "⏳ Задача на генерацию видео через Veo создана и отправлена в очередь.",
+            f"ID: {job.id}",
         ]
-        if job.result_url:
-            lines.append(f"Результат: {job.result_url}")
-
-        await message.answer("\n".join(lines))
+        msg = await message.answer("\n".join(lines))
+        
+        # Start background progress tracking
+        asyncio.create_task(
+            track_generation_progress(message.bot, message.chat.id, msg.message_id, job.id)
+        )
     except ValueError as exc:
         await message.answer(str(exc))
     finally:

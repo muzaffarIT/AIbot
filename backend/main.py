@@ -1,9 +1,20 @@
+import os
+import logging
+from logging.handlers import RotatingFileHandler
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.main_router import api_router
 from backend.core.config import settings
 from backend.db.init_db import init_db
+
+os.makedirs("logs", exist_ok=True)
+file_handler = RotatingFileHandler("logs/errors.log", maxBytes=10*1024*1024, backupCount=5)
+file_handler.setLevel(logging.ERROR)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logging.getLogger().addHandler(file_handler)
 
 app = FastAPI(title="AI Bot Backend")
 

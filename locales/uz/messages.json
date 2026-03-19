@@ -36,5 +36,7 @@
   "orders.paid": "Buyurtma muvaffaqiyatli to‘landi",
   "menu.open_cabinet": "Kabinetni ochish",
   "jobs.history.title": "So‘nggi generatsiyalar:",
-  "jobs.history.empty": "Sizda hozircha generatsiyalar yo‘q"
+  "jobs.history.empty": "Sizda hozircha generatsiyalar yo‘q",
+  "menu.support": "Qo'llab-quvvatlash",
+  "start.launch_app": "👇 Mini App ni ochish va ishlashni boshlash uchun quyidagi tugmani bosing!"
 }
