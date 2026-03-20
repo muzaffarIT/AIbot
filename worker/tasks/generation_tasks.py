@@ -71,6 +71,8 @@ def run_generation_job(job_id: int) -> dict:
                 "width": 1024,
                 "height": 1024
             }
+            if job.source_image_url:
+                payload["image_url"] = job.source_image_url
             poll_interval = 5
             poll_timeout = 120
             is_video = False
@@ -82,6 +84,8 @@ def run_generation_job(job_id: int) -> dict:
                 "duration": 8,
                 "quality": "fast"
             }
+            if job.source_image_url:
+                payload["image_url"] = job.source_image_url
             poll_interval = 10
             poll_timeout = 300
             is_video = True
@@ -93,6 +97,8 @@ def run_generation_job(job_id: int) -> dict:
                 "duration": 5,
                 "mode": "std"
             }
+            if job.source_image_url:
+                payload["image_url"] = job.source_image_url
             poll_interval = 15
             poll_timeout = 600
             is_video = True

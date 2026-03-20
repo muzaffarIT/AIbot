@@ -13,9 +13,9 @@ from shared.enums.providers import AIProvider
 
 
 GENERATION_CREDIT_COSTS = {
-    AIProvider.NANO_BANANA: 12,
-    AIProvider.KLING: 24,
-    AIProvider.VEO: 36,
+    AIProvider.NANO_BANANA: 5,
+    AIProvider.KLING: 40,
+    AIProvider.VEO: 30,
 }
 
 
