@@ -7,9 +7,8 @@ from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
 
 from backend.db.init_db import init_db
-from bot.handlers.kling import router as kling_router
+from bot.handlers.veo import router as veo_router  # handles F.photo, veo, AND kling
 from bot.handlers.nanobanana import router as nanobanana_router
-from bot.handlers.veo import router as veo_router
 from bot.handlers.jobs import router as jobs_router
 from bot.handlers.balance import router as balance_router
 from bot.handlers.payments import router as payments_router
@@ -40,14 +39,13 @@ async def main() -> None:
     dp = Dispatcher()
     dp.message.middleware(GenerationRateLimitMiddleware(limit=3, interval=60))
 
-    dp.include_router(nanobanana_router)
-    dp.include_router(kling_router)
-    dp.include_router(veo_router)
+    dp.include_router(start_router)      # /start command
+    dp.include_router(callbacks_router)   # all inline callbacks
+    dp.include_router(payments_router)    # Stars payment events
+    dp.include_router(veo_router)         # F.photo + Veo + Kling prompt states
+    dp.include_router(nanobanana_router)  # Nano Banana prompt state
     dp.include_router(jobs_router)
     dp.include_router(balance_router)
-    dp.include_router(payments_router)
-    dp.include_router(start_router)
-    dp.include_router(callbacks_router)
     dp.include_router(history_router)
     dp.include_router(admin_router)
 
