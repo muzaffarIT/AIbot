@@ -8,9 +8,19 @@ from backend.services.balance_service import BalanceService
 
 router = APIRouter()
 
+FREE_CREDITS_ON_REGISTER = 5
+
 
 class EnsureUserRequest(BaseModel):
     telegram_user_id: int
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    language_code: str | None = None
+
+
+class SyncUserRequest(BaseModel):
+    telegram_id: int
     username: str | None = None
     first_name: str | None = None
     last_name: str | None = None
@@ -27,6 +37,27 @@ def serialize_user(user, credits_balance: int) -> dict:
         "language_code": user.language_code,
         "credits_balance": credits_balance,
     }
+
+
+@router.post("/sync")
+def sync_user(payload: SyncUserRequest) -> dict:
+    """Upsert user from Mini App. Always returns 200 with user data."""
+    db: Session = SessionLocal()
+    try:
+        user_service = UserService(db)
+        balance_service = BalanceService(db)
+
+        user = user_service.get_or_create_user(
+            telegram_user_id=payload.telegram_id,
+            username=payload.username,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            language_code=payload.language_code,
+        )
+        credits_balance = balance_service.get_balance_value(user.id)
+        return serialize_user(user, credits_balance)
+    finally:
+        db.close()
 
 
 @router.post("/ensure")
@@ -63,3 +94,4 @@ def get_user(telegram_user_id: int) -> dict:
         return serialize_user(user, credits_balance)
     finally:
         db.close()
+

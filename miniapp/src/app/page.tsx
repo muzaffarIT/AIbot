@@ -55,6 +55,12 @@ export default function HomePage() {
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isTelegram, setIsTelegram] = useState(true);
+
+  useEffect(() => {
+    // Check if opened from Telegram
+    setIsTelegram(Boolean(window.Telegram?.WebApp?.initData));
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -125,8 +131,14 @@ export default function HomePage() {
           </div>
         </motion.section>
 
-        {error && (
+        {error && !isTelegram && (
           <motion.div variants={itemVariants} className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-3 text-red-400">
+            <AlertCircle className="shrink-0 mt-0.5" size={18} />
+            <p className="text-sm font-medium">{error}</p>
+          </motion.div>
+        )}
+        {error && isTelegram && (
+          <motion.div variants={itemVariants} className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-start gap-3 text-yellow-400">
             <AlertCircle className="shrink-0 mt-0.5" size={18} />
             <p className="text-sm font-medium">{error}</p>
           </motion.div>

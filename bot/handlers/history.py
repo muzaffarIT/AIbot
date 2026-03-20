@@ -22,7 +22,7 @@ async def callback_history(callback: CallbackQuery) -> None:
     await send_history(callback.message, callback.from_user.id)
     await callback.answer()
 
-async def send_history(message: Message, telegram_id: int = None) -> None:
+async def send_history(message: Message, telegram_id: int | None = None) -> None:
     db = get_db_session()
     try:
         user_id = telegram_id or message.from_user.id

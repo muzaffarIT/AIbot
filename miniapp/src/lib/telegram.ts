@@ -14,9 +14,16 @@ declare global {
       WebApp?: {
         ready: () => void;
         expand: () => void;
+        close: () => void;
         sendData?: (data: string) => void;
+        initData?: string;
         initDataUnsafe?: {
           user?: TelegramUser;
+        };
+        HapticFeedback?: {
+          impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+          notificationOccurred: (type: "error" | "success" | "warning") => void;
+          selectionChanged: () => void;
         };
       };
     };
