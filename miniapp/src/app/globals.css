@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-900: #0A0A0F;
+  --color-brand-800: #13131A;
+  --color-brand-700: #1E1E2E;
+  --color-brand-primary: #7C3AED;
+  --color-brand-cyan: #06B6D4;
+  --color-brand-accent: #ffb36b;
+  --font-inter: "Inter", sans-serif;
+}
+
+@layer base {
+  html {
+    min-height: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    color: #f7f1e8;
+    background-color: var(--color-brand-900);
+    /* Vibrant dark theme background */
+    background-image: 
+      radial-gradient(circle at top left, rgba(124, 58, 237, 0.15), transparent 40%),
+      radial-gradient(circle at top right, rgba(6, 182, 212, 0.15), transparent 40%),
+      linear-gradient(180deg, var(--color-brand-900) 0%, var(--color-brand-800) 100%);
+    background-attachment: fixed;
+    /* Apply Telegram safe areas variables if available */
+    padding-top: var(--tg-safe-area-inset-top, 0px);
+    padding-bottom: var(--tg-safe-area-inset-bottom, 80px); /* 80px for the bottom tab bar */
+    padding-left: var(--tg-safe-area-inset-left, 0px);
+    padding-right: var(--tg-safe-area-inset-right, 0px);
+  }
+
+  /* Typography improvements */
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tighter;
+  }
+}
+
+@layer components {
+  /* Glassmorphism utility */
+  .glass-card {
+    @apply bg-brand-800/60 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl;
+  }
+  
+  .glass-panel {
+    @apply bg-brand-700/50 backdrop-blur-md border border-white/5 rounded-2xl;
+  }
+
+  /* Premium Buttons */
+  .btn-primary {
+    @apply relative overflow-hidden flex items-center justify-center min-h-[56px] px-6 rounded-2xl font-semibold text-white bg-gradient-to-r from-brand-primary to-brand-cyan transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(124,58,237,0.3)];
+  }
+
+  .btn-secondary {
+    @apply flex items-center justify-center min-h-[56px] px-6 rounded-2xl font-medium text-white bg-white/10 border border-white/10 transition-all duration-300 hover:bg-white/15 active:scale-[0.98] disabled:opacity-50;
+  }
+
+  /* Custom inputs for dark theme */
+  .input-premium {
+    @apply w-full bg-brand-800/80 border border-white/10 rounded-2xl text-white placeholder-white/40 px-5 py-4 focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary/50 transition-all duration-300 backdrop-blur-sm;
+  }
+  
+  /* Animated gradient text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-cyan via-brand-primary to-brand-accent bg-[length:200%_auto];
+    animation: gradient 8s linear infinite;
+  }
+}
+
+/* Animations */
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Hide scrollbar for clean app-like feel */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
