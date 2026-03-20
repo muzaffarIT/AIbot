@@ -9,7 +9,7 @@ import os
 import asyncio
 import time
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from backend.core.config import settings
 
@@ -21,7 +21,7 @@ MAX_FILE_AGE_SECONDS = 3600  # 1 hour
 
 
 @router.post("")
-async def upload_image(file: UploadFile = File(...)) -> dict:
+async def upload_image(file: UploadFile, background_tasks: BackgroundTasks) -> dict:
     """Accept an image and return a URL accessible by KIE.ai."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are accepted.")
@@ -33,12 +33,13 @@ async def upload_image(file: UploadFile = File(...)) -> dict:
     content = await file.read()
     filepath.write_bytes(content)
 
-    # Clean up old files in background
-    asyncio.create_task(_cleanup_old_files())
+    # Schedule cleanup in background
+    background_tasks.add_task(_cleanup_old_files)
 
     base_url = (settings.miniapp_url or "").rstrip("/")
     file_url = f"{base_url}/api/upload/{filename}"
     return {"url": file_url}
+
 
 
 @router.get("/{filename}")

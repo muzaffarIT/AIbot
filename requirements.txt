@@ -12,3 +12,4 @@ python-dotenv==1.1.0
 orjson==3.10.18
 alembic==1.15.2
 requests>=2.31.0
+python-multipart==0.0.20
