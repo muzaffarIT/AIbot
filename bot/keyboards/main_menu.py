@@ -1,38 +1,37 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
-from shared.utils.i18n import I18n
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from backend.core.config import settings
 
-i18n = I18n()
 
-
-def main_menu_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
-    builder = ReplyKeyboardBuilder()
-
-    builder.row(
-        KeyboardButton(
-            text=i18n.t(lang, "menu.open_cabinet"),
-            web_app=WebAppInfo(url=settings.miniapp_url + "/"),
-        )
+def main_inline_keyboard() -> InlineKeyboardMarkup:
+    """Clean inline keyboard shown after /start."""
+    miniapp_url = (settings.miniapp_url or "").rstrip("/")
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎨 Создать", callback_data="menu_create"),
+                InlineKeyboardButton(text="💎 Тарифы", callback_data="menu_plans"),
+            ],
+            [
+                InlineKeyboardButton(text="📊 Мои работы", callback_data="history_cmd"),
+                InlineKeyboardButton(text="💰 Баланс", callback_data="menu_balance"),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Открыть кабинет",
+                    web_app=WebAppInfo(url=miniapp_url),
+                ),
+            ],
+        ]
     )
 
-    builder.row(
-        KeyboardButton(text=i18n.t(lang, "menu.generate_image")),
-        KeyboardButton(text=i18n.t(lang, "menu.create_video")),
-    )
-    
-    builder.row(
-        KeyboardButton(text=i18n.t(lang, "menu.animate_image")),
-        KeyboardButton(text=i18n.t(lang, "menu.jobs")),
-    )
 
-    builder.row(
-        KeyboardButton(text=i18n.t(lang, "menu.buy")),
-        KeyboardButton(text=i18n.t(lang, "menu.balance")),
+def create_submenu_keyboard() -> InlineKeyboardMarkup:
+    """Submenu for choosing AI provider."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🍌 Nano Banana — картинка", callback_data="gen_start:nano_banana")],
+            [InlineKeyboardButton(text="🎬 Veo 3 — видео", callback_data="gen_start:veo")],
+            [InlineKeyboardButton(text="🎥 Kling Motion — видео", callback_data="gen_start:kling")],
+            [InlineKeyboardButton(text="← Назад", callback_data="start_menu")],
+        ]
     )
-    
-    builder.row(
-        KeyboardButton(text=i18n.t(lang, "menu.language")),
-    )
-
-    return builder.as_markup(resize_keyboard=True)
