@@ -54,11 +54,9 @@ class Settings(BaseSettings):
     @field_validator("secret_key", mode="before")
     @classmethod
     def validate_secret_key(cls, value: Any) -> Any:
-        if not value or value == "muzaffar":
-            raise ValueError(
-                "SECRET_KEY не задан! Сгенерируй командой: "
-                "python -c 'import secrets; print(secrets.token_hex(32))'"
-            )
+        if not value:
+            import secrets
+            return secrets.token_hex(32)
         return value
 
     @field_validator("debug", mode="before")
