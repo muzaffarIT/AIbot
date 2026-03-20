@@ -36,7 +36,7 @@ def _do_post_request(url: str, headers: dict, json_data: dict, max_retries: int 
 
 
 @celery_app.task(name="worker.tasks.generation_tasks.run_generation_job")
-def run_generation_job(job_id: int) -> dict:
+def run_generation_job(job_id: int) -> dict | None:
     logger.info(f"[Job {job_id}] Starting generation task")
     db = SessionLocal()
     try:
@@ -111,9 +111,11 @@ def run_generation_job(job_id: int) -> dict:
 
         # 1. Start generation
         try:
-            logger.info(f"[Job {job_id}] POST {url} payload={str(payload)[:200]}")
+            _payload_str: str = str(payload)
+            logger.info(f"[Job {job_id}] POST {url} payload={_payload_str[:200]}")
             start_data = _do_post_request(url, headers, payload)
-            logger.info(f"[Job {job_id}] KIE response: {str(start_data)[:300]}")
+            _start_str: str = str(start_data)
+            logger.info(f"[Job {job_id}] KIE response: {_start_str[:300]}")
             task_id = start_data.get("id") or (start_data.get("data") and start_data["data"].get("task_id"))
             if not task_id:
                 raise ValueError(f"No task_id in response: {start_data}")
@@ -133,16 +135,18 @@ def run_generation_job(job_id: int) -> dict:
         try:
             # 2. Polling
             poll_url = f"{base_url}/v1/task/{task_id}"
-            elapsed = 0
-            final_result_url = None
-            
-            while elapsed < poll_timeout:
+            elapsed: int = 0
+            final_result_url: str | None = None
+            poll_timeout_int: int = int(poll_timeout)
+            poll_interval_int: int = int(poll_interval)
+
+            while elapsed < poll_timeout_int:
                 try:
                     resp = requests.get(poll_url, headers=headers, timeout=10)
                     resp.raise_for_status()
                     poll_data = resp.json()
                     status = poll_data.get("status")
-                    
+
                     if status == "completed":
                         if is_video:
                             final_result_url = poll_data.get("data", {}).get("result", {}).get("video_url")
@@ -151,12 +155,12 @@ def run_generation_job(job_id: int) -> dict:
                         break
                     elif status == "failed":
                         raise ValueError("Task failed during polling")
-                        
+
                 except Exception as e:
-                    pass # Ignore occasional network errors during polling
-                    
-                time.sleep(poll_interval)
-                elapsed += poll_interval
+                    pass  # Ignore occasional network errors during polling
+
+                time.sleep(poll_interval_int)
+                elapsed += poll_interval_int
 
             # 3. Finalize
             bot_token = settings.bot_token
