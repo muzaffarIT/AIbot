@@ -22,19 +22,15 @@ export function useMiniAppUser() {
   useEffect(() => {
     initTelegramWebApp();
 
-    const user = getTelegramUser();
-    setTelegramUser(user);
-    setLanguage(normalizeLanguage(user?.language_code));
+    let attempts = 0;
 
-    async function sync() {
-      if (!user?.id) {
-        setLoading(false);
-        return;
-      }
+    async function sync(user: TelegramUser) {
+      setTelegramUser(user);
+      setLanguage(normalizeLanguage(user?.language_code));
 
       try {
         const ensuredUser = await ensureUser({
-          telegram_user_id: user.id,
+          telegram_user_id: user.id!,
           username: user.username,
           first_name: user.first_name,
           last_name: user.last_name,
@@ -52,7 +48,19 @@ export function useMiniAppUser() {
       }
     }
 
-    void sync();
+    function checkUser() {
+      const user = getTelegramUser();
+      if (user?.id) {
+        void sync(user);
+      } else if (attempts < 20) {
+        attempts++;
+        setTimeout(checkUser, 100);
+      } else {
+        setLoading(false);
+      }
+    }
+
+    checkUser();
   }, []);
 
   useEffect(() => {
