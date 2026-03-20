@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from sqlalchemy import BigInteger, DateTime, Integer, String, func
@@ -27,6 +27,14 @@ class User(Base):
     )
     referred_by_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     referral_earnings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Daily streak
+    last_daily_claim: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    daily_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Notifications
+    last_notification_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

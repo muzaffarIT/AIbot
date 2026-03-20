@@ -6,21 +6,36 @@ from backend.services.plan_service import PlanService
 
 
 def _run_migrations(db) -> None:
-    """Add new columns to existing tables if they don't exist (safe idempotent migration)."""
+    """Add new columns/tables idempotently at startup (safe to run multiple times)."""
     from sqlalchemy import text
+
     migrations = [
         # Referral system columns on users table
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(16) UNIQUE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_telegram_id BIGINT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_earnings INTEGER DEFAULT 0 NOT NULL",
-        # Backfill referral_code for existing users (generate random codes)
+        # Backfill referral_code for existing users
         "UPDATE users SET referral_code = upper(substr(md5(telegram_user_id::text), 1, 8)) WHERE referral_code IS NULL",
+        # Daily streak columns
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim TIMESTAMPTZ",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER DEFAULT 0 NOT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS max_streak INTEGER DEFAULT 0 NOT NULL",
+        # Notifications
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_notification_at TIMESTAMPTZ",
+        # Achievements table
+        """CREATE TABLE IF NOT EXISTS achievements (
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            achievement_code VARCHAR(64) NOT NULL,
+            earned_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_achievements_user_id ON achievements (user_id)",
     ]
     for sql in migrations:
         try:
             db.execute(text(sql))
         except Exception:
-            pass  # Column already exists or other harmless error
+            db.rollback()  # rollback bad statement individually
     db.commit()
 
 

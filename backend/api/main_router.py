@@ -10,6 +10,7 @@ from backend.api.routes.upload import router as upload_router
 from backend.api.routes.cards_webhook import router as cards_webhook_router
 from backend.api.routes.payme_webhook import router as payme_webhook_router
 from backend.api.routes.click_webhook import router as click_webhook_router
+from backend.api.routes.debug import router as debug_router
 
 api_router = APIRouter()
 api_router.include_router(users_router, prefix="/users", tags=["users"])
@@ -22,4 +23,5 @@ api_router.include_router(upload_router, prefix="/upload", tags=["upload"])
 api_router.include_router(cards_webhook_router, prefix="/webhooks/cards", tags=["webhooks"])
 api_router.include_router(payme_webhook_router, prefix="/webhooks/payme", tags=["webhooks"])
 api_router.include_router(click_webhook_router, prefix="/webhooks/click", tags=["webhooks"])
+api_router.include_router(debug_router, tags=["debug"])
 
