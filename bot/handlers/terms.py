@@ -1,65 +1,54 @@
+"""
+Bilingual /terms handler.
+"""
 from aiogram import F, Router
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 
-from bot.keyboards.main_menu import main_inline_keyboard
+from bot.services.db_session import get_db_session
+from backend.services.user_service import UserService
+from shared.utils.i18n import I18n
 
 router = Router()
+i18n = I18n()
 
-TERMS_TEXT = """📄 <b>Пользовательское соглашение BATIR AI</b>
 
-<b>1. Общие положения</b>
-Используя бота BATIR AI, вы соглашаетесь с настоящими условиями.
-Сервис предоставляется «как есть» без гарантий результата.
-
-<b>2. Кредиты и оплата</b>
-• Кредиты приобретаются за Telegram Stars
-• Кредиты не возвращаются после успешной генерации
-• При технической ошибке кредиты возвращаются автоматически
-• Кредиты не имеют срока действия
-
-<b>3. Контент</b>
-• Вы несёте ответственность за содержание промптов
-• Запрещено генерировать контент 18+, насилие, незаконные материалы
-• Мы вправе заблокировать аккаунт за нарушения
-
-<b>4. Партнёрская программа</b>
-• 20 кредитов начисляются за первую покупку реферала
-• Реферальные кредиты не выводятся в деньги
-• Мошеннические схемы приведут к блокировке
-
-<b>5. Конфиденциальность</b>
-• Мы храним только Telegram ID и историю генераций
-• Данные не передаются третьим лицам
-• История генераций хранится 30 дней
-
-<b>6. Поддержка</b>
-Контакт: @khaetov_000
-
-<b>7. Изменения</b>
-Мы вправе обновлять соглашение.
-Продолжая использовать бот — вы принимаете изменения.
-"""
+def _get_lang(telegram_id: int) -> str:
+    db = get_db_session()
+    try:
+        user = UserService(db).get_user_by_telegram_id(telegram_id)
+        return (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
 
 
 @router.message(Command("terms"))
-async def show_terms(message: Message) -> None:
+async def show_terms_cmd(message: Message) -> None:
+    lang = _get_lang(message.from_user.id)
+    btn_text = "✅ Qabul qilaman" if lang == "uz" else "✅ Принимаю"
     await message.answer(
-        TERMS_TEXT,
-        parse_mode="HTML",
+        i18n.t(lang, "terms.text"),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Принимаю", callback_data="start_menu")],
+            [InlineKeyboardButton(text=btn_text, callback_data="terms_accept")]
         ]),
     )
 
 
 @router.callback_query(F.data == "menu_terms")
-async def show_terms_callback(callback) -> None:
+async def show_terms_callback(callback: CallbackQuery) -> None:
+    lang = _get_lang(callback.from_user.id)
+    btn_text = "✅ Qabul qilaman" if lang == "uz" else "✅ Принимаю"
     await callback.message.answer(
-        TERMS_TEXT,
-        parse_mode="HTML",
+        i18n.t(lang, "terms.text"),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Принимаю", callback_data="start_menu")],
+            [InlineKeyboardButton(text=btn_text, callback_data="terms_accept")]
         ]),
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "terms_accept")
+async def accept_terms(callback: CallbackQuery) -> None:
+    lang = _get_lang(callback.from_user.id)
+    msg = "✅ Qabul qildi! Raxmat." if lang == "uz" else "✅ Принято! Спасибо."
+    await callback.answer(msg, show_alert=False)

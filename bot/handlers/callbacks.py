@@ -59,35 +59,177 @@ async def process_menu_create(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("gen_start:"))
 async def process_gen_start(callback: CallbackQuery, state: FSMContext) -> None:
     provider = callback.data.split(":")[1]
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
 
-    prompts = {
-        AIProvider.NANO_BANANA: (
-            NanoBananaStates.waiting_for_prompt,
-            "🍌 <b>Nano Banana</b> — генерация изображения\n\n"
-            "✏️ Напиши промпт на английском:\n<i>Пример: a futuristic cat in neon city, 4k, cinematic</i>\n\n"
-            "📎 Или отправь фото + промпт в подписи для Image-to-Image",
-        ),
-        AIProvider.VEO: (
-            VeoStates.waiting_for_prompt,
-            "🎬 <b>Veo 3</b> — генерация видео\n\n"
-            "✏️ Напиши промпт:\n<i>Пример: a dragon flying over mountains, epic, slow motion</i>\n\n"
-            "📎 Или отправь фото + промпт чтобы оживить изображение",
-        ),
-        AIProvider.KLING: (
-            KlingStates.waiting_for_prompt,
-            "🎥 <b>Kling Motion</b> — анимация\n\n"
-            "✏️ Напиши промпт:\n<i>Пример: she smiles slowly, cinematic, portrait</i>\n\n"
-            "📎 Или отправь фото + промпт чтобы оживить изображение",
-        ),
-    }
-
-    if provider not in prompts:
+    from bot.keyboards.quality import nano_quality_keyboard, veo_quality_keyboard, kling_quality_keyboard
+    if provider == "nano_banana":
+        title = "🍌 <b>Nano Banana</b> — выбери качество:" if lang != "uz" else "🍌 <b>Nano Banana</b> — sifatni tanlang:"
+        kb = nano_quality_keyboard(lang)
+    elif provider == "veo":
+        title = "🎬 <b>Veo 3</b> — выбери качество:" if lang != "uz" else "🎬 <b>Veo 3</b> — sifatni tanlang:"
+        kb = veo_quality_keyboard(lang)
+    elif provider == "kling":
+        title = "🎥 <b>Kling Motion</b> — выбери качество:" if lang != "uz" else "🎥 <b>Kling Motion</b> — sifatni tanlang:"
+        kb = kling_quality_keyboard(lang)
+    else:
         await callback.answer("Неизвестный провайдер.")
         return
 
-    state_cls, text = prompts[provider]
-    await state.set_state(state_cls)
-    await callback.message.answer(text, parse_mode="HTML")
+    await state.update_data(provider=provider, lang=lang)
+    await callback.message.answer(title, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("nano_quality:"))
+async def process_nano_quality(callback: CallbackQuery, state: FSMContext) -> None:
+    quality = callback.data.split(":")[1]
+    from bot.keyboards.quality import NANO_QUALITY_MAP
+    if quality not in NANO_QUALITY_MAP:
+        await callback.answer("Неизвестное качество.")
+        return
+    cost, overrides = NANO_QUALITY_MAP[quality]
+
+    state_data = await state.get_data()
+    lang = state_data.get("lang", "ru")
+    await state.update_data(quality=quality, cost=cost, payload_overrides=overrides, provider="nano_banana")
+    await state.set_state(NanoBananaStates.waiting_for_prompt)
+    prompt_text = i18n.t(lang, "gen.prompt.nano")
+    await callback.message.answer(prompt_text, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("veo_quality:"))
+async def process_veo_quality(callback: CallbackQuery, state: FSMContext) -> None:
+    quality = callback.data.split(":")[1]
+    from bot.keyboards.quality import VEO_QUALITY_MAP
+    if quality not in VEO_QUALITY_MAP:
+        await callback.answer("Неизвестное качество.")
+        return
+    cost, overrides = VEO_QUALITY_MAP[quality]
+
+    state_data = await state.get_data()
+    lang = state_data.get("lang", "ru")
+    await state.update_data(quality=quality, cost=cost, payload_overrides=overrides, provider="veo")
+    await state.set_state(VeoStates.waiting_for_prompt)
+    prompt_text = i18n.t(lang, "gen.prompt.veo")
+    await callback.message.answer(prompt_text, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("kling_quality:"))
+async def process_kling_quality(callback: CallbackQuery, state: FSMContext) -> None:
+    parts = callback.data.split(":")
+    quality = f"{parts[1]}:{parts[2]}"
+    from bot.keyboards.quality import KLING_QUALITY_MAP
+    if quality not in KLING_QUALITY_MAP:
+        await callback.answer("Неизвестное качество.")
+        return
+    cost, overrides = KLING_QUALITY_MAP[quality]
+
+    state_data = await state.get_data()
+    lang = state_data.get("lang", "ru")
+    await state.update_data(quality=quality, cost=cost, payload_overrides=overrides, provider="kling")
+    await state.set_state(KlingStates.waiting_for_prompt)
+    prompt_text = i18n.t(lang, "gen.prompt.kling")
+    await callback.message.answer(prompt_text, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "surprise_me")
+async def process_surprise_me(callback: CallbackQuery, state: FSMContext) -> None:
+    from bot.data.prompts import get_random_prompt, CATEGORY_LABELS_RU, CATEGORY_LABELS_UZ, VIDEO_CATEGORIES
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
+
+    cat, prompt = get_random_prompt()
+    labels = CATEGORY_LABELS_UZ if lang == "uz" else CATEGORY_LABELS_RU
+    tip = i18n.t(lang, "prompts.tip")
+
+    # Set state based on whether it's video
+    if cat in VIDEO_CATEGORIES:
+        await state.update_data(provider="veo", quality="fast", cost=30,
+                                payload_overrides={"quality": "fast", "duration": 8})
+        await state.set_state(VeoStates.waiting_for_prompt)
+    else:
+        await state.update_data(provider="nano_banana", quality="hd", cost=10,
+                                payload_overrides={"width": 1024, "height": 1024})
+        await state.set_state(NanoBananaStates.waiting_for_prompt)
+
+    text = i18n.t(lang, "prompts.selected", prompt=prompt)
+    await callback.message.answer(
+        text + f"\n\n{tip}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.use"), callback_data=f"use_prompt:{prompt[:100]}"),
+                InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.another"), callback_data="surprise_me"),
+            ],
+            [InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.own"), callback_data="cancel_prompt")],
+        ]),
+        parse_mode="HTML",
+    )
+    await state.update_data(suggested_prompt=prompt)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("use_prompt:"))
+async def use_suggested_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    """User accepted the suggested prompt — run it directly."""
+    from bot.handlers.nanobanana import create_nanobanana_job
+    data = await state.get_data()
+    prompt = data.get("suggested_prompt", callback.data.split(":", 1)[1])
+    provider = data.get("provider", "nano_banana")
+
+    # Artificial message with the prompt to reuse existing handlers
+    await callback.message.answer(f"✅ Запускаю: <i>{prompt[:100]}</i>", parse_mode="HTML")
+
+    class _FakeMessage:
+        text = prompt
+        chat = callback.message.chat
+        from_user = callback.from_user
+        bot = callback.bot
+        async def answer(self, *a, **kw): return await callback.message.answer(*a, **kw)
+        parse_mode = "HTML"
+
+    fake = _FakeMessage()
+    if provider == "veo":
+        from bot.handlers.veo import _create_veo_job
+        await _create_veo_job(fake, state, prompt)
+    elif provider == "kling":
+        from bot.handlers.veo import _create_kling_job
+        await _create_kling_job(fake, state, prompt)
+    else:
+        from bot.handlers.nanobanana import create_nanobanana_job
+        # Use the state FSM path:
+        fake.text = prompt
+        await create_nanobanana_job(fake, state)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cancel_prompt")
+async def cancel_suggested_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
+
+    from bot.keyboards.main_menu import create_submenu_keyboard
+    msg = "Хорошо! Выбери нейросеть:" if lang != "uz" else "Yaxshi! Neyrosetni tanlang:"
+    await state.clear()
+    await callback.message.answer(msg, reply_markup=create_submenu_keyboard(lang))
     await callback.answer()
 
 
@@ -98,6 +240,7 @@ async def process_gen_again_callback(callback: CallbackQuery, state: FSMContext)
     fake_data = f"gen_start:{provider}"
     fake_callback = callback.model_copy(update={"data": fake_data})
     await process_gen_start(fake_callback, state)
+
 
 
 @router.callback_query(F.data == "menu_balance")
