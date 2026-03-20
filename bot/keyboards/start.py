@@ -10,7 +10,7 @@ def welcome_inline_keyboard(lang: str) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text=i18n.t(lang, 'start.launch_app'),
-                    web_app=WebAppInfo(url=settings.miniapp_url + "/")
+                    web_app=WebAppInfo(url=settings.miniapp_url.rstrip('/'))
                 )
             ],
             [
