@@ -51,9 +51,17 @@ class UserService:
         user = self.repo.get_by_telegram_user_id(telegram_user_id)
         if not user:
             raise ValueError("User not found")
-
         updated_user = self.repo.update_language(user, language_code)
         return updated_user.language_code
 
     def get_user_by_telegram_id(self, telegram_user_id: int) -> User | None:
         return self.repo.get_by_telegram_user_id(telegram_user_id)
+
+    def get_user_by_referral_code(self, code: str) -> User | None:
+        return self.repo.get_by_referral_code(code)
+
+    def set_referred_by(self, user_id: int, referrer_telegram_id: int) -> None:
+        self.repo.set_referred_by(user_id, referrer_telegram_id)
+
+    def get_referral_count(self, user_id: int) -> int:
+        return self.repo.get_referral_count(user_id)

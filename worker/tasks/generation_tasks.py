@@ -1,4 +1,5 @@
 import time
+import logging
 import requests
 import asyncio
 from aiogram import Bot
@@ -12,6 +13,8 @@ from backend.core.config import settings
 from shared.enums.job_status import JobStatus
 from shared.enums.providers import AIProvider
 from worker.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 def _do_post_request(url: str, headers: dict, json_data: dict, max_retries: int = 3) -> dict:
@@ -34,19 +37,19 @@ def _do_post_request(url: str, headers: dict, json_data: dict, max_retries: int 
 
 @celery_app.task(name="worker.tasks.generation_tasks.run_generation_job")
 def run_generation_job(job_id: int) -> dict:
-    print(">>> RUNNING TASK FOR JOB", job_id)
+    logger.info(f"[Job {job_id}] Starting generation task")
     db = SessionLocal()
     try:
         service = GenerationService(db)
         user_service = UserService(db)
         balance_service = BalanceService(db)
-        
+
         job = service.get_job(job_id)
-        print(">>> JOB FOUND?", job is not None)
+        logger.info(f"[Job {job_id}] Found: {job is not None}, status: {getattr(job, 'status', None)}")
         if not job or job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
-            print(">>> ABORTING TASK", job.status if job else "not_found")
             return {"job_id": job_id, "status": job.status if job else "not_found"}
 
+        logger.info(f"[Job {job_id}] provider={job.provider}, mock={settings.ai_mock_mode}, kie_key={'present' if settings.kie_api_key else 'MISSING'}")
         if getattr(settings, "ai_mock_mode", False):
             service.process_job(job.id)
             return {"job_id": job.id, "status": "mocked"}
@@ -108,12 +111,14 @@ def run_generation_job(job_id: int) -> dict:
 
         # 1. Start generation
         try:
+            logger.info(f"[Job {job_id}] POST {url} payload={str(payload)[:200]}")
             start_data = _do_post_request(url, headers, payload)
-            # Depending on KIE API, they usually return a task_id
+            logger.info(f"[Job {job_id}] KIE response: {str(start_data)[:300]}")
             task_id = start_data.get("id") or (start_data.get("data") and start_data["data"].get("task_id"))
             if not task_id:
                 raise ValueError(f"No task_id in response: {start_data}")
         except Exception as exc:
+            logger.error(f"[Job {job_id}] KIE API call failed: {exc}")
             # Refund and Fail
             balance_service.add_credits(
                 user_id=job.user_id,

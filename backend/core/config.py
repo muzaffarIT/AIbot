@@ -46,6 +46,10 @@ class Settings(BaseSettings):
 
     payment_provider: str = "stars"
     admin_ids: str = ""
+    welcome_credits: int = 10
+    referral_bonus_referrer: int = 20
+    referral_bonus_new_user: int = 10
+    support_username: str = "khaetov_000"
 
     click_merchant_id: str | None = None
     click_service_id: str | None = None
