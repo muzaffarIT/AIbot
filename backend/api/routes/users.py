@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from backend.db.session import SessionLocal
 from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
+from backend.models.user import User
 
 router = APIRouter()
 
@@ -27,7 +28,7 @@ class SyncUserRequest(BaseModel):
     language_code: str | None = None
 
 
-def serialize_user(user, credits_balance: int) -> dict:
+def serialize_user(user, credits_balance: int, referral_count: int = 0) -> dict:
     return {
         "id": user.id,
         "telegram_user_id": user.telegram_user_id,
@@ -36,7 +37,11 @@ def serialize_user(user, credits_balance: int) -> dict:
         "last_name": user.last_name,
         "language_code": user.language_code,
         "credits_balance": credits_balance,
+        "referral_count": referral_count,
     }
+
+def get_referral_count(db: Session, telegram_id: int) -> int:
+    return db.query(User).filter(User.referred_by_telegram_id == telegram_id).count()
 
 
 @router.post("/sync")
@@ -55,7 +60,8 @@ def sync_user(payload: SyncUserRequest) -> dict:
             language_code=payload.language_code,
         )
         credits_balance = balance_service.get_balance_value(user.id)
-        return serialize_user(user, credits_balance)
+        referral_count = get_referral_count(db, user.telegram_user_id)
+        return serialize_user(user, credits_balance, referral_count)
     finally:
         db.close()
 
@@ -75,7 +81,8 @@ def ensure_user(payload: EnsureUserRequest) -> dict:
             language_code=payload.language_code,
         )
         credits_balance = balance_service.get_balance_value(user.id)
-        return serialize_user(user, credits_balance)
+        referral_count = get_referral_count(db, user.telegram_user_id)
+        return serialize_user(user, credits_balance, referral_count)
     finally:
         db.close()
 
@@ -91,7 +98,7 @@ def get_user(telegram_user_id: int) -> dict:
             raise HTTPException(status_code=404, detail="User not found")
 
         credits_balance = balance_service.get_balance_value(user.id)
-        return serialize_user(user, credits_balance)
+        referral_count = get_referral_count(db, user.telegram_user_id)
+        return serialize_user(user, credits_balance, referral_count)
     finally:
         db.close()
-

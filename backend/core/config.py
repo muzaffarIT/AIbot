@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     payment_provider: str = "stars"
     admin_ids: str = ""
     welcome_credits: int = 10
+    daily_credits: int = 3
+    max_free_gens_per_day: int = 5
     referral_bonus_referrer: int = 20
     referral_bonus_new_user: int = 10
     support_username: str = "khaetov_000"

@@ -23,6 +23,7 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
                 ],
                 [
                     KeyboardButton(text="☀️ Bonus"),
+                    KeyboardButton(text="✨ Meni hayrat qoldiring"),
                 ],
             ],
             resize_keyboard=True,
@@ -34,7 +35,7 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
             keyboard=[
                 [
                     KeyboardButton(text="🎨 Создать"),
-                    KeyboardButton(text="💎 Тарифы"),
+                    KeyboardButton(text="💎 Тарифи"),
                 ],
                 [
                     KeyboardButton(text="📊 Мои работы"),
@@ -46,6 +47,7 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
                 ],
                 [
                     KeyboardButton(text="☀️ Бонус"),
+                    KeyboardButton(text="✨ Удиви меня"),
                 ],
             ],
             resize_keyboard=True,
@@ -64,6 +66,7 @@ REPLY_BUTTON_ACTIONS = {
     "👥 Партнёрам": "menu_referral",
     "❓ Помощь": "menu_help",
     "☀️ Бонус": "daily_bonus",
+    "✨ Удиви меня": "surprise_me",
     # UZ
     "🎨 Yaratish": "menu_create",
     "💎 Tariflar": "menu_plans",
@@ -72,4 +75,5 @@ REPLY_BUTTON_ACTIONS = {
     "👥 Hamkorlik": "menu_referral",
     "❓ Yordam": "menu_help",
     "☀️ Bonus": "daily_bonus",
+    "✨ Meni hayrat qoldiring": "surprise_me",
 }

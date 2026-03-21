@@ -15,6 +15,7 @@ class VeoProvider(BaseAIProvider):
         *,
         prompt: str,
         source_image_url: str | None = None,
+        job_payload: dict | None = None,
     ) -> GenerationResult:
         client = KieClient(api_key=self.api_key)
         payload = {
@@ -23,6 +24,8 @@ class VeoProvider(BaseAIProvider):
             "aspectRatio": "16:9",
             "callBackUrl": self._build_callback_url("veo"),
         }
+        if job_payload:
+            payload.update(job_payload)
         if source_image_url:
             payload["imageUrls"] = [source_image_url]
 

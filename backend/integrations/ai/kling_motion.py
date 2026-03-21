@@ -15,6 +15,7 @@ class KlingMotionProvider(BaseAIProvider):
         *,
         prompt: str,
         source_image_url: str | None = None,
+        job_payload: dict | None = None,
     ) -> GenerationResult:
         client = KieClient(api_key=self.api_key)
         input_payload = {
@@ -22,6 +23,8 @@ class KlingMotionProvider(BaseAIProvider):
             "sound": False,
             "duration": "5",
         }
+        if job_payload:
+            input_payload.update(job_payload)
         model = "kling-3.0/video"
         if source_image_url:
             input_payload["image_urls"] = [source_image_url]

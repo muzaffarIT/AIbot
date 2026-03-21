@@ -109,10 +109,14 @@ def check_and_award_achievements(
         if code == "legend":      return completed_jobs >= 500
         return False
 
+    from backend.services.balance_service import BalanceService
+    balance_service = BalanceService(db)
+
     newly_awarded: list[tuple[AchievementDef, int]] = []
     for ach in ACHIEVEMENTS:
         if should_award(ach.code):
             db.add(Achievement(user_id=user_id, achievement_code=ach.code))
+            balance_service.add_credits(user_id, ach.bonus_credits, f"achievement_{ach.code}")
             newly_awarded.append((ach, ach.bonus_credits))
             logger.info(f"[Achievement] user={telegram_id} earned {ach.code} (+{ach.bonus_credits} credits)")
 

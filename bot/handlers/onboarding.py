@@ -1,50 +1,62 @@
-"""
-Onboarding flow for new users: 4 steps with 1.5s delay.
-Triggered from start.py after first registration.
-"""
 import asyncio
 import logging
-
-from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
+from aiogram import Router, F, types
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from backend.services.user_service import UserService
+from backend.services.balance_service import BalanceService
+from bot.services.db_session import get_db_session
+from bot.keyboards.reply_menu import main_reply_keyboard
+from bot.keyboards.main_menu import main_inline_keyboard
 from shared.utils.i18n import I18n
 
 logger = logging.getLogger(__name__)
-i18n = I18n()
+router = Router()
 
+class OnboardingStates(StatesGroup):
+    step_1 = State()
+    step_2 = State()
+    step_3 = State()
+    step_4 = State()
 
-async def run_onboarding(bot: Bot, chat_id: int, name: str, lang: str = "ru") -> None:
-    """Send 4 onboarding messages with 1.5s delays."""
-    try:
-        # Step 1 — immediate (welcome already sent by start.py, this adds context)
-        await asyncio.sleep(1.5)
-        await bot.send_message(
-            chat_id,
-            i18n.t(lang, "onboarding.step2"),
-        )
+async def start_onboarding(message: types.Message, state: FSMContext, i18n: I18n):
+    await state.set_state(OnboardingStates.step_1)
+    await message.answer(
+        i18n.get("onboarding_step_1"),
+        reply_markup=ReplyKeyboardRemove()
+    )
+    await asyncio.sleep(1.5)
+    await state.set_state(OnboardingStates.step_2)
+    await message.answer(i18n.get("onboarding_step_2"))
+    
+    await asyncio.sleep(1.5)
+    await state.set_state(OnboardingStates.step_3)
+    await message.answer(
+        i18n.get("onboarding_step_3"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=i18n.get("btn_continue"), callback_data="onboarding_next")]
+        ])
+    )
 
-        # Step 2 — model descriptions
-        await asyncio.sleep(1.5)
-        surprise_btn = i18n.t(lang, "onboarding.btn.surprise")
-        nano_btn = i18n.t(lang, "onboarding.btn.try_nano")
-        await bot.send_message(
-            chat_id,
-            i18n.t(lang, "onboarding.step3"),
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [
-                    InlineKeyboardButton(text=nano_btn, callback_data="gen_start:nano_banana"),
-                    InlineKeyboardButton(text=surprise_btn, callback_data="surprise_me"),
-                ]
-            ]),
-        )
-    except Exception as e:
-        logger.error(f"[Onboarding] Failed for chat_id={chat_id}: {e}")
-
-
-async def send_post_first_gen_message(bot: Bot, chat_id: int, lang: str = "ru") -> None:
-    """Step 4: sent after the user's first generation completes."""
-    try:
-        await bot.send_message(chat_id, i18n.t(lang, "onboarding.step4"))
-    except Exception as e:
-        logger.error(f"[Onboarding step4] Failed for chat_id={chat_id}: {e}")
+@router.callback_query(F.data == "onboarding_next", OnboardingStates.step_3)
+async def onboarding_step_4(callback: types.CallbackQuery, state: FSMContext):
+    db = next(get_db_session())
+    user_service = UserService(db)
+    i18n = I18n(callback.from_user.language_code)
+    
+    await state.set_state(OnboardingStates.step_4)
+    await callback.message.edit_text(i18n.get("onboarding_step_4"))
+    
+    # Finalize onboarding
+    user = user_service.get_user_by_telegram_id(callback.from_user.id)
+    if user:
+        user.onboarding_completed = True
+        db.commit()
+    
+    await state.clear()
+    await callback.message.answer(
+        i18n.get("onboarding_finished"),
+        reply_markup=main_reply_keyboard(callback.from_user.language_code)
+    )
+    await callback.answer()

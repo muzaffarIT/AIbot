@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { motion, type Variants } from "framer-motion";
-import { Sparkles, Image as ImageIcon, Video, Coins, AlertCircle, ChevronRight, Activity, Zap } from "lucide-react";
+import { Sparkles, Users, Image as ImageIcon, Video, Coins, AlertCircle, ChevronRight, Activity, Zap } from "lucide-react";
 import {
   getBalanceHistory,
   getJobs,
@@ -146,12 +146,12 @@ export default function HomePage() {
 
         {/* Quick Actions Grid */}
         <motion.section variants={itemVariants} className="grid grid-cols-2 gap-4">
-          <Link href="/generate" className="glass-card p-5 group hover:bg-white/5 transition-colors relative overflow-hidden">
+          <Link href="/partnership" className="glass-card p-5 group hover:bg-white/5 transition-colors relative overflow-hidden">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-cyan to-blue-500 flex items-center justify-center mb-4 shadow-lg shadow-brand-cyan/20">
-              <ImageIcon className="text-white" size={20} />
+              <Users className="text-white" size={20} />
             </div>
-            <h3 className="font-semibold text-white mb-1">Генерация</h3>
-            <p className="text-xs text-white/50">Создать нейроарт</p>
+            <h3 className="font-semibold text-white mb-1">Рефералы</h3>
+            <p className="text-xs text-white/50">Пригласить друзей</p>
             <ChevronRight className="absolute bottom-4 right-4 text-white/30 group-hover:text-white/70 transition-colors" size={18} />
           </Link>
 

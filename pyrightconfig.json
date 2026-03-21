@@ -1,0 +1,8 @@
+{
+  "pythonVersion": "3.11",
+  "venvPath": ".",
+  "extraPaths": ["."],
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "typeCheckingMode": "basic"
+}

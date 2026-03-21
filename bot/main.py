@@ -20,6 +20,9 @@ from bot.handlers.achievements import router as achievements_router  # /achievem
 from bot.handlers.callbacks import router as callbacks_router     # all inline keyboard callbacks
 from bot.handlers.veo import router as veo_router                 # F.photo + veo + kling FSM states
 from bot.handlers.nanobanana import router as nanobanana_router   # nano banana FSM state
+from bot.handlers.quality import router as quality_router
+from bot.handlers.onboarding import router as onboarding_router
+from bot.handlers.prompts import router as prompts_router
 from bot.handlers.jobs import router as jobs_router
 from bot.handlers.balance import router as balance_router
 from bot.handlers.history import router as history_router
@@ -51,21 +54,27 @@ async def main() -> None:
     dp = Dispatcher()
     dp.message.middleware(GenerationRateLimitMiddleware(limit=3, interval=60))
 
-    dp.include_router(payments_router)     # F.successful_payment / pre_checkout — FIRST
-    dp.include_router(daily_router)        # ☀️ Bonus reply + /daily — before generic reply_router
-    dp.include_router(start_router)        # /start
-    dp.include_router(reply_router)        # all other reply keyboard buttons
-    dp.include_router(help_router)         # /help
-    dp.include_router(terms_router)        # /terms
-    dp.include_router(referral_router)     # /referral
-    dp.include_router(achievements_router)  # /achievements
-    dp.include_router(callbacks_router)    # inline keyboard callbacks
-    dp.include_router(veo_router)          # F.photo + veo + kling FSM
-    dp.include_router(nanobanana_router)   # nano banana FSM
-    dp.include_router(jobs_router)
-    dp.include_router(balance_router)
-    dp.include_router(history_router)
-    dp.include_router(admin_router)
+    dp.include_router(payments_router)     # 1. payments (Critical: first)
+    dp.include_router(onboarding_router)   # 2. onboarding (Block 2)
+    dp.include_router(start_router)        # 3. start
+    dp.include_router(prompts_router)      # 4. surprise me
+    dp.include_router(quality_router)      # 5. quality selection
+    dp.include_router(callbacks_router)    # 6. callbacks
+    dp.include_router(daily_router)        # 6. daily
+    dp.include_router(referral_router)     # 6. referral
+    dp.include_router(achievements_router)  # 7. achievements
+    dp.include_router(veo_router)          # 8. veo (with F.photo)
+    dp.include_router(nanobanana_router)   # 9. nanobanana / kling
+    # Kling is currently inside veo_router or nanobanana_router context in some cases, 
+    # but the point is to keep the order logic.
+    dp.include_router(history_router)      # 10. history
+    dp.include_router(admin_router)        # 11. admin
+    dp.include_router(help_router)         # 12. help
+    dp.include_router(terms_router)        # 13. terms
+    
+    # reply_router is a catch-all for reply buttons, usually registered after specific commands 
+    # but before generic message filters.
+    dp.include_router(reply_router)
 
     logging.info(f"[BOT] Starting polling...")
     await dp.start_polling(bot)

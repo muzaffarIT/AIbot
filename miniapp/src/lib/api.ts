@@ -9,6 +9,7 @@ export type BackendUser = {
   last_name?: string | null;
   language_code: string;
   credits_balance?: number;
+  referral_count?: number;
 };
 
 export type BalanceResponse = {

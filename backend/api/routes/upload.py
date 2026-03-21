@@ -36,7 +36,7 @@ async def upload_image(file: UploadFile, background_tasks: BackgroundTasks) -> d
     # Schedule cleanup in background
     background_tasks.add_task(_cleanup_old_files)
 
-    base_url = (settings.miniapp_url or "").rstrip("/")
+    base_url = (settings.backend_base_url or "").rstrip("/")
     file_url = f"{base_url}/api/upload/{filename}"
     return {"url": file_url}
 

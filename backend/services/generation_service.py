@@ -7,9 +7,14 @@ from backend.integrations.ai.nanobanana import NanoBananaProvider
 from backend.integrations.ai.veo import VeoProvider
 from backend.services.balance_service import BalanceService
 from backend.services.user_service import UserService
+from backend.services.settings_service import SettingsService
+from backend.models.order import Order
+from backend.models.generation_job import GenerationJob
 from shared.enums.credit_transaction_type import CreditTransactionType
 from shared.enums.job_status import JobStatus
 from shared.enums.providers import AIProvider
+from datetime import datetime, timedelta, timezone
+from sqlalchemy import func
 
 
 GENERATION_CREDIT_COSTS = {
@@ -21,9 +26,11 @@ GENERATION_CREDIT_COSTS = {
 
 class GenerationService:
     def __init__(self, db: Session) -> None:
+        self.db = db
         self.repo = GenerationJobRepository(db)
         self.user_service = UserService(db)
         self.balance_service = BalanceService(db)
+        self.settings_service = SettingsService(db)
 
     def _get_provider_client(self, provider: str):
         if provider == AIProvider.NANO_BANANA:
@@ -47,6 +54,8 @@ class GenerationService:
         provider: str,
         prompt: str,
         source_image_url: str | None = None,
+        job_payload: dict | None = None,
+        credits: int | None = None,
         process_now: bool | None = None,
     ):
         if not prompt.strip():
@@ -56,7 +65,30 @@ class GenerationService:
         if not user:
             raise ValueError("User not found")
 
-        cost = self._get_credit_cost(provider)
+        # Daily generation limit check
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Check if user is premium (has at least one completed order)
+        has_purchased = self.db.query(Order).filter(
+            Order.user_id == user.id,
+            Order.status == "completed"
+        ).first() is not None
+        
+        limit_key = "max_premium_gens_per_day" if has_purchased else "max_free_gens_per_day"
+        default_limit = 50 if has_purchased else settings.max_free_gens_per_day
+        limit = await self.settings_service.get_int(limit_key, default_limit)
+        
+        daily_count = self.db.query(func.count(GenerationJob.id)).filter(
+            GenerationJob.user_id == user.id,
+            GenerationJob.created_at >= today_start,
+            GenerationJob.status != JobStatus.FAILED
+        ).scalar() or 0
+        
+        if daily_count >= limit:
+            raise ValueError(f"Daily generation limit reached ({limit}). Try again tomorrow.")
+
+        cost = credits if credits is not None else self._get_credit_cost(provider)
         current_balance = self.balance_service.get_balance_value(user.id)
         if current_balance < cost:
             raise ValueError("Not enough credits")
@@ -68,6 +100,7 @@ class GenerationService:
             source_image_url=source_image_url,
             status=JobStatus.PENDING,
             credits_reserved=cost,
+            job_payload=job_payload or {}
         )
         self.balance_service.subtract_credits(
             user_id=user.id,
@@ -106,8 +139,9 @@ class GenerationService:
             result = provider.generate(
                 prompt=job.prompt,
                 source_image_url=job.source_image_url,
+                job_payload=job.job_payload,
             )
-            return self.repo.update_job(
+            updated_job = self.repo.update_job(
                 job,
                 status=JobStatus.COMPLETED,
                 external_job_id=result.external_job_id,
@@ -115,6 +149,21 @@ class GenerationService:
                 result_payload=result.result_payload,
                 completed=True,
             )
+            
+            # Check achievements
+            try:
+                from bot.services.achievements import check_and_award_achievements
+                check_and_award_achievements(
+                    db=self.db,
+                    user_id=job.user_id,
+                    telegram_id=user.telegram_user_id,
+                    lang=user.language_code or "ru"
+                )
+                self.db.commit() # Commit achievements
+            except Exception as e:
+                logger.error(f"Error checking achievements after job {job.id}: {e}")
+            
+            return updated_job
         except Exception as exc:
             self.balance_service.add_credits(
                 user_id=job.user_id,
@@ -139,3 +188,34 @@ class GenerationService:
         if not user:
             raise ValueError("User not found")
         return self.repo.get_by_user_id(user.id, limit=limit)
+
+    def cleanup_stale_jobs(self, minutes: int = 30):
+        """Finds jobs in PENDING for > 30 mins, fails them and refunds credits."""
+        from datetime import datetime, timedelta, timezone
+        threshold = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        
+        stale_jobs = self.repo.session.query(self.repo.model).filter(
+            self.repo.model.status == JobStatus.PENDING,
+            self.repo.model.created_at <= threshold
+        ).all()
+        
+        results = []
+        for job in stale_jobs:
+            self.balance_service.add_credits(
+                user_id=job.user_id,
+                amount=job.credits_reserved,
+                transaction_type=CreditTransactionType.REFUND,
+                reference_type="generation_job",
+                reference_id=str(job.id),
+                comment=f"Timeout refund for job {job.id}",
+            )
+            self.repo.update_job(
+                job,
+                status=JobStatus.FAILED,
+                error_message="Generation timeout (30 min)",
+                completed=True
+            )
+            results.append(job)
+        
+        self.repo.session.commit()
+        return results

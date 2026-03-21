@@ -12,6 +12,8 @@ from shared.enums.providers import AIProvider
 from shared.utils.i18n import I18n
 from bot.services.progress import track_generation_progress
 from backend.core.config import settings
+from bot.keyboards.quality_menu import get_quality_keyboard
+from bot.states.nanobanana_states import NanoBananaStates
 
 router = Router()
 i18n = I18n()
@@ -39,25 +41,23 @@ async def handle_photo_input(message: Message, state: FSMContext, bot: Bot) -> N
     file_url = f"https://api.telegram.org/file/bot{settings.bot_token}/{file.file_path}"
 
     caption = message.caption or ""
+    # Caption logic: if user sent photo with caption, save caption as prompt
     if caption.strip():
-        # We have prompt in caption — check state and create job directly
-        current_state = await state.get_state()
-        if current_state in (VeoStates.waiting_for_prompt, str(VeoStates.waiting_for_prompt)):
-            await _create_veo_job(message, state, caption.strip(), file_url)
-            return
-        if current_state in (KlingStates.waiting_for_prompt, str(KlingStates.waiting_for_prompt)):
-            await _create_kling_job(message, state, caption.strip(), file_url)
-            return
-
-    # No active state, or no caption — save url and show action keyboard
+        await state.update_data(prompt=caption.strip())
+    
     await state.update_data(source_image_url=file_url)
+    
+    # We always show the action keyboard because we don't know if they want Nano, Veo, or Kling
     await message.answer(
+        "📸 Фото получено! Что сделать?\n\n"
+        "✏️ После выбора — я создам задачу с твоим описанием." if caption.strip() else 
         "📸 Фото получено! Что сделать?\n\n"
         "✏️ После выбора — напиши промпт что должно происходить\n"
         "<i>Пример: she smiles slowly, cinematic</i>",
         reply_markup=PHOTO_ACTION_KEYBOARD,
         parse_mode="HTML",
     )
+    return
 
 
 @router.callback_query(F.data.startswith("photo:"))
@@ -68,8 +68,8 @@ async def handle_photo_action(callback, state: FSMContext) -> None:
         "kling": (KlingStates.waiting_for_prompt, "🎥 Kling Motion выбран. Напиши промпт для анимации:"),
         "nano_banana": ("nano:waiting", "🍌 Nano Banana выбран. Напиши промпт для Image-to-Image:"),
     }
-    from bot.states.nanobanana_states import NanoBananaStates
-    state_map["nano_banana"] = (NanoBananaStates.waiting_for_prompt, "🍌 Nano Banana. Напиши промпт для Image-to-Image преобразования:")
+    state_cls, text = state_map[action]
+    await state.set_state(state_cls)
 
     if action not in state_map:
         await callback.answer("Неизвестное действие.")
@@ -77,8 +77,40 @@ async def handle_photo_action(callback, state: FSMContext) -> None:
 
     state_cls, text = state_map[action]
     await state.set_state(state_cls)
+    
+    state_data = await state.get_data()
+    if state_data.get("prompt"):
+        # We already have a prompt from caption! Go to quality selection.
+        await _show_provider_quality(callback.message, state, action)
+        await callback.answer()
+        return
+
     await callback.message.answer(text)
     await callback.answer()
+
+
+async def _show_provider_quality(message: Message, state: FSMContext, provider: str) -> None:
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(message.chat.id)
+        lang = user.language_code or "ru"
+        
+        # Map action keys to quality keyboard keys
+        kb_key = "nano_banana" if provider == "nano_banana" else provider
+        
+        # Set specific quality waiting state
+        if provider == "veo3": await state.set_state(VeoStates.waiting_for_quality)
+        elif provider == "kling": await state.set_state(KlingStates.waiting_for_quality)
+        elif provider == "nano_banana": 
+            await state.set_state(NanoBananaStates.waiting_for_quality)
+
+        await message.answer(
+            i18n.t(lang, "quality.select"),
+            reply_markup=get_quality_keyboard(kb_key, lang)
+        )
+    finally:
+        db.close()
 
 
 async def _create_veo_job(message: Message, state: FSMContext, prompt: str, source_image_url: str | None = None) -> None:
@@ -98,6 +130,8 @@ async def _create_veo_job(message: Message, state: FSMContext, prompt: str, sour
             provider=AIProvider.VEO,
             prompt=prompt,
             source_image_url=img_url,
+            job_payload=state_data.get("payload_overrides"),
+            credits=state_data.get("cost"),
         )
         msg = await message.answer(
             f"⏳ <b>Veo 3</b> — задача #{job.id} в очереди.\n\n"
@@ -131,6 +165,8 @@ async def _create_kling_job(message: Message, state: FSMContext, prompt: str, so
             provider=AIProvider.KLING,
             prompt=prompt,
             source_image_url=img_url,
+            job_payload=state_data.get("payload_overrides"),
+            credits=state_data.get("cost"),
         )
         msg = await message.answer(
             f"⏳ <b>Kling Motion</b> — задача #{job.id} в очереди.\n\n"
@@ -148,18 +184,48 @@ async def _create_kling_job(message: Message, state: FSMContext, prompt: str, so
 
 
 @router.message(VeoStates.waiting_for_prompt, F.text)
-async def create_veo_job_from_text(message: Message, state: FSMContext) -> None:
+async def handle_veo_prompt_msg(message: Message, state: FSMContext) -> None:
     prompt = message.text or ""
     if len(prompt) < 3 or len(prompt) > 500:
         await message.answer("❌ Длина промпта: от 3 до 500 символов.")
         return
-    await _create_veo_job(message, state, prompt)
+    
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(message.from_user.id)
+        lang = user.language_code or "ru"
+        await state.update_data(prompt=prompt)
+        await state.set_state(VeoStates.waiting_for_quality)
+        
+        from bot.keyboards.quality_menu import get_quality_keyboard
+        await message.answer(
+            i18n.t(lang, "quality.select"),
+            reply_markup=get_quality_keyboard("veo", lang)
+        )
+    finally:
+        db.close()
 
 
 @router.message(KlingStates.waiting_for_prompt, F.text)
-async def create_kling_job_from_text(message: Message, state: FSMContext) -> None:
+async def handle_kling_prompt_msg(message: Message, state: FSMContext) -> None:
     prompt = message.text or ""
     if len(prompt) < 3 or len(prompt) > 500:
         await message.answer("❌ Длина промпта: от 3 до 500 символов.")
         return
-    await _create_kling_job(message, state, prompt)
+    
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(message.from_user.id)
+        lang = user.language_code or "ru"
+        await state.update_data(prompt=prompt)
+        await state.set_state(KlingStates.waiting_for_quality)
+        
+        from bot.keyboards.quality_menu import get_quality_keyboard
+        await message.answer(
+            i18n.t(lang, "quality.select"),
+            reply_markup=get_quality_keyboard("kling", lang)
+        )
+    finally:
+        db.close()

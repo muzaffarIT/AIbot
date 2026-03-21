@@ -1,3 +1,4 @@
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 
 from backend.db.repositories.users import UserRepository
@@ -65,3 +66,71 @@ class UserService:
 
     def get_referral_count(self, user_id: int) -> int:
         return self.repo.get_referral_count(user_id)
+
+    def claim_daily_bonus(self, user_id: int) -> dict:
+        user = self.repo.get_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+
+        now = datetime.now(timezone.utc)
+        
+        # Check last claim
+        if user.last_daily_claim:
+            time_diff = now - user.last_daily_claim
+            if time_diff < timedelta(hours=24):
+                # Already claimed today (less than 24h)
+                # But actually we should check calendar day or 24h window?
+                # User says: "если > 48ч - сброс".
+                # Usually daily is once per 24h.
+                hours_left = 24 - (time_diff.total_seconds() / 3600)
+                minutes_left = (hours_left % 1) * 60
+                return {
+                    "success": False,
+                    "error": "already_claimed",
+                    "hours": int(hours_left),
+                    "minutes": int(minutes_left),
+                    "streak": user.daily_streak
+                }
+
+            if time_diff > timedelta(hours=48):
+                # Streak reset
+                user.daily_streak = 1
+            else:
+                # Streak increment
+                user.daily_streak += 1
+        else:
+            # First claim
+            user.daily_streak = 1
+
+        if user.daily_streak > user.max_streak:
+            user.max_streak = user.daily_streak
+
+        user.last_daily_claim = now
+        
+        # Bonus formula: 3 + streak*1, max 10
+        bonus_credits = min(10, 3 + user.daily_streak)
+        self.balance_service.add_credits(user.id, bonus_credits, "daily_bonus")
+        
+        self.repo.db.commit()
+        
+        # Check achievements (streak)
+        newly_earned = []
+        try:
+            from bot.services.achievements import check_and_award_achievements
+            newly_earned = check_and_award_achievements(
+                db=self.repo.db,
+                user_id=user.id,
+                telegram_id=user.telegram_user_id,
+                lang=user.language_code or "ru"
+            )
+            self.repo.db.commit()
+        except Exception as e:
+            logger.error(f"Error checking achievements for user {user.id}: {e}")
+
+        return {
+            "success": True,
+            "credits": bonus_credits,
+            "streak": user.daily_streak,
+            "balance": self.balance_service.get_balance_value(user.id),
+            "newly_earned": newly_earned
+        }

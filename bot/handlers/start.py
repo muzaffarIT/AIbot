@@ -1,22 +1,24 @@
-from aiogram import Router, Bot
+from aiogram import Router, Bot, types
 from aiogram.types import Message, ReplyKeyboardRemove
 from aiogram.filters import CommandStart
+from aiogram.fsm.context import FSMContext
 
 from bot.keyboards.reply_menu import main_reply_keyboard
 from bot.keyboards.main_menu import main_inline_keyboard
+from bot.handlers.onboarding import start_onboarding
 from bot.services.db_session import get_db_session
 from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
+from backend.services.settings_service import SettingsService
 from backend.core.config import settings
 from shared.utils.i18n import I18n
 
 router = Router()
 i18n = I18n()
 
-
 @router.message(CommandStart())
-async def cmd_start(message: Message, bot: Bot) -> None:
-    db = get_db_session()
+async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
+    db = next(get_db_session())
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)
@@ -46,11 +48,35 @@ async def cmd_start(message: Message, bot: Bot) -> None:
                 user_service.set_referred_by(user.id, referrer.telegram_user_id)
                 # New user gets extra 10 credits (on top of welcome bonus)
                 balance_service.add_credits(user.id, settings.referral_bonus_new_user, "referral_welcome")
+                
+                # Referrer gets 5 credits for the new registration
+                balance_service.add_credits(referrer.id, 5, "referral_registration_bonus")
+                db.commit()
+                
+                # Notify referrer
+                try:
+                    ref_lang = referrer.language_code or "ru"
+                    await bot.send_message(
+                        referrer.telegram_user_id,
+                        f"👥 <b>Новый реферал!</b>\n\nПо твоей ссылке зарегистрировался новый пользователь.\nНачислено: <b>+5</b> кредитов 🎁" if ref_lang == "ru" else
+                        f"👥 <b>Yangi referal!</b>\n\nSizning havolangiz orqali yangi foydalanuvchi ro'yxatdan o'tdi.\nHisobingizga: <b>+5</b> kredit qo'shildi 🎁",
+                        parse_mode="HTML"
+                    )
+                except:
+                    pass
 
         # Welcome bonus for new users
         if is_new:
-            balance_service.add_credits(user.id, settings.welcome_credits, "welcome_bonus")
+            settings_service = SettingsService(db)
+            welcome_credits = await settings_service.get_int("welcome_credits", settings.welcome_credits)
+            balance_service.add_credits(user.id, welcome_credits, "welcome_bonus")
             db.commit()
+
+        # Onboarding trigger (Block 2)
+        if not user.onboarding_completed:
+            await state.clear()
+            await start_onboarding(message, state, I18n(lang))
+            return
 
         credits = balance_service.get_balance_value(user.id)
         name = user.first_name or message.from_user.username or "друг"
@@ -58,21 +84,18 @@ async def cmd_start(message: Message, bot: Bot) -> None:
         # Remove any lingering old reply keyboards
         await message.answer("👋", reply_markup=ReplyKeyboardRemove())
 
-        if is_new:
-            text = i18n.t(lang, "onboarding.step1", name=name)
+        if lang == "uz":
+            text = (
+                f"👋 Qaytib keldingiz, <b>{name}</b>!\n\n"
+                f"💰 Balansingiz: <b>{credits}</b> kredit\n\n"
+                f"Nima qilamiz?"
+            )
         else:
-            if lang == "uz":
-                text = (
-                    f"👋 Qaytib keldingiz, <b>{name}</b>!\n\n"
-                    f"💰 Balansingiz: <b>{credits}</b> kredit\n\n"
-                    f"Nima qilamiz?"
-                )
-            else:
-                text = (
-                    f"👋 С возвращением, <b>{name}</b>!\n\n"
-                    f"💰 Баланс: <b>{credits}</b> кредитов\n\n"
-                    f"Что делаем?"
-                )
+            text = (
+                f"👋 С возвращением, <b>{name}</b>!\n\n"
+                f"💰 Баланс: <b>{credits}</b> кредитов\n\n"
+                f"Что делаем?"
+            )
 
         # Send reply keyboard as main navigation
         await message.answer(
@@ -80,12 +103,6 @@ async def cmd_start(message: Message, bot: Bot) -> None:
             reply_markup=main_reply_keyboard(lang),
             parse_mode="HTML",
         )
-
-        # For new users: run onboarding in background
-        if is_new:
-            import asyncio
-            from bot.handlers.onboarding import run_onboarding
-            asyncio.create_task(run_onboarding(bot, message.chat.id, name, lang))
 
     finally:
         db.close()

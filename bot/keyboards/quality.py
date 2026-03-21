@@ -9,14 +9,14 @@ def nano_quality_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     """Quality options for Nano Banana image generation."""
     if lang == "uz":
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🖼 Standart — 5 kr. (512×512)", callback_data="nano_quality:standard")],
-            [InlineKeyboardButton(text="✨ HD — 10 kr. (1024×1024)", callback_data="nano_quality:hd")],
+            [InlineKeyboardButton(text="🖼 Standart — 5 kr. (1024×1024)", callback_data="nano_quality:standard")],
+            [InlineKeyboardButton(text="✨ HD — 10 kr. (1536×1536)", callback_data="nano_quality:hd")],
             [InlineKeyboardButton(text="💎 4K — 20 kr. (2048×2048)", callback_data="nano_quality:4k")],
             [InlineKeyboardButton(text="← Orqaga", callback_data="start_menu")],
         ])
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🖼 Стандарт — 5 кр. (512×512)", callback_data="nano_quality:standard")],
-        [InlineKeyboardButton(text="✨ HD — 10 кр. (1024×1024)", callback_data="nano_quality:hd")],
+        [InlineKeyboardButton(text="🖼 Стандарт — 5 кр. (1024×1024)", callback_data="nano_quality:standard")],
+        [InlineKeyboardButton(text="✨ HD — 10 кр. (1536×1536)", callback_data="nano_quality:hd")],
         [InlineKeyboardButton(text="💎 4K — 20 кр. (2048×2048)", callback_data="nano_quality:4k")],
         [InlineKeyboardButton(text="← Назад", callback_data="start_menu")],
     ])
@@ -56,8 +56,8 @@ def kling_quality_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
 
 # Quality → (cost_credits, payload_overrides)
 NANO_QUALITY_MAP = {
-    "standard": (5,  {"width": 512,  "height": 512}),
-    "hd":       (10, {"width": 1024, "height": 1024}),
+    "standard": (5,  {"width": 1024, "height": 1024}),
+    "hd":       (10, {"width": 1536, "height": 1536}),
     "4k":       (20, {"width": 2048, "height": 2048}),
 }
 

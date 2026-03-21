@@ -22,6 +22,8 @@ def _run_migrations(db) -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS max_streak INTEGER DEFAULT 0 NOT NULL",
         # Notifications
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_notification_at TIMESTAMPTZ",
+        # Onboarding
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE NOT NULL",
         # Achievements table
         """CREATE TABLE IF NOT EXISTS achievements (
             id SERIAL PRIMARY KEY,
@@ -30,6 +32,11 @@ def _run_migrations(db) -> None:
             earned_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
         )""",
         "CREATE INDEX IF NOT EXISTS ix_achievements_user_id ON achievements (user_id)",
+        """CREATE TABLE IF NOT EXISTS settings (
+            key VARCHAR(100) PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+        )""",
     ]
     for sql in migrations:
         try:

@@ -15,6 +15,7 @@ class NanoBananaProvider(BaseAIProvider):
         *,
         prompt: str,
         source_image_url: str | None = None,
+        job_payload: dict | None = None,
     ) -> GenerationResult:
         client = KieClient(api_key=self.api_key)
         input_payload = {
@@ -22,6 +23,8 @@ class NanoBananaProvider(BaseAIProvider):
             "output_format": "png",
             "image_size": "1:1",
         }
+        if job_payload:
+            input_payload.update(job_payload)
         if source_image_url:
             input_payload["image_urls"] = [source_image_url]
 

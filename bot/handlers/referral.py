@@ -99,33 +99,41 @@ async def copy_ref_callback(callback: CallbackQuery, bot: Bot) -> None:
 
 
 async def notify_referrer_on_purchase(bot: Bot, referred_user_id: int) -> None:
-    """Called when a referred user makes their first purchase."""
-    db = get_db_session()
+    """Called when a referred user (database internal ID) makes their first purchase."""
+    db = next(get_db_session())
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)
 
-        referred = db.get(type(user_service.get_user_by_telegram_id(referred_user_id).__class__), 0)
-        # Need to get by telegram_id
-        referred = user_service.get_user_by_telegram_id(referred_user_id)
+        referred = user_service.repo.get_by_id(referred_user_id)
         if not referred or not referred.referred_by_telegram_id:
+            logger.info(f"[Referral] User {referred_user_id} has no referrer.")
             return
 
         referrer = user_service.get_user_by_telegram_id(referred.referred_by_telegram_id)
         if not referrer:
+            logger.warning(f"[Referral] Referrer telegram_id={referred.referred_by_telegram_id} not found.")
             return
 
         lang = referrer.language_code or "ru"
         bonus = settings.referral_bonus_referrer
 
+        # Add credits to referrer
         balance_service.add_credits(referrer.id, bonus, "referral_purchase_bonus")
+        
+        # Update stats
         referrer.referral_earnings = (referrer.referral_earnings or 0) + bonus
         db.commit()
 
+        # Notify
         text = i18n.t(lang, "referral.purchase_notify")
-        await bot.send_message(referrer.telegram_user_id, text)
-        logger.info(f"[Referral] Notified referrer={referrer.telegram_user_id} +{bonus} credits")
+        try:
+            await bot.send_message(referrer.telegram_user_id, text)
+        except Exception as e:
+            logger.error(f"[Referral] Failed to send notification message to {referrer.telegram_user_id}: {e}")
+            
+        logger.info(f"[Referral] Awarded {bonus} to referrer {referrer.telegram_user_id} for user {referred.telegram_user_id} purchase.")
     except Exception as e:
-        logger.error(f"[Referral] Notify failed: {e}")
+        logger.error(f"[Referral] notify_referrer_on_purchase error: {e}")
     finally:
         db.close()

@@ -56,10 +56,9 @@ async def process_successful_payment(message: Message, bot: Bot) -> None:
             # Trigger referral bonus if user was referred
             if user.referred_by_telegram_id and not _has_made_previous_purchase(user.id, db):
                 from bot.handlers.referral import notify_referrer_on_purchase
-                from backend.core.config import settings
                 import asyncio
                 asyncio.create_task(
-                    notify_referrer_on_purchase(bot, user.referred_by_telegram_id, settings.referral_bonus_referrer)
+                    notify_referrer_on_purchase(bot, user.id)
                 )
 
             await message.answer(

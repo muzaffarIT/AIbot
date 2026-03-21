@@ -67,12 +67,14 @@ def run_generation_job(job_id: int) -> dict | None:
 
         # Setup provider specific configs
         if job.provider == AIProvider.NANO_BANANA:
-            url = f"{base_url}/v1/nano-banana/generate"
+            url = f"{settings.kie_base_url}/v1/nano-banana/generate"
+            width = job.job_payload.get("width", 1024)
+            height = job.job_payload.get("height", 1024)
             payload = {
-                "prompt": job.prompt,
                 "model": "nano-banana-pro",
-                "width": 1024,
-                "height": 1024
+                "prompt": job.prompt,
+                "width": width,
+                "height": height
             }
             if job.source_image_url:
                 payload["image_url"] = job.source_image_url
@@ -80,12 +82,13 @@ def run_generation_job(job_id: int) -> dict | None:
             poll_timeout = 120
             is_video = False
         elif job.provider == AIProvider.VEO:
-            url = f"{base_url}/v1/veo3/generate"
+            url = f"{settings.kie_base_url}/v1/veo3/generate"
+            quality = job.job_payload.get("quality", "fast")
             payload = {
-                "prompt": job.prompt,
                 "model": "veo-3",
+                "prompt": job.prompt,
                 "duration": 8,
-                "quality": "fast"
+                "quality": quality
             }
             if job.source_image_url:
                 payload["image_url"] = job.source_image_url
@@ -93,12 +96,14 @@ def run_generation_job(job_id: int) -> dict | None:
             poll_timeout = 300
             is_video = True
         elif job.provider == AIProvider.KLING:
-            url = f"{base_url}/v1/kling/generate"
+            url = f"{settings.kie_base_url}/v1/kling/generate"
+            mode = job.job_payload.get("mode", "std")
+            duration = job.job_payload.get("duration", 5)
             payload = {
-                "prompt": job.prompt,
                 "model": "kling-v3",
-                "duration": 5,
-                "mode": "std"
+                "prompt": job.prompt,
+                "duration": duration,
+                "mode": mode
             }
             if job.source_image_url:
                 payload["image_url"] = job.source_image_url
@@ -111,11 +116,22 @@ def run_generation_job(job_id: int) -> dict | None:
 
         # 1. Start generation
         try:
+            logger.info(f"[KIE] AI_MOCK_MODE={settings.ai_mock_mode}")
+            logger.info(f"[KIE] API_KEY present: {bool(settings.kie_api_key)}")
+            logger.info(f"[KIE] Sending to: {url}")
+            
             _payload_str: str = str(payload)
             logger.info(f"[Job {job_id}] POST {url} payload={_payload_str[:200]}")
-            start_data = _do_post_request(url, headers, payload)
+            
+            # Using raw requests to get full response for logging as requested
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            logger.info(f"[KIE] Response: {response.status_code} — {response.text[:300]}")
+            
+            response.raise_for_status()
+            start_data = response.json()
+            
             _start_str: str = str(start_data)
-            logger.info(f"[Job {job_id}] KIE response: {_start_str[:300]}")
+            logger.info(f"[Job {job_id}] KIE processing: {_start_str[:300]}")
             task_id = start_data.get("id") or (start_data.get("data") and start_data["data"].get("task_id"))
             if not task_id:
                 raise ValueError(f"No task_id in response: {start_data}")
@@ -172,6 +188,23 @@ def run_generation_job(job_id: int) -> dict | None:
                     result_url=final_result_url,
                     completed=True
                 )
+                
+                # Check achievements
+                try:
+                    from bot.services.achievements import check_and_award_achievements
+                    newly_earned = check_and_award_achievements(
+                        db=db,
+                        user_id=job.user_id,
+                        telegram_id=user.telegram_user_id,
+                        lang=user.language_code or "ru"
+                    )
+                    db.commit()
+                    
+                    if newly_earned and chat_id and settings.bot_token:
+                        # Notify about achievements too
+                        asyncio.run(_notify_achievements(chat_id, settings.bot_token, newly_earned, user.language_code or "ru"))
+                except Exception as ach_err:
+                    logger.error(f"[Achievement] Worker error: {ach_err}")
                 if chat_id and bot_token and isinstance(final_result_url, str):
                     asyncio.run(_notify_success(chat_id, bot_token, job.provider, job.prompt, final_result_url, is_video))
                 return {"job_id": job.id, "status": "completed", "result_url": final_result_url}
@@ -216,13 +249,54 @@ async def _notify_success(chat_id: int, bot_token: str, provider: str, prompt: s
         await bot.session.close()
 
 
-async def _notify_failed(chat_id: int, provider: str, prompt: str):
-    bot_token = settings.bot_token
-    if not bot_token:
-        return
+async def _notify_achievements(chat_id: int, bot_token: str, achievements_with_bonus, lang: str):
     bot = Bot(token=bot_token)
     try:
-        text = f"❌ Ошибка генерации ({provider}).\nКредиты были возвращены.\nПромпт: {prompt}"
-        await bot.send_message(chat_id=chat_id, text=text)
+        from shared.utils.i18n import I18n
+        i18n = I18n()
+        
+        for ach, bonus in achievements_with_bonus:
+            name = ach.name_uz if lang == "uz" else ach.name_ru
+            text = (
+                f"🏆 <b>Yangi yutuq!</b>\n\n{ach.emoji} <b>{name}</b>\n🎁 Bonus: <b>+{bonus}</b> kredit!"
+                if lang == "uz" else
+                f"🏆 <b>Новое достижение!</b>\n\n{ach.emoji} <b>{name}</b>\n🎁 Бонус: <b>+{bonus}</b> кредитов!"
+            )
+            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
     finally:
         await bot.session.close()
+
+
+async def _notify_failed(chat_id: int, provider: str, prompt: str):
+
+
+@celery_app.task(name="worker.tasks.generation_tasks.cleanup_stale_jobs_task")
+def cleanup_stale_jobs_task() -> None:
+    """Periodic task to fail jobs pending > 30 min and notify users."""
+    db = SessionLocal()
+    try:
+        service = GenerationService(db)
+        balance_service = BalanceService(db)
+        stale_jobs = service.cleanup_stale_jobs(minutes=30)
+        
+        if stale_jobs:
+            logger.info(f"[Cleanup] Found {len(stale_jobs)} stale jobs")
+            bot_token = settings.bot_token
+            if bot_token:
+                bot = Bot(token=bot_token)
+                for job in stale_jobs:
+                    # Notify user about failure and refund
+                    user = service.user_service.repo.get_by_id(job.user_id)
+                    if user:
+                        lang = user.language_code
+                        msg = (
+                            "⚠️ Генерация не удалась. Кредиты возвращены на баланс."
+                            if lang == "ru" else
+                            "⚠️ Generatsiya muvaffaqiyatsiz. Kreditlar qaytarildi."
+                        )
+                        asyncio.run(bot.send_message(user.telegram_user_id, msg))
+                # Note: Bot session should ideally be managed, but for infrequent task this is okay-ish
+    except Exception as e:
+        logger.error(f"[Cleanup] Error during stale jobs cleanup: {e}")
+    finally:
+        db.close()
