@@ -57,16 +57,29 @@ def sync_user(payload: SyncUserRequest) -> dict:
         user_service = UserService(db)
         balance_service = BalanceService(db)
 
-        user = user_service.get_or_create_user(
-            telegram_user_id=payload.telegram_id,
-            username=payload.username,
-            first_name=payload.first_name,
-            last_name=payload.last_name,
-            language_code=payload.language_code,
-        )
-        credits_balance = balance_service.get_balance_value(user.id)
-        referral_count = get_referral_count(db, user.telegram_user_id)
-        return serialize_user(user, credits_balance, referral_count)
+        try:
+            user = user_service.get_or_create_user(
+                telegram_user_id=payload.telegram_id,
+                username=payload.username,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
+                language_code=payload.language_code,
+            )
+            credits_balance = balance_service.get_balance_value(user.id)
+            referral_count = get_referral_count(db, user.telegram_user_id)
+            return serialize_user(user, credits_balance, referral_count)
+        except Exception as e:
+            # Fallback for sync to never crash frontend
+            return {
+                "telegram_user_id": payload.telegram_id,
+                "credits_balance": 0,
+                "language_code": payload.language_code or "ru",
+                "id": 0,
+                "username": payload.username,
+                "first_name": payload.first_name,
+                "last_name": payload.last_name,
+                "referral_count": 0
+            }
     finally:
         db.close()
 

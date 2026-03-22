@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUser, syncUser, updateLanguage, type BackendUser } from "@/lib/api";
+import { getUser, syncUser as apiSyncUser, updateLanguage, type BackendUser } from "@/lib/api";
 import {
   getTelegramUser,
   initTelegramWebApp,
@@ -18,7 +18,7 @@ export function useMiniAppUser() {
   const [language, setLanguage] = useState<MiniAppLanguage>("ru");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
+  const [retryCount, setRetryCount] = useState(0);
   useEffect(() => {
     initTelegramWebApp();
 
@@ -34,7 +34,7 @@ export function useMiniAppUser() {
           beUser = await getUser(user.id!);
         } catch (e: any) {
           // If 404 or other error, fallback to sync
-          beUser = await syncUser({
+          beUser = await apiSyncUser({
             telegram_id: user.id!,
             username: user.username,
             first_name: user.first_name,
@@ -45,12 +45,11 @@ export function useMiniAppUser() {
         setBackendUser(beUser);
         setLanguage(normalizeLanguage(beUser.language_code));
         localStorage.setItem("miniapp_language", normalizeLanguage(beUser.language_code));
+        setError(""); // Clear any previous error
       } catch (syncError) {
-        if (syncError instanceof Error && syncError.message) {
-          setError(syncError.message);
-        } else {
-          setError("sync_failed");
-        }
+        // Silently log errors and don't spam user UI
+        console.error('Cabinet load error:', syncError);
+        setError("sync_failed");
       } finally {
         setLoading(false);
       }
@@ -69,7 +68,7 @@ export function useMiniAppUser() {
     }
 
     checkUser();
-  }, []);
+  }, [retryCount]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -89,6 +88,11 @@ export function useMiniAppUser() {
     }
   };
 
+  const syncUser = () => {
+    setLoading(true);
+    setRetryCount(c => c + 1);
+  };
+
   return {
     telegramUser,
     backendUser,
@@ -96,5 +100,6 @@ export function useMiniAppUser() {
     loading,
     error,
     changeLanguage,
+    syncUser,
   };
 }

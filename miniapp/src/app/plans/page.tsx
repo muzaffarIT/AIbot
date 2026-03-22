@@ -20,36 +20,56 @@ const PLANS = [
     emoji: "⚡",
     nameRu: "Start",
     nameUz: "Start",
+    descRu: "Для знакомства с нейросетями",
+    descUz: "Neyrosetlar bilan tanishish uchun",
     credits: 100,
     stars: 580,
     popular: false,
+    btnClass: "bg-white/10 text-white hover:bg-white/20",
+    featuresRu: ["✓ Базовый доступ", "✓ Стандартная очередь"],
+    featuresUz: ["✓ Asosiy ruxsat", "✓ Oddiy navbat"],
   },
   {
     id: "pro",
     emoji: "💎",
     nameRu: "Pro",
     nameUz: "Pro",
+    descRu: "Для активного использования",
+    descUz: "Faol foydalanish uchun",
     credits: 300,
     stars: 1450,
     popular: true,
+    btnClass: "bg-brand-primary text-white shadow-lg shadow-brand-primary/30",
+    featuresRu: ["✓ Все нейросети", "✓ Быстрая очередь"],
+    featuresUz: ["✓ Barcha neyrosetlar", "✓ Tezkor navbat"],
   },
   {
     id: "creator",
     emoji: "🚀",
     nameRu: "Creator",
     nameUz: "Creator",
+    descRu: "Для создателей контента",
+    descUz: "Kontent yaratuvchilar uchun",
     credits: 600,
     stars: 2600,
     popular: false,
+    btnClass: "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30",
+    featuresRu: ["✓ Все нейросети", "✓ Без ограничений", "✓ Приоритет"],
+    featuresUz: ["✓ Barcha neyrosetlar", "✓ Cheklovsiz", "✓ Ustuvorlik"],
   },
   {
     id: "ultra",
     emoji: "👑",
     nameRu: "Ultra",
     nameUz: "Ultra",
+    descRu: "Для профессионалов",
+    descUz: "Professionallar uchun",
     credits: 1500,
     stars: 5800,
     popular: false,
+    btnClass: "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-500/30",
+    featuresRu: ["✓ Выделенный сервер", "✓ Все нейросети", "✓ Без очереди"],
+    featuresUz: ["✓ Maxsus server", "✓ Barcha neyrosetlar", "✓ Navbatsiz"],
   },
 ];
 
@@ -72,7 +92,9 @@ export default function PlansPage() {
       }
       return;
     }
+    // sendData and immediately close miniapp
     tg.sendData?.(JSON.stringify({ action: "buy_plan", package_id: planId }));
+    tg.close?.();
   };
 
   return (
@@ -90,7 +112,7 @@ export default function PlansPage() {
         </motion.div>
 
         {/* Packages */}
-        <motion.div variants={itemVariants} className="space-y-3">
+        <motion.div variants={itemVariants} className="space-y-4">
           {PLANS.map((plan) => (
             <div
               key={plan.id}
@@ -103,28 +125,37 @@ export default function PlansPage() {
                   {language === "uz" ? "MASHHUR" : "ПОПУЛЯРНЫЙ"}
                 </div>
               )}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{plan.emoji}</span>
-                  <div>
-                    <p className="font-bold text-white text-lg">
-                      {language === "uz" ? plan.nameUz : plan.nameRu}
-                    </p>
-                    <p className="text-sm text-white/60 flex items-center gap-1">
-                      <Zap size={12} className="text-brand-cyan" />
-                      {plan.credits} {language === "uz" ? "kredit" : "кредитов"}
-                    </p>
+              
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className="text-3xl mt-1">{plan.emoji}</span>
+                    <div>
+                      <h2 className="font-bold text-white text-lg">
+                        {language === "uz" ? plan.nameUz : plan.nameRu}
+                      </h2>
+                      <p className="text-sm text-white/50 mb-1">
+                        {language === "uz" ? plan.descUz : plan.descRu}
+                      </p>
+                      <p className="text-sm font-semibold text-brand-cyan flex items-center gap-1">
+                        <Zap size={14} />
+                        {plan.credits} {language === "uz" ? "kredit" : "кредитов"}
+                      </p>
+                    </div>
                   </div>
                 </div>
+
+                <div className="flex flex-col pl-11 gap-1">
+                  {(language === "uz" ? plan.featuresUz : plan.featuresRu).map((f, i) => (
+                    <span key={i} className="text-xs text-white/60">{f}</span>
+                  ))}
+                </div>
+
                 <button
                   onClick={() => handleBuy(plan.id)}
-                  className={`flex items-center gap-1.5 font-bold px-4 py-2.5 rounded-xl text-sm transition-all active:scale-95 ${
-                    plan.popular
-                      ? "bg-brand-primary text-white shadow-lg shadow-brand-primary/30"
-                      : "bg-white/10 text-white hover:bg-white/20"
-                  }`}
+                  className={`mt-2 flex items-center justify-center gap-1.5 font-bold px-4 py-3 rounded-xl transition-all active:scale-95 w-full ${plan.btnClass}`}
                 >
-                  <Star size={14} />
+                  <Star size={16} />
                   {plan.stars.toLocaleString()}
                 </button>
               </div>

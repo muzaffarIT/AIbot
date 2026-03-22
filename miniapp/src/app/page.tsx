@@ -48,7 +48,7 @@ const itemVariants: Variants = {
 };
 
 export default function HomePage() {
-  const { telegramUser, backendUser, language, loading: userLoading, error: userError } =
+  const { telegramUser, backendUser, language, loading: userLoading, error: userError, syncUser } =
     useMiniAppUser();
   const [history, setHistory] = useState<BalanceHistoryResponse | null>(null);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
@@ -131,16 +131,14 @@ export default function HomePage() {
           </div>
         </motion.section>
 
-        {error && !isTelegram && (
-          <motion.div variants={itemVariants} className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-3 text-red-400">
-            <AlertCircle className="shrink-0 mt-0.5" size={18} />
-            <p className="text-sm font-medium">{error}</p>
-          </motion.div>
-        )}
-        {error && isTelegram && (
-          <motion.div variants={itemVariants} className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-start gap-3 text-yellow-400">
-            <AlertCircle className="shrink-0 mt-0.5" size={18} />
-            <p className="text-sm font-medium">{error}</p>
+        {!backendUser && !userLoading && isTelegram && (
+          <motion.div variants={itemVariants} className="flex justify-center my-4">
+            <button
+              onClick={syncUser}
+              className="bg-white/10 text-white px-5 py-3 rounded-xl text-sm font-bold hover:bg-white/20 transition-colors flex items-center gap-2 active:scale-95"
+            >
+              <span className={userLoading ? "animate-spin" : ""}>🔄</span> Обновить данные
+            </button>
           </motion.div>
         )}
 
