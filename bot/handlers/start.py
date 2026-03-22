@@ -68,7 +68,7 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
         # Welcome bonus for new users
         if is_new:
             settings_service = SettingsService(db)
-            welcome_credits = await settings_service.get_int("welcome_credits", settings.welcome_credits)
+            welcome_credits = settings_service.get_int("welcome_credits", settings.welcome_credits)
             balance_service.add_credits(user.id, welcome_credits, "welcome_bonus")
             db.commit()
 

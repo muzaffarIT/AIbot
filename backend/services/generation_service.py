@@ -77,7 +77,7 @@ class GenerationService:
         
         limit_key = "max_premium_gens_per_day" if has_purchased else "max_free_gens_per_day"
         default_limit = 50 if has_purchased else settings.max_free_gens_per_day
-        limit = await self.settings_service.get_int(limit_key, default_limit)
+        limit = self.settings_service.get_int(limit_key, default_limit)
         
         daily_count = self.db.query(func.count(GenerationJob.id)).filter(
             GenerationJob.user_id == user.id,

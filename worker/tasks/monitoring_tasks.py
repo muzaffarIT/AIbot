@@ -51,8 +51,8 @@ async def run_financial_monitor():
 
         # 3. Emergency Stop Logic
         if sum_api > (sum_rev * 2) and sum_api > 10.0:  # Also min threshold to avoid noise
-            await settings_service.set("welcome_credits", 5)
-            await settings_service.set("max_free_gens_per_day", 3)
+            settings_service.set("welcome_credits", 5)
+            settings_service.set("max_free_gens_per_day", 3)
             
             admin_msg = (
                 f"🚨 <b>АВАРИЙНЫЙ РЕЖИМ!</b>\n\n"
