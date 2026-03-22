@@ -34,7 +34,7 @@ def get_categories_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 @router.message(F.text.in_(["✨ Удиви меня", "✨ Meni hayrat qoldiring"]))
 async def surprise_me_msg(message: Message, state: FSMContext) -> None:
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(message.from_user.id)
@@ -53,7 +53,7 @@ async def surprise_me_msg(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data.startswith("prompt_cat:"))
 async def select_category(callback: CallbackQuery, state: FSMContext) -> None:
     cat_id = callback.data.split(":")[1]
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(callback.from_user.id)
@@ -93,7 +93,7 @@ async def use_prompt(callback: CallbackQuery, state: FSMContext, bot: Bot) -> No
         await callback.answer("Ошибка: промпт не найден", show_alert=True)
         return
 
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(callback.from_user.id)
@@ -117,7 +117,7 @@ async def use_prompt(callback: CallbackQuery, state: FSMContext, bot: Bot) -> No
 @router.callback_query(F.data == "prompt_own")
 async def own_prompt(callback: CallbackQuery, state: FSMContext) -> None:
     # Just clear state and ask to use normal creation buttons
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(callback.from_user.id)

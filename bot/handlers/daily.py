@@ -36,7 +36,7 @@ async def daily_reply_btn(message: Message, bot: Bot) -> None:
     await _handle_daily_bonus(message.from_user.id, message, bot)
 
 async def _handle_daily_bonus(telegram_id: int, message: Message, bot: Bot) -> None:
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(telegram_id)

@@ -30,7 +30,7 @@ async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
         await message.answer("❌ Длина промпта: от 3 до 500 символов.")
         return
 
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(message.from_user.id)

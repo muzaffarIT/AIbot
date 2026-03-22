@@ -38,7 +38,7 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
         await state.clear()
         return
 
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(callback.from_user.id)

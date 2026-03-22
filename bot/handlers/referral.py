@@ -100,7 +100,7 @@ async def copy_ref_callback(callback: CallbackQuery, bot: Bot) -> None:
 
 async def notify_referrer_on_purchase(bot: Bot, referred_user_id: int) -> None:
     """Called when a referred user (database internal ID) makes their first purchase."""
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)

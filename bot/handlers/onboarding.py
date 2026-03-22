@@ -41,7 +41,7 @@ async def start_onboarding(message: types.Message, state: FSMContext, i18n: I18n
 
 @router.callback_query(F.data == "onboarding_next", OnboardingStates.step_3)
 async def onboarding_step_4(callback: types.CallbackQuery, state: FSMContext):
-    db = next(get_db_session())
+    db = get_db_session()
     user_service = UserService(db)
     i18n = I18n(callback.from_user.language_code)
     

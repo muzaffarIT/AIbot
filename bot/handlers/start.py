@@ -18,7 +18,7 @@ i18n = I18n()
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)
