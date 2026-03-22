@@ -9,23 +9,23 @@ def get_quality_keyboard(provider: str, lang: str) -> InlineKeyboardMarkup:
     
     if provider == "nano_banana":
         buttons = [
-            [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.standard"), callback_query_data="q:nano:std")],
-            [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.hd"), callback_query_data="q:nano:hd")],
-            [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.4k"), callback_query_data="q:nano:4k")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.standard"), callback_data="q:nano:std")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.hd"), callback_data="q:nano:hd")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.4k"), callback_data="q:nano:4k")],
         ]
     elif provider == "veo":
         buttons = [
-            [InlineKeyboardButton(text=i18n.t(lang, "quality.veo.fast"), callback_query_data="q:veo:fast")],
-            [InlineKeyboardButton(text=i18n.t(lang, "quality.veo.quality"), callback_query_data="q:veo:quality")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.veo.fast"), callback_data="q:veo:fast")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.veo.quality"), callback_data="q:veo:quality")],
         ]
     elif provider == "kling":
         buttons = [
-            [InlineKeyboardButton(text=i18n.t(lang, "quality.kling.std5"), callback_query_data="q:kling:std5")],
-            [InlineKeyboardButton(text=i18n.t(lang, "quality.kling.pro5"), callback_query_data="q:kling:pro5")],
-            [InlineKeyboardButton(text=i18n.t(lang, "quality.kling.pro10"), callback_query_data="q:kling:pro10")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.kling.std5"), callback_data="q:kling:std5")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.kling.pro5"), callback_data="q:kling:pro5")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.kling.pro10"), callback_data="q:kling:pro10")],
         ]
     
-    buttons.append([InlineKeyboardButton(text=i18n.t(lang, "common.cancel"), callback_query_data="start_menu")])
+    buttons.append([InlineKeyboardButton(text=i18n.t(lang, "common.cancel"), callback_data="start_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 QUALITY_DATA = {

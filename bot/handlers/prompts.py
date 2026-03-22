@@ -24,7 +24,7 @@ def get_categories_keyboard(lang: str) -> InlineKeyboardMarkup:
     # Create grid 2xN
     row = []
     for cat_id, label in labels.items():
-        row.append(InlineKeyboardButton(text=label, callback_query_data=f"prompt_cat:{cat_id}"))
+        row.append(InlineKeyboardButton(text=label, callback_data=f"prompt_cat:{cat_id}"))
         if len(row) == 2:
             buttons.append(row)
             row = []
@@ -70,11 +70,11 @@ async def select_category(callback: CallbackQuery, state: FSMContext) -> None:
         
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.use"), callback_query_data="prompt_use"),
-                InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.another"), callback_query_data=f"prompt_cat:{cat_id}")
+                InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.use"), callback_data="prompt_use"),
+                InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.another"), callback_data=f"prompt_cat:{cat_id}")
             ],
             [
-                InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.own"), callback_query_data="prompt_own")
+                InlineKeyboardButton(text=i18n.t(lang, "prompts.btn.own"), callback_data="prompt_own")
             ]
         ])
         
