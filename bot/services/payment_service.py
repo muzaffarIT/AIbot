@@ -74,14 +74,15 @@ class BotPaymentService:
             return 0
 
         db = get_db_session()
+        result_amount = 0
         try:
             balance_service = BalanceService(db)
             balance_service.add_credits(user_id, amount, "telegram_stars_purchase")
             db.commit()
-            return amount
+            result_amount = amount
         except Exception as e:
             print(f"Failed to credit: {e}")
             db.rollback()
-            return 0
         finally:
             db.close()
+        return result_amount

@@ -32,7 +32,7 @@ async def _send_daily_reminders():
         )
         users = db.execute(stmt).scalars().all()
         
-        count = 0
+        count: int = 0
         for user in users:
             try:
                 lang = user.language_code or "ru"
@@ -40,7 +40,7 @@ async def _send_daily_reminders():
                 
                 await bot.send_message(user.telegram_user_id, text)
                 user.last_notification_at = now
-                count += 1
+                count = count + 1
                 
                 # Rate limiting for Telegram
                 await asyncio.sleep(0.05)

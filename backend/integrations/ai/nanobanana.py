@@ -1,3 +1,4 @@
+from typing import Any
 from backend.integrations.ai.kie_client import KieAPIError, KieClient
 from backend.core.config import settings
 from backend.integrations.ai.base import BaseAIProvider
@@ -18,7 +19,7 @@ class NanoBananaProvider(BaseAIProvider):
         job_payload: dict | None = None,
     ) -> GenerationResult:
         client = KieClient(api_key=self.api_key)
-        input_payload = {
+        input_payload: dict[str, Any] = {
             "prompt": prompt,
             "output_format": "png",
             "image_size": "1:1",

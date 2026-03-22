@@ -1,3 +1,4 @@
+from typing import Any
 from sqlalchemy.orm import Session
 from backend.models.setting import Setting
 
@@ -5,7 +6,7 @@ class SettingsService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get(self, key: str, default: any = None) -> any:
+    def get(self, key: str, default: Any = None) -> Any:
         setting = self.db.query(Setting).filter(Setting.key == key).first()
         if not setting:
             return default
@@ -20,7 +21,7 @@ class SettingsService:
         except (ValueError, TypeError):
             return default
 
-    def set(self, key: str, value: any):
+    def set(self, key: str, value: Any):
         setting = self.db.query(Setting).filter(Setting.key == key).first()
         if setting:
             setting.value = str(value)

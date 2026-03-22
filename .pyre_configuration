@@ -4,7 +4,13 @@
       "root": "."
     }
   ],
-  "search_path": ["."],
+  "search_path": [
+    ".",
+    ".venv/lib/python3.11/site-packages"
+  ],
+  "exclude": [
+    ".venv/.*"
+  ],
   "python_version": "3.11",
   "strict": false
 }

@@ -15,11 +15,15 @@ i18n = I18n()
 
 def _get_lang(telegram_id: int) -> str:
     db = get_db_session()
+    lang = "ru"
     try:
         user = UserService(db).get_user_by_telegram_id(telegram_id)
-        return (user.language_code if user else None) or "ru"
+        if user and user.language_code:
+            lang = user.language_code
     finally:
         db.close()
+    return lang
+
 
 
 @router.message(Command("terms"))
