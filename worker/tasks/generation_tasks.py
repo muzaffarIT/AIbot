@@ -37,7 +37,10 @@ def _do_post_request(url: str, headers: dict, json_data: dict, max_retries: int 
 
 @celery_app.task(name="worker.tasks.generation_tasks.run_generation_job")
 def run_generation_job(job_id: int) -> dict | None:
-    logger.info(f"[Job {job_id}] Starting generation task")
+    logger.info(f"[WORKER] Job {job_id} started")
+    logger.info(f"[WORKER] mock_mode={settings.ai_mock_mode}")
+    logger.info(f"[WORKER] kie_key={'present' if settings.kie_api_key else 'MISSING'}")
+    
     db = SessionLocal()
     try:
         service = GenerationService(db)
@@ -46,17 +49,10 @@ def run_generation_job(job_id: int) -> dict | None:
 
         job = service.get_job(job_id)
         
-        # --- DEBUG LOGGING ---
-        provider_name = getattr(job, "provider", "unknown")
-        logger.info(f"[JOB START] id={job_id} model={provider_name}")
-        logger.info(f"[CONFIG] mock={settings.ai_mock_mode} key={settings.kie_api_key[:8] if settings.kie_api_key else 'EMPTY'}...")
-        # ---------------------
-
         logger.info(f"[Job {job_id}] Found: {job is not None}, status: {getattr(job, 'status', None)}")
         if not job or job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
             return {"job_id": job_id, "status": job.status if job else "not_found"}
 
-        logger.info(f"[Job {job_id}] provider={job.provider}, mock={settings.ai_mock_mode}, kie_key={'present' if settings.kie_api_key else 'MISSING'}")
         if getattr(settings, "ai_mock_mode", False):
             service.process_job(job.id)
             return {"job_id": job.id, "status": "mocked"}
@@ -70,7 +66,6 @@ def run_generation_job(job_id: int) -> dict | None:
         
         # --- API KEY VALIDATION ---
         if not api_key or not api_key.startswith("kie-"):
-            # Avoid crashing, update job to failed and notify
             logger.error(f"[KIE] Invalid API key format: {api_key[:10] if api_key else 'None'}")
             service.repo.update_job(job, status=JobStatus.FAILED, error_message="Invalid KIE API key", completed=True)
             balance_service.add_credits(
@@ -139,8 +134,6 @@ def run_generation_job(job_id: int) -> dict | None:
             
             poll_url_template = f"{base_url}/v1/kling/video/query/{{task_id}}"
             
-            # 5 сек = каждые 15 сек, 10 сек = каждые 20 сек, 15 сек = каждые 25 сек
-            # timeout: 5с=300с, 10с=600с, 15с=900с (15 минут)
             if duration == "15":
                 poll_interval = 25
                 poll_timeout = 900
@@ -158,27 +151,18 @@ def run_generation_job(job_id: int) -> dict | None:
 
         # 1. Start generation
         try:
-            logger.info(f"[KIE] AI_MOCK_MODE={settings.ai_mock_mode}")
-            logger.info(f"[KIE] API_KEY present: {bool(settings.kie_api_key)}")
-            logger.info(f"[KIE] Sending to: {url}")
-            
-            _payload_str: str = str(payload)
-            logger.info(f"[Job {job_id}] POST {url} payload={_payload_str[:200]}")  # type: ignore
-            
             response = requests.post(url, headers=headers, json=payload, timeout=30)
-            logger.info(f"[KIE RESPONSE] status={response.status_code}")
-            logger.info(f"[KIE BODY] {response.text[:300]}")
+            logger.info(f"[KIE] Response status: {response.status_code}")
+            logger.info(f"[KIE] Response body: {response.text[:200]}")
             
             response.raise_for_status()
             start_data = response.json()
             
-            _start_str: str = str(start_data)
-            logger.info(f"[Job {job_id}] KIE processing: {_start_str[:300]}")  # type: ignore
             task_id = start_data.get("id") or (start_data.get("data") and start_data["data"].get("task_id"))
             if not task_id:
                 raise ValueError(f"No task_id in response: {start_data}")
         except Exception as exc:
-            logger.error(f"[Job {job_id}] KIE API call failed: {exc}")
+            logger.error(f"[WORKER] Job {job_id} FAILED: {exc}", exc_info=True)
             balance_service.add_credits(
                 user_id=job.user_id,
                 amount=job.credits_reserved,
@@ -222,6 +206,7 @@ def run_generation_job(job_id: int) -> dict | None:
             # 3. Finalize
             bot_token = settings.bot_token
             if final_result_url:
+                logger.info(f"[KIE] Task result: {final_result_url}")
                 service.repo.update_job(
                     job,
                     status=JobStatus.COMPLETED,
@@ -242,15 +227,16 @@ def run_generation_job(job_id: int) -> dict | None:
                     db.commit()
                     
                     if newly_earned and chat_id and settings.bot_token:
-                        # Notify about achievements too
                         asyncio.run(_notify_achievements(chat_id, settings.bot_token, newly_earned, user.language_code or "ru"))
                 except Exception as ach_err:
                     logger.error(f"[Achievement] Worker error: {ach_err}")
+                    
                 if chat_id and bot_token and isinstance(final_result_url, str):
                     asyncio.run(_notify_success(chat_id, bot_token, job.provider, job.prompt, final_result_url, is_video))
+                    logger.info(f"[WORKER] Job {job_id} completed, sent to user")
                 return {"job_id": job.id, "status": "completed", "result_url": final_result_url}
             else:
-                # Timeout or failed
+                logger.error(f"[WORKER] Job {job_id} FAILED: Polling timeout or failure", exc_info=True)
                 balance_service.add_credits(
                     user_id=job.user_id,
                     amount=job.credits_reserved,
@@ -262,7 +248,7 @@ def run_generation_job(job_id: int) -> dict | None:
                 return {"job_id": job.id, "status": "failed"}
 
         except Exception as e:
-            print(f"CRITICAL ERROR IN WORKER: {e}")
+            logger.error(f"[WORKER] Job {job_id} FAILED: {e}", exc_info=True)
             service.repo.update_job(job, status=JobStatus.FAILED, error_message=str(e), completed=True)
             return {"job_id": job.id, "status": "crashed"}
 
