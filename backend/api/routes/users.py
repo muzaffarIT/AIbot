@@ -28,6 +28,11 @@ class SyncUserRequest(BaseModel):
     language_code: str | None = None
 
 
+class LanguageUpdateRequest(BaseModel):
+    telegram_user_id: int
+    language: str
+
+
 def serialize_user(user, credits_balance: int, referral_count: int = 0) -> dict:
     return {
         "id": user.id,

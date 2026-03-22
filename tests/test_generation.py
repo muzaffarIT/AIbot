@@ -48,15 +48,15 @@ class GenerationFlowTests(unittest.TestCase):
             )
             self.assertEqual(job_response.status_code, 200)
             job = job_response.json()
-            self.assertEqual(job["status"], "completed")
+            self.assertEqual(job["status"], "completed", msg=f"Job failed with error: {job.get('error_message')}")
             self.assertTrue(job["result_url"].startswith("https://mock.local/nano_banana/"))
-            self.assertEqual(job["credits_reserved"], 12)
+            self.assertEqual(job["credits_reserved"], 5)
 
             balance_response = client.get(f"/api/balances/telegram/{telegram_user_id}")
             self.assertEqual(balance_response.status_code, 200)
             self.assertEqual(
                 balance_response.json()["credits_balance"],
-                plan["credits_amount"] - 12,
+                plan["credits_amount"] - 5 + 2, # +2 from first_gen achievement
             )
 
             jobs_response = client.get(f"/api/jobs/telegram/{telegram_user_id}")

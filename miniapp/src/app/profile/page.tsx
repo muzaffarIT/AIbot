@@ -37,7 +37,7 @@ const LANG_OPTIONS = [
 ];
 
 export default function ProfilePage() {
-  const { language, backendUser, telegramUser } = useMiniAppUser();
+  const { language, backendUser, telegramUser, changeLanguage } = useMiniAppUser();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
   // In a real app we'd fetch achievements from backend. For now show placeholders.
@@ -52,10 +52,7 @@ export default function ProfilePage() {
     });
 
   const handleLangChange = (code: string) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("miniapp_language", code);
-      window.location.reload();
-    }
+    changeLanguage(code);
     setLangMenuOpen(false);
   };
 

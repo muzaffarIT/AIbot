@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.db.base import Base
@@ -22,6 +22,7 @@ class GenerationJob(Base):
     external_job_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     result_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    job_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

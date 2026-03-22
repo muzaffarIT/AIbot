@@ -16,16 +16,18 @@ class BaseAIProvider(ABC):
         *,
         prompt: str,
         source_image_url: str | None = None,
+        job_payload: dict | None = None,
     ) -> GenerationResult:
         if settings.ai_mock_mode or not self.api_key:
-            return self._mock_generate(prompt=prompt, source_image_url=source_image_url)
-        return self._real_generate(prompt=prompt, source_image_url=source_image_url)
+            return self._mock_generate(prompt=prompt, source_image_url=source_image_url, job_payload=job_payload)
+        return self._real_generate(prompt=prompt, source_image_url=source_image_url, job_payload=job_payload)
 
     def _mock_generate(
         self,
         *,
         prompt: str,
         source_image_url: str | None = None,
+        job_payload: dict | None = None,
     ) -> GenerationResult:
         job_id = uuid4().hex
         source = source_image_url or ""
@@ -38,6 +40,7 @@ class BaseAIProvider(ABC):
                     "provider": str(self.provider_name),
                     "prompt": prompt,
                     "source_image_url": source,
+                    "job_payload": job_payload,
                 },
                 ensure_ascii=True,
                 sort_keys=True,
@@ -60,5 +63,6 @@ class BaseAIProvider(ABC):
         *,
         prompt: str,
         source_image_url: str | None = None,
+        job_payload: dict | None = None,
     ) -> GenerationResult:
         raise NotImplementedError

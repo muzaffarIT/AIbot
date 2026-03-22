@@ -19,6 +19,7 @@ class GenerationJobRepository:
         source_image_url: str | None,
         status: str,
         credits_reserved: int,
+        job_payload: dict | None = None,
     ) -> GenerationJob:
         job = GenerationJob(
             user_id=user_id,
@@ -27,6 +28,7 @@ class GenerationJobRepository:
             source_image_url=source_image_url,
             status=status,
             credits_reserved=credits_reserved,
+            job_payload=job_payload,
         )
         self.db.add(job)
         self.db.commit()

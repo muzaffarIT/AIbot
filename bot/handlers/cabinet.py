@@ -42,5 +42,5 @@ async def open_cabinet(message: Message) -> None:
         )
     ]])
 
-    text = i18n.get("open_cabinet", lang)
+    text = i18n.t(lang, "open_cabinet")
     await message.answer(text, reply_markup=keyboard)

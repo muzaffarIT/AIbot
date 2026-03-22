@@ -64,9 +64,15 @@ export default function PlansPage() {
 
   const handleBuy = (planId: string) => {
     const tg = (window as any).Telegram?.WebApp;
-    if (tg) {
-      tg.sendData?.(JSON.stringify({ action: "buy_plan", package_id: planId }));
+    if (!tg?.initData) {
+      if (tg?.showAlert) {
+         tg.showAlert("Откройте через Telegram");
+      } else {
+         alert("Откройте через Telegram");
+      }
+      return;
     }
+    tg.sendData?.(JSON.stringify({ action: "buy_plan", package_id: planId }));
   };
 
   return (

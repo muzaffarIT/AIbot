@@ -169,6 +169,26 @@ export async function getUser(telegramUserId: number) {
   return fetchJson<BackendUser>(`/api/users/${telegramUserId}`);
 }
 
+export async function syncUser(payload: {
+  telegram_id: number;
+  username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  language_code?: string | null;
+}) {
+  return fetchJson<BackendUser>(`/api/users/sync`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLanguage(telegramUserId: number, language: string) {
+  return fetchJson<{ success: boolean; language: string }>(`/api/users/language`, {
+    method: "PATCH",
+    body: JSON.stringify({ telegram_user_id: telegramUserId, language }),
+  });
+}
+
 export async function getBalance(telegramUserId: number) {
   return fetchJson<BalanceResponse>(`/api/balances/telegram/${telegramUserId}`);
 }

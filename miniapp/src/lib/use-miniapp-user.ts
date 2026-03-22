@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ensureUser, type BackendUser } from "@/lib/api";
+import { getUser, syncUser, updateLanguage, type BackendUser } from "@/lib/api";
 import {
   getTelegramUser,
   initTelegramWebApp,
@@ -29,14 +29,22 @@ export function useMiniAppUser() {
       setLanguage(normalizeLanguage(user?.language_code));
 
       try {
-        const ensuredUser = await ensureUser({
-          telegram_user_id: user.id!,
-          username: user.username,
-          first_name: user.first_name,
-          last_name: user.last_name,
-        });
-        setBackendUser(ensuredUser);
-        setLanguage(normalizeLanguage(ensuredUser.language_code));
+        let beUser: BackendUser;
+        try {
+          beUser = await getUser(user.id!);
+        } catch (e: any) {
+          // If 404 or other error, fallback to sync
+          beUser = await syncUser({
+            telegram_id: user.id!,
+            username: user.username,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            language_code: user.language_code,
+          });
+        }
+        setBackendUser(beUser);
+        setLanguage(normalizeLanguage(beUser.language_code));
+        localStorage.setItem("miniapp_language", normalizeLanguage(beUser.language_code));
       } catch (syncError) {
         if (syncError instanceof Error && syncError.message) {
           setError(syncError.message);
@@ -69,11 +77,24 @@ export function useMiniAppUser() {
     }
   }, [language]);
 
+  const changeLanguage = async (newLang: string) => {
+    setLanguage(newLang as MiniAppLanguage);
+    localStorage.setItem("miniapp_language", newLang);
+    if (backendUser) {
+      try {
+        await updateLanguage(backendUser.telegram_user_id, newLang);
+      } catch (e) {
+        console.error("Failed to update language on backend", e);
+      }
+    }
+  };
+
   return {
     telegramUser,
     backendUser,
     language,
     loading,
     error,
+    changeLanguage,
   };
 }

@@ -138,7 +138,7 @@ export default function JobsPage() {
                 const jobDate = new Date(job.created_at || "");
                 const isStuck = isActiveStatus(job.status) && (new Date().getTime() - jobDate.getTime()) > 30 * 60 * 1000;
                 const displayStatus = isStuck ? "failed" : job.status;
-                const statusLabel = isStuck ? (language === 'uz' ? "Xatolik (Qotib qolgan)" : "Зависло / Ошибка") : getJobStatusLabel(language, job.status);
+                const statusLabel = isStuck ? (language === 'uz' ? "Xatolik" : "Ошибка") : getJobStatusLabel(language, job.status);
 
                 return (
                   <div key={job.id} className="glass-card p-5 overflow-hidden relative group hover:border-white/20 transition-colors">

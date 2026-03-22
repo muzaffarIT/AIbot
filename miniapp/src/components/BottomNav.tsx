@@ -10,7 +10,7 @@ export function BottomNav() {
   const items = [
     { href: "/profile",     icon: UserCircle,    labelRu: "Профиль",   labelUz: "Profil"    },
     { href: "/plans",       icon: Package,       labelRu: "Услуги",    labelUz: "Xizmatlar" },
-    { href: "/partnership", icon: Users,         labelRu: "Партнёры",  labelUz: "Hamkorlar" },
+    { href: "/referral",    icon: Users,         labelRu: "Партнёры",  labelUz: "Hamkorlar" },
     { href: "/jobs",        icon: ClipboardList, labelRu: "Работы",    labelUz: "Ishlar"    },
   ] as const;
 

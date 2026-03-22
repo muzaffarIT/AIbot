@@ -25,8 +25,17 @@ export default function PartnershipPage() {
   const botUsername = "batirai_bot"; 
   const referralLink = `https://t.me/${botUsername}?start=ref_${userId}`;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(referralLink);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(referralLink);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = referralLink;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     if ((window as any).Telegram?.WebApp?.HapticFeedback) {

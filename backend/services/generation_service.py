@@ -1,6 +1,8 @@
+import logging
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
+from backend.models.user import User
 from backend.db.repositories.generation_jobs import GenerationJobRepository
 from backend.integrations.ai.kling_motion import KlingMotionProvider
 from backend.integrations.ai.nanobanana import NanoBananaProvider
@@ -16,7 +18,7 @@ from shared.enums.providers import AIProvider
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 
-
+logger = logging.getLogger(__name__)
 GENERATION_CREDIT_COSTS = {
     AIProvider.NANO_BANANA: 5,
     AIProvider.KLING: 40,
@@ -152,14 +154,16 @@ class GenerationService:
             
             # Check achievements
             try:
-                from bot.services.achievements import check_and_award_achievements
-                check_and_award_achievements(
-                    db=self.db,
-                    user_id=job.user_id,
-                    telegram_id=user.telegram_user_id,
-                    lang=user.language_code or "ru"
-                )
-                self.db.commit() # Commit achievements
+                user = self.db.query(User).filter(User.id == job.user_id).first()
+                if user:
+                    from bot.services.achievements import check_and_award_achievements
+                    check_and_award_achievements(
+                        db=self.db,
+                        user_id=job.user_id,
+                        telegram_id=user.telegram_user_id,
+                        lang=user.language_code or "ru"
+                    )
+                    self.db.commit() # Commit achievements
             except Exception as e:
                 logger.error(f"Error checking achievements after job {job.id}: {e}")
             
