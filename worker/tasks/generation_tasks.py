@@ -268,7 +268,17 @@ async def _notify_achievements(chat_id: int, bot_token: str, achievements_with_b
 
 
 async def _notify_failed(chat_id: int, provider: str, prompt: str):
-
+    bot_token = settings.bot_token
+    if not bot_token:
+        return
+    bot = Bot(token=bot_token)
+    try:
+        text = f"❌ Ошибка генерации ({provider}).\nВаш промпт: <i>{prompt[:100]}...</i>\n\nКредиты возвращены на баланс."
+        await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Failed to send failed notification to {chat_id}: {e}")
+    finally:
+        await bot.session.close()
 
 @celery_app.task(name="worker.tasks.generation_tasks.cleanup_stale_jobs_task")
 def cleanup_stale_jobs_task() -> None:
