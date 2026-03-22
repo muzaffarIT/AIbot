@@ -12,6 +12,9 @@ class UserRepository:
         stmt = select(User).where(User.telegram_user_id == telegram_user_id)
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_by_id(self, user_id: int) -> User | None:
+        return self.db.get(User, user_id)
+
     def get_by_referral_code(self, code: str) -> User | None:
         stmt = select(User).where(User.referral_code == code)
         return self.db.execute(stmt).scalar_one_or_none()
