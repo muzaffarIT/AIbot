@@ -109,5 +109,11 @@
     "onboarding_step_4": "🎉 Tayyor! Endi BATIR AI dan foydalanishni bilasiz.\n\n👥 Do'stlarni taklif qiling: /referral\n☀️ Har kuni bonus oling: /daily\n❓ Yordam: /help",
     "onboarding_finished": "✅ Onboarding tugadi! Harakatni tanlang:",
     "onboarding_try_now": "✨ Meni hayrat qoldiring",
-    "onboarding_create": "🍌 Rasm yaratish"
+    "onboarding_create": "🍌 Rasm yaratish",
+    "common": {
+        "cancel": "❌ Bekor qilish",
+        "back": "← Orqaga",
+        "yes": "✅ Ha",
+        "no": "❌ Yo'q"
+    }
 }

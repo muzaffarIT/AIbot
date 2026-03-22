@@ -95,8 +95,13 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
         await callback.answer()
         await state.clear()
         
-    except Exception as exc:
-        logger.error(f"Error creating quality job: {exc}")
-        await callback.answer(f"❌ Ошибка: {exc}", show_alert=True)
+    except Exception as e:
+        logger.error(f"Error creating quality job: {e}")
+        from bot.keyboards.reply_menu import main_reply_keyboard
+        await callback.message.answer(
+            "❌ Произошла ошибка. Попробуй ещё раз.\n"
+            "Кредиты не списаны.",
+            reply_markup=main_reply_keyboard(lang)
+        )
     finally:
         db.close()
