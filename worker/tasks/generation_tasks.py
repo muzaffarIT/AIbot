@@ -65,18 +65,20 @@ def run_generation_job(job_id: int) -> dict | None:
         api_key = settings.kie_api_key
         
         # --- API KEY VALIDATION ---
-        if not api_key or not api_key.startswith("kie-"):
-            logger.error(f"[KIE] Invalid API key format: {api_key[:10] if api_key else 'None'}")
-            service.repo.update_job(job, status=JobStatus.FAILED, error_message="Invalid KIE API key", completed=True)
+        if not api_key:
+            logger.error("[KIE] KIE_API_KEY is empty!")
+            service.repo.update_job(job, status=JobStatus.FAILED, error_message="KIE_API_KEY not set", completed=True)
             balance_service.add_credits(
                 user_id=job.user_id,
                 amount=job.credits_reserved,
-                comment="Refund: Invalid backend API key"
+                comment="Refund: KIE API key missing"
             )
             if chat_id and settings.bot_token:
                 import asyncio
                 asyncio.run(_notify_failed(chat_id, job.provider, job.prompt))
-            raise ValueError("Invalid KIE API key")
+            raise ValueError("KIE_API_KEY not set")
+            
+        logger.info(f"[KIE] Using key: {api_key[:8]}...")
         # --------------------------
         
         headers = {
