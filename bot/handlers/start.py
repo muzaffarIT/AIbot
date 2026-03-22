@@ -75,7 +75,7 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
         # Onboarding trigger (Block 2)
         if not user.onboarding_completed:
             await state.clear()
-            await start_onboarding(message, state, I18n(lang))
+            await start_onboarding(message, state, lang)
             return
 
         credits = balance_service.get_balance_value(user.id)

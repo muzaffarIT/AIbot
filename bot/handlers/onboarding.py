@@ -13,6 +13,7 @@ from shared.utils.i18n import I18n
 
 logger = logging.getLogger(__name__)
 router = Router()
+i18n = I18n()
 
 class OnboardingStates(StatesGroup):
     step_1 = State()
@@ -20,22 +21,22 @@ class OnboardingStates(StatesGroup):
     step_3 = State()
     step_4 = State()
 
-async def start_onboarding(message: types.Message, state: FSMContext, i18n: I18n):
+async def start_onboarding(message: types.Message, state: FSMContext, lang: str):
     await state.set_state(OnboardingStates.step_1)
     await message.answer(
-        i18n.get("onboarding_step_1"),
+        i18n.t(lang, "onboarding_step_1"),
         reply_markup=ReplyKeyboardRemove()
     )
     await asyncio.sleep(1.5)
     await state.set_state(OnboardingStates.step_2)
-    await message.answer(i18n.get("onboarding_step_2"))
+    await message.answer(i18n.t(lang, "onboarding_step_2"))
     
     await asyncio.sleep(1.5)
     await state.set_state(OnboardingStates.step_3)
     await message.answer(
-        i18n.get("onboarding_step_3"),
+        i18n.t(lang, "onboarding_step_3"),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=i18n.get("btn_continue"), callback_data="onboarding_next")]
+            [InlineKeyboardButton(text=i18n.t(lang, "btn_continue"), callback_data="onboarding_next")]
         ])
     )
 
@@ -43,10 +44,10 @@ async def start_onboarding(message: types.Message, state: FSMContext, i18n: I18n
 async def onboarding_step_4(callback: types.CallbackQuery, state: FSMContext):
     db = get_db_session()
     user_service = UserService(db)
-    i18n = I18n(callback.from_user.language_code)
+    lang = callback.from_user.language_code or "ru"
     
     await state.set_state(OnboardingStates.step_4)
-    await callback.message.edit_text(i18n.get("onboarding_step_4"))
+    await callback.message.edit_text(i18n.t(lang, "onboarding_step_4"))
     
     # Finalize onboarding
     user = user_service.get_user_by_telegram_id(callback.from_user.id)
@@ -56,7 +57,7 @@ async def onboarding_step_4(callback: types.CallbackQuery, state: FSMContext):
     
     await state.clear()
     await callback.message.answer(
-        i18n.get("onboarding_finished"),
-        reply_markup=main_reply_keyboard(callback.from_user.language_code)
+        i18n.t(lang, "onboarding_finished"),
+        reply_markup=main_reply_keyboard(lang)
     )
     await callback.answer()
