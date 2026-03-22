@@ -35,6 +35,63 @@ def _do_post_request(url: str, headers: dict, json_data: dict, max_retries: int 
     raise ValueError("Max retries exceeded")
 
 
+def poll_task(task_id, max_seconds=300, interval=5):
+    elapsed = 0
+    while elapsed < max_seconds:
+        time.sleep(interval)
+        elapsed += interval
+        
+        r = requests.get(
+            f"{settings.kie_base_url}/api/v1/jobs/{task_id}",
+            headers={"Authorization": f"Bearer {settings.kie_api_key}"}
+        )
+        data = r.json()
+        status = data.get("status", "")
+        
+        logger.info(f"[KIE POLL] {task_id} → {status} ({elapsed}s)")
+        
+        if status == "completed":
+            result = data.get("result", {})
+            # Для картинок:
+            images = result.get("images", [])
+            if images:
+                return images[0].get("url")
+            # Для видео:
+            videos = result.get("videos", [])
+            if videos:
+                return videos[0].get("url")
+        
+        if status == "failed":
+            raise ValueError(f"KIE task failed: {data}")
+    
+    raise TimeoutError(f"Task {task_id} timeout after {max_seconds}s")
+
+
+async def send_result(telegram_id, result_url, provider, prompt, credits):
+    bot = Bot(token=settings.bot_token)
+    try:
+        caption = (
+            f"✅ Готово!\n"
+            f"🤖 {provider}\n"
+            f"💬 {prompt[:100]}\n"
+            f"💰 Потрачено: {credits} кредитов"
+        )
+        if provider in ["nano_banana", "nano-banana-pro", AIProvider.NANO_BANANA]:
+            await bot.send_photo(
+                chat_id=telegram_id,
+                photo=result_url,
+                caption=caption
+            )
+        else:
+            await bot.send_video(
+                chat_id=telegram_id,
+                video=result_url,
+                caption=caption
+            )
+    finally:
+        await bot.session.close()
+
+
 @celery_app.task(name="worker.tasks.generation_tasks.run_generation_job")
 def run_generation_job(job_id: int) -> dict | None:
     logger.info(f"[WORKER] Job {job_id} started")
@@ -61,198 +118,149 @@ def run_generation_job(job_id: int) -> dict | None:
         user = user_service.get_user_by_id(job.user_id)
         chat_id = user.telegram_user_id if user else None
 
-        base_url = "https://api.kie.ai"
-        api_key = settings.kie_api_key
-        
-        # --- API KEY VALIDATION ---
-        if not api_key:
-            logger.error("[KIE] KIE_API_KEY is empty!")
-            service.repo.update_job(job, status=JobStatus.FAILED, error_message="KIE_API_KEY not set", completed=True)
-            balance_service.add_credits(
-                user_id=job.user_id,
-                amount=job.credits_reserved,
-                comment="Refund: KIE API key missing"
-            )
-            if chat_id and settings.bot_token:
-                import asyncio
-                asyncio.run(_notify_failed(chat_id, job.provider, job.prompt))
+        if not settings.kie_api_key:
             raise ValueError("KIE_API_KEY not set")
-            
-        logger.info(f"[KIE] Using key: {api_key[:8]}...")
-        # --------------------------
+        logger.info(f"[KIE] Key: {settings.kie_api_key[:8]}...")
         
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {settings.kie_api_key}",
             "Content-Type": "application/json"
         }
 
         # Setup provider specific configs
-        poll_url_template = f"{base_url}/v1/task/{{task_id}}" # default
-
         if job.provider == AIProvider.NANO_BANANA:
-            url = f"{settings.kie_base_url}/v1/nano-banana/generate"
-            width = job.job_payload.get("width", 1024)
-            height = job.job_payload.get("height", 1024)
+            url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
+            aspect_ratio = job.job_payload.get("aspect_ratio", "1:1")
+            resolution = job.job_payload.get("resolution", "1K")
             payload = {
                 "model": "nano-banana-pro",
-                "prompt": job.prompt,
-                "width": width,
-                "height": height
+                "input": {
+                    "prompt": job.prompt,
+                    "aspect_ratio": aspect_ratio,
+                    "resolution": resolution,
+                    "output_format": "png",
+                    "image_input": [job.source_image_url] if job.source_image_url else []
+                }
             }
-            if job.source_image_url:
-                payload["image_url"] = job.source_image_url
             poll_interval = 5
             poll_timeout = 120
-            is_video = False
 
         elif job.provider == AIProvider.VEO:
-            url = f"{settings.kie_base_url}/v1/veo/generate"
+            url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
             quality = job.job_payload.get("quality", "fast")
             payload = {
-                "model": quality,  # As explicitly requested in payload example: "model": "fast" or "quality"
-                "prompt": job.prompt,
-                "duration": 8
+                "model": "veo-3",
+                "input": {
+                    "prompt": job.prompt,
+                    "duration": 8,
+                    "resolution": "720p" if quality == "fast" else "1080p",
+                    "image_input": [job.source_image_url] if job.source_image_url else []
+                }
             }
-            if job.source_image_url:
-                payload["image_url"] = job.source_image_url
-            
-            poll_url_template = f"{base_url}/v1/veo/query/{{task_id}}"
             poll_interval = 10
             poll_timeout = 300
-            is_video = True
 
         elif job.provider == AIProvider.KLING:
-            url = f"{settings.kie_base_url}/v1/kling/video/generate"
+            url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
             mode = job.job_payload.get("mode", "std")
-            duration = str(job.job_payload.get("duration", 5))
+            duration = int(job.job_payload.get("duration", 5))
             payload = {
-                "model_name": "kling-v3.0",
-                "prompt": job.prompt,
-                "duration": duration,
-                "mode": mode
+                "model": "kling-v3",
+                "input": {
+                    "prompt": job.prompt,
+                    "duration": duration,
+                    "mode": mode,
+                    "image_input": [job.source_image_url] if job.source_image_url else []
+                }
             }
-            if job.source_image_url:
-                payload["image_url"] = job.source_image_url
-            
-            poll_url_template = f"{base_url}/v1/kling/video/query/{{task_id}}"
-            
-            if duration == "15":
+            if duration == 15:
                 poll_interval = 25
                 poll_timeout = 900
-            elif duration == "10":
+            elif duration == 10:
                 poll_interval = 20
                 poll_timeout = 600
             else:
                 poll_interval = 15
                 poll_timeout = 300
-                
-            is_video = True
         else:
             service.repo.update_job(job, status=JobStatus.FAILED, error_message="Unknown provider", completed=True)
             return {"job_id": job_id, "status": "failed"}
 
         # 1. Start generation
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            logger.info(f"[KIE] Response status: {response.status_code}")
-            logger.info(f"[KIE] Response body: {response.text[:200]}")
-            
-            response.raise_for_status()
-            start_data = response.json()
-            
-            task_id = start_data.get("id") or (start_data.get("data") and start_data["data"].get("task_id"))
-            if not task_id:
-                raise ValueError(f"No task_id in response: {start_data}")
-        except Exception as exc:
-            logger.error(f"[WORKER] Job {job_id} FAILED: {exc}", exc_info=True)
-            balance_service.add_credits(
-                user_id=job.user_id,
-                amount=job.credits_reserved,
-                comment=f"Refund after start failed: {exc}"
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        logger.info(f"[KIE] Response status: {response.status_code}")
+        logger.info(f"[KIE] Response body: {response.text[:200]}")
+        
+        response.raise_for_status()
+        start_data = response.json()
+        
+        task_id = start_data.get("id") or start_data.get("task_id") or (start_data.get("data") and start_data["data"].get("task_id"))
+        if not task_id:
+            raise ValueError(f"No task_id in response: {start_data}")
+
+        # 2. Polling
+        final_result_url = poll_task(task_id, max_seconds=poll_timeout, interval=poll_interval)
+        
+        if final_result_url:
+            logger.info(f"[KIE] Task result: {final_result_url}")
+            service.repo.update_job(
+                job,
+                status=JobStatus.COMPLETED,
+                external_job_id=str(task_id),
+                result_url=final_result_url,
+                completed=True
             )
-            service.repo.update_job(job, status=JobStatus.FAILED, error_message=str(exc), completed=True)
-            if chat_id and settings.bot_token:
-                asyncio.run(_notify_failed(chat_id, job.provider, job.prompt))
-            return {"job_id": job.id, "status": "failed"}
-
-        try:
-            # 2. Polling
-            poll_url = poll_url_template.format(task_id=task_id)
-            elapsed: int = 0
-            final_result_url: str | None = None
-            poll_timeout_int: int = int(poll_timeout)
-            poll_interval_int: int = int(poll_interval)
-
-            while elapsed < poll_timeout_int:
-                try:
-                    resp = requests.get(poll_url, headers=headers, timeout=10)
-                    resp.raise_for_status()
-                    poll_data = resp.json()
-                    status = poll_data.get("status")
-
-                    if status == "completed":
-                        if is_video:
-                            final_result_url = poll_data.get("data", {}).get("result", {}).get("video_url")
-                        else:
-                            final_result_url = poll_data.get("data", {}).get("result", {}).get("image_url")
-                        break
-                    elif status == "failed":
-                        raise ValueError("Task failed during polling")
-
-                except Exception as e:
-                    pass  # Ignore occasional network errors during polling
-
-                time.sleep(poll_interval_int)
-                elapsed += poll_interval_int
-
-            # 3. Finalize
-            bot_token = settings.bot_token
-            if final_result_url:
-                logger.info(f"[KIE] Task result: {final_result_url}")
-                service.repo.update_job(
-                    job,
-                    status=JobStatus.COMPLETED,
-                    external_job_id=str(task_id),
-                    result_url=final_result_url,
-                    completed=True
-                )
-                
-                # Check achievements
-                try:
-                    from bot.services.achievements import check_and_award_achievements
-                    newly_earned = check_and_award_achievements(
-                        db=db,
-                        user_id=job.user_id,
-                        telegram_id=user.telegram_user_id,
-                        lang=user.language_code or "ru"
-                    )
-                    db.commit()
-                    
-                    if newly_earned and chat_id and settings.bot_token:
-                        asyncio.run(_notify_achievements(chat_id, settings.bot_token, newly_earned, user.language_code or "ru"))
-                except Exception as ach_err:
-                    logger.error(f"[Achievement] Worker error: {ach_err}")
-                    
-                if chat_id and bot_token and isinstance(final_result_url, str):
-                    asyncio.run(_notify_success(chat_id, bot_token, job.provider, job.prompt, final_result_url, is_video))
-                    logger.info(f"[WORKER] Job {job_id} completed, sent to user")
-                return {"job_id": job.id, "status": "completed", "result_url": final_result_url}
-            else:
-                logger.error(f"[WORKER] Job {job_id} FAILED: Polling timeout or failure", exc_info=True)
-                balance_service.add_credits(
+            
+            # Check achievements
+            try:
+                from bot.services.achievements import check_and_award_achievements
+                newly_earned = check_and_award_achievements(
+                    db=db,
                     user_id=job.user_id,
-                    amount=job.credits_reserved,
-                    comment="Refund after polling timeout/failure"
+                    telegram_id=user.telegram_user_id,
+                    lang=user.language_code or "ru"
                 )
-                service.repo.update_job(job, status=JobStatus.FAILED, error_message="Polling timeout or failure", completed=True)
-                if chat_id and bot_token:
-                    asyncio.run(_notify_failed(chat_id, job.provider, job.prompt))
-                return {"job_id": job.id, "status": "failed"}
+                db.commit()
+                
+                if newly_earned and chat_id and settings.bot_token:
+                    asyncio.run(_notify_achievements(chat_id, settings.bot_token, newly_earned, user.language_code or "ru"))
+            except Exception as ach_err:
+                logger.error(f"[Achievement] Worker error: {ach_err}")
+                
+            if chat_id:
+                asyncio.run(send_result(
+                    chat_id, final_result_url,
+                    job.provider, job.prompt, job.credits_reserved
+                ))
+            return {"job_id": job.id, "status": "completed", "result_url": final_result_url}
 
-        except Exception as e:
-            logger.error(f"[WORKER] Job {job_id} FAILED: {e}", exc_info=True)
-            service.repo.update_job(job, status=JobStatus.FAILED, error_message=str(e), completed=True)
-            return {"job_id": job.id, "status": "crashed"}
+    except Exception as e:
+        logger.error(f"[JOB {job_id}] FAILED: {e}", exc_info=True)
+        
+        try:
+            job.status = JobStatus.FAILED  # Used the enum directly here! Wait, the prompt used "failed", but enum might be safer.
+            job.error_message = str(e)[:500]
+            user.balance += job.credits_reserved
+            db.commit()
+            logger.info(f"[JOB {job_id}] Refunded {job.credits_reserved} credits")
+        except Exception as db_err:
+            logger.error(f"[JOB {job_id}] Refund failed: {db_err}")
+        
+        if 'user' in locals() and user:
+            try:
+                from aiogram import Bot
+                bot = Bot(token=settings.bot_token)
+                import asyncio
+                asyncio.run(bot.send_message(
+                    chat_id=user.telegram_user_id,
+                    text=f"⚠️ Генерация не удалась.\n"
+                         f"✅ {job.credits_reserved} кредитов возвращено на баланс."
+                ))
+                asyncio.run(bot.session.close())
+            except Exception as notify_err:
+                logger.error(f"[JOB {job_id}] Notify failed: {notify_err}")
+
+        return {"job_id": job_id, "status": "failed"}
 
     finally:
         db.close()
@@ -309,6 +317,7 @@ async def _notify_failed(chat_id: int, provider: str, prompt: str):
     finally:
         await bot.session.close()
 
+
 @celery_app.task(name="worker.tasks.generation_tasks.cleanup_stale_jobs_task")
 def cleanup_stale_jobs_task() -> None:
     """Periodic task to fail jobs pending > 30 min and notify users."""
@@ -324,7 +333,6 @@ def cleanup_stale_jobs_task() -> None:
             if bot_token:
                 bot = Bot(token=bot_token)
                 for job in stale_jobs:
-                    # Notify user about failure and refund
                     user = service.user_service.repo.get_by_id(job.user_id)
                     if user:
                         lang = user.language_code
@@ -334,7 +342,6 @@ def cleanup_stale_jobs_task() -> None:
                             "⚠️ Generatsiya muvaffaqiyatsiz. Kreditlar qaytarildi."
                         )
                         asyncio.run(bot.send_message(user.telegram_user_id, msg))
-                # Note: Bot session should ideally be managed, but for infrequent task this is okay-ish
     except Exception as e:
         logger.error(f"[Cleanup] Error during stale jobs cleanup: {e}")
     finally:
