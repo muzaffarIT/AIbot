@@ -27,6 +27,7 @@ from bot.handlers.jobs import router as jobs_router
 from bot.handlers.balance import router as balance_router
 from bot.handlers.history import router as history_router
 from bot.handlers.admin import router as admin_router
+from bot.handlers.cabinet import router as cabinet_router
 from bot.middlewares.rate_limit import GenerationRateLimitMiddleware
 
 load_dotenv()
@@ -69,8 +70,9 @@ async def main() -> None:
     # but the point is to keep the order logic.
     dp.include_router(history_router)      # 10. history
     dp.include_router(admin_router)        # 11. admin
-    dp.include_router(help_router)         # 12. help
-    dp.include_router(terms_router)        # 13. terms
+    dp.include_router(cabinet_router)      # 12. cabinet (🌐 mini app button)
+    dp.include_router(help_router)         # 13. help
+    dp.include_router(terms_router)        # 14. terms
     
     # reply_router is a catch-all for reply buttons, usually registered after specific commands 
     # but before generic message filters.

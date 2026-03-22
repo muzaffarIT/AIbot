@@ -1,25 +1,29 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clock, CreditCard, Users, UserCircle } from "lucide-react";
+import Link from "next/link";
+import { UserCircle, Package, Users, ClipboardList } from "lucide-react";
 
 export function BottomNav() {
   const pathname = usePathname();
 
   const items = [
-    { href: "/jobs",        icon: Clock,        label: "Работы"   },
-    { href: "/wallet",      icon: CreditCard,   label: "Баланс",  extraPaths: ["/plans"] },
-    { href: "/partnership", icon: Users,         label: "Партнёры" },
-    { href: "/profile",     icon: UserCircle,    label: "Профиль"  },
+    { href: "/profile",     icon: UserCircle,    labelRu: "Профиль",   labelUz: "Profil"    },
+    { href: "/plans",       icon: Package,       labelRu: "Услуги",    labelUz: "Xizmatlar" },
+    { href: "/partnership", icon: Users,         labelRu: "Партнёры",  labelUz: "Hamkorlar" },
+    { href: "/jobs",        icon: ClipboardList, labelRu: "Работы",    labelUz: "Ishlar"    },
   ] as const;
+
+  // Read language from localStorage (set by profile page switcher)
+  const lang = typeof window !== "undefined"
+    ? (localStorage.getItem("miniapp_language") ?? "ru")
+    : "ru";
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-brand-900/80 backdrop-blur-xl border-t border-white/10 pb-[env(safe-area-inset-bottom,0px)]">
       <nav className="flex items-center justify-around h-16 max-w-md mx-auto px-2">
-        {items.map(({ href, icon: Icon, label, ...rest }) => {
-          const extraPaths = (rest as any).extraPaths as string[] | undefined;
-          const active = pathname === href || extraPaths?.includes(pathname);
+        {items.map(({ href, icon: Icon, labelRu, labelUz }) => {
+          const active = pathname === href;
           return (
             <Link
               key={href}
@@ -29,7 +33,9 @@ export function BottomNav() {
               }`}
             >
               <Icon size={22} className="mb-1" />
-              <span className="text-[10px] font-medium tracking-wide">{label}</span>
+              <span className="text-[10px] font-medium tracking-wide">
+                {lang === "uz" ? labelUz : labelRu}
+              </span>
             </Link>
           );
         })}
