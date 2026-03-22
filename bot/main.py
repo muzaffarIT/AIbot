@@ -79,8 +79,12 @@ async def main() -> None:
     dp.include_router(reply_router)
 
     logging.info(f"[BOT] Starting polling...")
-    await dp.start_polling(bot)
-
+    try:
+        await dp.start_polling(bot)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        await bot.session.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
