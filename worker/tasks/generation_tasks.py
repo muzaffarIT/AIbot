@@ -121,7 +121,7 @@ def run_generation_job(job_id: int) -> dict | None:
             logger.info(f"[KIE] Sending to: {url}")
             
             _payload_str: str = str(payload)
-            logger.info(f"[Job {job_id}] POST {url} payload={_payload_str[:200]}")
+            logger.info(f"[Job {job_id}] POST {url} payload={_payload_str[:200]}")  # type: ignore
             
             # Using raw requests to get full response for logging as requested
             response = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -131,7 +131,7 @@ def run_generation_job(job_id: int) -> dict | None:
             start_data = response.json()
             
             _start_str: str = str(start_data)
-            logger.info(f"[Job {job_id}] KIE processing: {_start_str[:300]}")
+            logger.info(f"[Job {job_id}] KIE processing: {_start_str[:300]}")  # type: ignore
             task_id = start_data.get("id") or (start_data.get("data") and start_data["data"].get("task_id"))
             if not task_id:
                 raise ValueError(f"No task_id in response: {start_data}")
@@ -273,7 +273,7 @@ async def _notify_failed(chat_id: int, provider: str, prompt: str):
         return
     bot = Bot(token=bot_token)
     try:
-        text = f"❌ Ошибка генерации ({provider}).\nВаш промпт: <i>{prompt[:100]}...</i>\n\nКредиты возвращены на баланс."
+        text = f"❌ Ошибка генерации ({provider}).\nВаш промпт: <i>{prompt[:100]}...</i>\n\nКредиты возвращены на баланс."  # type: ignore
         await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
     except Exception as e:
         logger.error(f"Failed to send failed notification to {chat_id}: {e}")
