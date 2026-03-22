@@ -66,6 +66,8 @@ def run_generation_job(job_id: int) -> dict | None:
         }
 
         # Setup provider specific configs
+        poll_url_template = f"{base_url}/v1/task/{{task_id}}" # default
+
         if job.provider == AIProvider.NANO_BANANA:
             url = f"{settings.kie_base_url}/v1/nano-banana/generate"
             width = job.job_payload.get("width", 1024)
@@ -81,34 +83,50 @@ def run_generation_job(job_id: int) -> dict | None:
             poll_interval = 5
             poll_timeout = 120
             is_video = False
+
         elif job.provider == AIProvider.VEO:
-            url = f"{settings.kie_base_url}/v1/veo3/generate"
+            url = f"{settings.kie_base_url}/v1/veo/generate"
             quality = job.job_payload.get("quality", "fast")
             payload = {
-                "model": "veo-3",
+                "model": quality,  # As explicitly requested in payload example: "model": "fast" or "quality"
                 "prompt": job.prompt,
-                "duration": 8,
-                "quality": quality
+                "duration": 8
             }
             if job.source_image_url:
                 payload["image_url"] = job.source_image_url
+            
+            poll_url_template = f"{base_url}/v1/veo/query/{{task_id}}"
             poll_interval = 10
             poll_timeout = 300
             is_video = True
+
         elif job.provider == AIProvider.KLING:
-            url = f"{settings.kie_base_url}/v1/kling/generate"
+            url = f"{settings.kie_base_url}/v1/kling/video/generate"
             mode = job.job_payload.get("mode", "std")
-            duration = job.job_payload.get("duration", 5)
+            duration = str(job.job_payload.get("duration", 5))
             payload = {
-                "model": "kling-v3",
+                "model_name": "kling-v3.0",
                 "prompt": job.prompt,
                 "duration": duration,
                 "mode": mode
             }
             if job.source_image_url:
                 payload["image_url"] = job.source_image_url
-            poll_interval = 15
-            poll_timeout = 600
+            
+            poll_url_template = f"{base_url}/v1/kling/video/query/{{task_id}}"
+            
+            # 5 сек = каждые 15 сек, 10 сек = каждые 20 сек, 15 сек = каждые 25 сек
+            # timeout: 5с=300с, 10с=600с, 15с=900с (15 минут)
+            if duration == "15":
+                poll_interval = 25
+                poll_timeout = 900
+            elif duration == "10":
+                poll_interval = 20
+                poll_timeout = 600
+            else:
+                poll_interval = 15
+                poll_timeout = 300
+                
             is_video = True
         else:
             service.repo.update_job(job, status=JobStatus.FAILED, error_message="Unknown provider", completed=True)
@@ -123,7 +141,6 @@ def run_generation_job(job_id: int) -> dict | None:
             _payload_str: str = str(payload)
             logger.info(f"[Job {job_id}] POST {url} payload={_payload_str[:200]}")  # type: ignore
             
-            # Using raw requests to get full response for logging as requested
             response = requests.post(url, headers=headers, json=payload, timeout=30)
             logger.info(f"[KIE] Response: {response.status_code} — {response.text[:300]}")
             
@@ -137,7 +154,6 @@ def run_generation_job(job_id: int) -> dict | None:
                 raise ValueError(f"No task_id in response: {start_data}")
         except Exception as exc:
             logger.error(f"[Job {job_id}] KIE API call failed: {exc}")
-            # Refund and Fail
             balance_service.add_credits(
                 user_id=job.user_id,
                 amount=job.credits_reserved,
@@ -150,7 +166,7 @@ def run_generation_job(job_id: int) -> dict | None:
 
         try:
             # 2. Polling
-            poll_url = f"{base_url}/v1/task/{task_id}"
+            poll_url = poll_url_template.format(task_id=task_id)
             elapsed: int = 0
             final_result_url: str | None = None
             poll_timeout_int: int = int(poll_timeout)
