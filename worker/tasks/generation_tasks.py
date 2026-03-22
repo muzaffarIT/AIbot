@@ -45,6 +45,13 @@ def run_generation_job(job_id: int) -> dict | None:
         balance_service = BalanceService(db)
 
         job = service.get_job(job_id)
+        
+        # --- DEBUG LOGGING ---
+        provider_name = getattr(job, "provider", "unknown")
+        logger.info(f"[JOB START] id={job_id} model={provider_name}")
+        logger.info(f"[CONFIG] mock={settings.ai_mock_mode} key={settings.kie_api_key[:8] if settings.kie_api_key else 'EMPTY'}...")
+        # ---------------------
+
         logger.info(f"[Job {job_id}] Found: {job is not None}, status: {getattr(job, 'status', None)}")
         if not job or job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
             return {"job_id": job_id, "status": job.status if job else "not_found"}
@@ -60,6 +67,23 @@ def run_generation_job(job_id: int) -> dict | None:
 
         base_url = "https://api.kie.ai"
         api_key = settings.kie_api_key
+        
+        # --- API KEY VALIDATION ---
+        if not api_key or not api_key.startswith("kie-"):
+            # Avoid crashing, update job to failed and notify
+            logger.error(f"[KIE] Invalid API key format: {api_key[:10] if api_key else 'None'}")
+            service.repo.update_job(job, status=JobStatus.FAILED, error_message="Invalid KIE API key", completed=True)
+            balance_service.add_credits(
+                user_id=job.user_id,
+                amount=job.credits_reserved,
+                comment="Refund: Invalid backend API key"
+            )
+            if chat_id and settings.bot_token:
+                import asyncio
+                asyncio.run(_notify_failed(chat_id, job.provider, job.prompt))
+            raise ValueError("Invalid KIE API key")
+        # --------------------------
+        
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -142,7 +166,8 @@ def run_generation_job(job_id: int) -> dict | None:
             logger.info(f"[Job {job_id}] POST {url} payload={_payload_str[:200]}")  # type: ignore
             
             response = requests.post(url, headers=headers, json=payload, timeout=30)
-            logger.info(f"[KIE] Response: {response.status_code} — {response.text[:300]}")
+            logger.info(f"[KIE RESPONSE] status={response.status_code}")
+            logger.info(f"[KIE BODY] {response.text[:300]}")
             
             response.raise_for_status()
             start_data = response.json()
