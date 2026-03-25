@@ -45,29 +45,37 @@ def poll_task(task_id, max_seconds=300, interval=5):
             f"{settings.kie_base_url}/api/v1/jobs/{task_id}",
             headers={"Authorization": f"Bearer {settings.kie_api_key}"}
         )
-        data = r.json()
-        status = data.get("status", "")
+        resp = r.json()
+        logger.info(f"[KIE POLL] {task_id} → {r.text[:200]}")
         
-        logger.info(f"[KIE POLL] {task_id} → {status} ({elapsed}s)")
+        job_data = resp.get("data", {})
+        status = job_data.get("status", "")
         
-        if status == "completed":
-            result = data.get("result", {})
-            # Для картинок:
-            images = result.get("images", [])
-            if images:
-                return images[0].get("url")
-            # Для видео:
-            videos = result.get("videos", [])
-            if videos:
-                return videos[0].get("url")
+        if status in ("success", "completed", "finish"):
+            output = job_data.get("output", {})
+            url = (output.get("imageUrl")
+                   or output.get("image_url")
+                   or output.get("videoUrl")
+                   or output.get("video_url"))
+            if url:
+                logger.info(f"[KIE] Result URL: {url}")
+                return url
+            # Если нет в output — ищем везде
+            logger.warning(f"[KIE] Status success but no URL: {resp}")
+            return None
         
-        if status == "failed":
-            raise ValueError(f"KIE task failed: {data}")
+        if status in ("failed", "error"):
+            raise ValueError(f"KIE task failed: {resp}")
+        
+        logger.info(f"[KIE POLL] status={status} elapsed={elapsed}s")
     
-    raise TimeoutError(f"Task {task_id} timeout after {max_seconds}s")
+    raise TimeoutError(f"KIE task {task_id} timeout")
 
 
 async def send_result(telegram_id, result_url, provider, prompt, credits):
+    if not settings.bot_token:
+        logger.error("[NOTIFY] BOT_TOKEN is not set in worker!")
+        return
     bot = Bot(token=settings.bot_token)
     try:
         caption = (
@@ -88,6 +96,9 @@ async def send_result(telegram_id, result_url, provider, prompt, credits):
                 video=result_url,
                 caption=caption
             )
+        logger.info(f"[NOTIFY] Sent to {telegram_id}: {result_url[:50]}")
+    except Exception as e:
+        logger.error(f"[NOTIFY] Failed: {e}")
     finally:
         await bot.session.close()
 
@@ -194,9 +205,13 @@ def run_generation_job(job_id: int) -> dict | None:
         response.raise_for_status()
         start_data = response.json()
         
-        task_id = start_data.get("id") or start_data.get("task_id") or (start_data.get("data") and start_data["data"].get("task_id"))
+        data = start_data.get("data", {})
+        task_id = (data.get("taskId")
+                   or data.get("task_id")
+                   or data.get("recordId"))
         if not task_id:
-            raise ValueError(f"No task_id in response: {start_data}")
+            raise ValueError(f"No taskId in KIE response: {start_data}")
+        logger.info(f"[KIE] Task created: {task_id}")
 
         # 2. Polling
         final_result_url = poll_task(task_id, max_seconds=poll_timeout, interval=poll_interval)
@@ -240,7 +255,11 @@ def run_generation_job(job_id: int) -> dict | None:
         try:
             job.status = JobStatus.FAILED  # Used the enum directly here! Wait, the prompt used "failed", but enum might be safer.
             job.error_message = str(e)[:500]
-            user.balance += job.credits_reserved
+            balance_service.add_credits(
+                user_id=job.user_id,
+                amount=job.credits_reserved,
+                comment="Refund after crash"
+            )
             db.commit()
             logger.info(f"[JOB {job_id}] Refunded {job.credits_reserved} credits")
         except Exception as db_err:
@@ -248,15 +267,16 @@ def run_generation_job(job_id: int) -> dict | None:
         
         if 'user' in locals() and user:
             try:
-                from aiogram import Bot
-                bot = Bot(token=settings.bot_token)
-                import asyncio
-                asyncio.run(bot.send_message(
-                    chat_id=user.telegram_user_id,
-                    text=f"⚠️ Генерация не удалась.\n"
-                         f"✅ {job.credits_reserved} кредитов возвращено на баланс."
-                ))
-                asyncio.run(bot.session.close())
+                if settings.bot_token:
+                    from aiogram import Bot
+                    bot = Bot(token=settings.bot_token)
+                    import asyncio
+                    asyncio.run(bot.send_message(
+                        chat_id=user.telegram_user_id,
+                        text=f"⚠️ Генерация не удалась.\n"
+                             f"✅ {job.credits_reserved} кредитов возвращено на баланс."
+                    ))
+                    asyncio.run(bot.session.close())
             except Exception as notify_err:
                 logger.error(f"[JOB {job_id}] Notify failed: {notify_err}")
 

@@ -1,8 +1,41 @@
 from fastapi import APIRouter, Depends, HTTPException
 import httpx
 from backend.core.config import settings
+from backend.db.session import SessionLocal
+from backend.models.generation_job import GenerationJob
+from backend.models.user import User
+from backend.services.balance_service import BalanceService
 
 router = APIRouter(prefix="/api/debug", tags=["debug"])
+
+@router.post("/cleanup-stale")
+async def cleanup_stale():
+    db = SessionLocal()
+    try:
+        from datetime import datetime, timedelta, timezone
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+        stale = db.query(GenerationJob).filter(
+            GenerationJob.status == "pending",
+            GenerationJob.created_at < cutoff
+        ).all()
+        
+        refunded = 0
+        balance_service = BalanceService(db)
+        for job in stale:
+            job.status = "failed"
+            job.error_message = "Manual cleanup"
+            user = db.query(User).filter(User.id == job.user_id).first()
+            if user:
+                balance_service.add_credits(
+                    user_id=user.id,
+                    amount=job.credits_reserved,
+                    comment="Manual cleanup"
+                )
+                refunded += job.credits_reserved
+        db.commit()
+        return {"cleaned": len(stale), "refunded": refunded}
+    finally:
+        db.close()
 
 @router.get("/kie-ping")
 async def kie_ping():
