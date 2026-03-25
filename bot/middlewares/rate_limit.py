@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
-from aiogram.types import Message, TelegramObject
+from aiogram.types import Message, CallbackQuery, TelegramObject
 from backend.core.config import settings
 from bot.services.db_session import get_db_session
 from backend.services.user_service import UserService
@@ -10,6 +10,22 @@ from backend.services.balance_service import BalanceService
 from shared.enums.credit_transaction_type import CreditTransactionType
 
 logger = logging.getLogger(__name__)
+
+SKIP_RATE_LIMIT_TEXTS = {
+    "🎨 Создать", "💎 Тарифы", "📊 Мои работы",
+    "💰 Баланс", "👥 Партнёрам", "❓ Помощь",
+    "☀️ Бонус", "🌐 Кабинет", "/start", "/help",
+    "/daily", "/referral", "/history", "/admin",
+    "🎨 Yaratish", "💎 Tariflar", "📊 Ishlarim",
+    "💰 Balans", "👥 Hamkorlik", "❓ Yordam",
+    "☀️ Bonus", "🌐 Kabinet",
+}
+
+NAV_CALLBACKS = {
+    "main_menu", "menu_create", "menu_balance",
+    "menu_plans", "menu_history", "menu_referral",
+    "menu_help", "menu_cabinet", "start_menu",
+}
 
 class GenerationRateLimitMiddleware(BaseMiddleware):
     def __init__(self, limit: int = 3, interval: int = 60):
@@ -23,6 +39,16 @@ class GenerationRateLimitMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+        # Skip rate limit for menu buttons and commands
+        if isinstance(event, Message):
+            if event.text and (event.text in SKIP_RATE_LIMIT_TEXTS or event.text.startswith("/")):
+                return await handler(event, data)
+
+        # Skip rate limit for navigation callbacks
+        if isinstance(event, CallbackQuery):
+            if event.data in NAV_CALLBACKS:
+                return await handler(event, data)
+
         if not isinstance(event, Message) or not event.text:
             return await handler(event, data)
 

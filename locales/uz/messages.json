@@ -115,5 +115,10 @@
         "back": "← Orqaga",
         "yes": "✅ Ha",
         "no": "❌ Yo'q"
+    },
+    "errors": {
+        "insufficient_funds": "❌ Kreditlar yetarli emas!\nDavom etish uchun paket sotib oling 👇",
+        "generation_failed": "❌ Generatsiya muvaffaqiyatsiz. Kreditlar qaytarildi.",
+        "unknown_error": "❌ Xatolik yuz berdi. Qayta urinib ko'ring."
     }
 }
