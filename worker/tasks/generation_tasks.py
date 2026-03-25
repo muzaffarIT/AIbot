@@ -42,32 +42,35 @@ def poll_task(task_id, max_seconds=300, interval=5):
         elapsed += interval
         
         r = requests.get(
-            f"{settings.kie_base_url}/api/v1/jobs/{task_id}",
+            f"{settings.kie_base_url}/api/v1/jobs/result/{task_id}",
             headers={"Authorization": f"Bearer {settings.kie_api_key}"}
         )
+        logger.info(f"[KIE POLL] Full response: {r.text[:500]}")
         resp = r.json()
-        logger.info(f"[KIE POLL] {task_id} → {r.text[:200]}")
-        
-        job_data = resp.get("data", {})
-        status = job_data.get("status", "")
-        
+
+        # KIE.ai возвращает статус в data объекте
+        task_data = resp.get("data", {})
+        status = task_data.get("status", "")
+
+        logger.info(f"[KIE POLL] taskId={task_id} status={status}")
+
         if status in ("success", "completed", "finish"):
-            output = job_data.get("output", {})
+            output = task_data.get("output", {})
             url = (output.get("imageUrl")
                    or output.get("image_url")
                    or output.get("videoUrl")
                    or output.get("video_url"))
             if url:
-                logger.info(f"[KIE] Result URL: {url}")
+                logger.info(f"[KIE] Got result URL: {url[:80]}")
                 return url
-            # Если нет в output — ищем везде
-            logger.warning(f"[KIE] Status success but no URL: {resp}")
+            logger.error(f"[KIE] Success but no URL in output: {output}")
             return None
-        
+
         if status in ("failed", "error"):
             raise ValueError(f"KIE task failed: {resp}")
-        
-        logger.info(f"[KIE POLL] status={status} elapsed={elapsed}s")
+
+        # waiting/queuing/generating — продолжаем polling
+        logger.info(f"[KIE POLL] status={status} elapsed={elapsed}s, continuing...")
     
     raise TimeoutError(f"KIE task {task_id} timeout")
 

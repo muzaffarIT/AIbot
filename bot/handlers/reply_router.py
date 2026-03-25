@@ -55,7 +55,7 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
 
         elif action == "history_cmd":
             # Delegate to jobs handler via importing
-            from bot.handlers.history import _send_history
+            from bot.handlers.history import send_history as _send_history
             await _send_history(message.from_user.id, message)
 
         elif action == "menu_balance":
