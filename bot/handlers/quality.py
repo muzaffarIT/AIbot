@@ -58,11 +58,14 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
         payload = data["payload"]
         
         # Check balance again (proactive)
-        from backend.services.balance_service import BalanceService
-        balance = BalanceService(db).get_balance_value(user.id)
-        if balance < cost:
-            await callback.answer(i18n.t(lang, "errors.insufficient_funds"), show_alert=True)
-            return
+        from backend.core.config import settings
+        is_admin = user.telegram_user_id in settings.admin_ids_list
+        if not is_admin:
+            from backend.services.balance_service import BalanceService
+            balance = BalanceService(db).get_balance_value(user.id)
+            if balance < cost:
+                await callback.answer(i18n.t(lang, "errors.insufficient_funds"), show_alert=True)
+                return
 
         # Create job
         gs = GenerationService(db)

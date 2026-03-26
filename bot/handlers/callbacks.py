@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from bot.services.db_session import get_db_session
 from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
-from bot.keyboards.main_menu import main_inline_keyboard, create_submenu_keyboard
+from bot.keyboards.main_menu import create_submenu_keyboard
 from shared.utils.i18n import I18n
 
 from bot.states.nanobanana_states import NanoBananaStates
@@ -40,7 +40,8 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
             f"У тебя <b>{credits}</b> кредитов.\n\n"
             f"Выбери действие:"
         )
-        await callback.message.edit_text(text, reply_markup=main_inline_keyboard(), parse_mode="HTML")
+        await callback.message.edit_text(text, reply_markup=None, parse_mode="HTML")
+        await callback.message.answer("👇 Выберите действие в меню ниже:")
         await callback.answer()
     finally:
         db.close()
@@ -205,7 +206,7 @@ async def process_menu_balance(callback: CallbackQuery) -> None:
                 f"🎬 Veo 3 (fast) — 30 кр.\n"
                 f"🎥 Kling Motion (std) — 40 кр.",
                 parse_mode="HTML",
-                reply_markup=main_inline_keyboard(),
+                reply_markup=None,
             )
         await callback.answer()
     finally:

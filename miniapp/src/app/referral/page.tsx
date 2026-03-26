@@ -37,7 +37,7 @@ export default function PartnershipPage() {
     // Fallback if the API fails, we use userId (which is the tg id)
     const defaultRef = `https://t.me/${botUsername}?start=ref_${userId || backendUser?.telegram_user_id}`;
 
-    fetch('/api/users/me', { signal: controller.signal })
+    fetch(`/api/users/${userId}`, { signal: controller.signal })
       .then(r => r.json())
       .then(data => {
         if (data && data.referral_code) {

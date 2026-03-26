@@ -6,7 +6,6 @@ from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
 from bot.services.db_session import get_db_session
 from bot.services.payment_service import BotPaymentService
-from bot.keyboards.main_menu import main_inline_keyboard
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -67,7 +66,7 @@ async def process_successful_payment(message: Message, bot: Bot) -> None:
                 f"💳 Текущий баланс: <b>{balance}</b> кредитов\n\n"
                 f"Спасибо за покупку! Теперь создавай нейроарт 🎨",
                 parse_mode="HTML",
-                reply_markup=main_inline_keyboard(),
+                reply_markup=None,
             )
         else:
             logger.error(f"Payment credited 0 for user={user.telegram_user_id}, payload={payload}")
