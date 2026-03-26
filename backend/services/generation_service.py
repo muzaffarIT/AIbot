@@ -94,8 +94,8 @@ class GenerationService:
         is_admin = user.telegram_user_id in settings.admin_ids_list
 
         logger.info(
-            f"[ADMIN CHECK] telegram_id={user.telegram_user_id} "
-            f"admin_ids={settings.admin_ids_list} "
+            f"[ADMIN CHECK] user={user.telegram_user_id} "
+            f"admin_list={settings.admin_ids_list} "
             f"is_admin={is_admin}"
         )
 

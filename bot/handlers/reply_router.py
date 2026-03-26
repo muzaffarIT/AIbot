@@ -54,29 +54,12 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
             await _send_plans(message, bot, user, lang)
 
         elif action == "history_cmd":
-            # Delegate to jobs handler via importing
             from bot.handlers.history import send_history as _send_history
             await _send_history(message)
-
-        elif action == "menu_balance":
-            name = user.first_name or message.from_user.username or "друг"
-            if lang == "uz":
-                text = f"💰 <b>{name}</b> balansingiz:\n<b>{credits}</b> kredit"
-            else:
-                text = f"💰 Баланс <b>{name}</b>:\n<b>{credits}</b> кредитов"
-            await message.answer(text, parse_mode="HTML")
-
-        elif action == "menu_referral":
-            from bot.handlers.referral import _send_referral_info
-            await _send_referral_info(message.from_user.id, message, bot)
 
         elif action == "menu_help":
             from bot.handlers.help import show_help_cmd
             await show_help_cmd(message)
-
-        elif action == "daily_bonus":
-            from bot.handlers.daily import _handle_daily_bonus
-            await _handle_daily_bonus(message.from_user.id, message, bot)
 
     finally:
         db.close()
