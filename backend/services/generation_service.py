@@ -91,10 +91,13 @@ class GenerationService:
         if daily_count >= limit:
             raise ValueError(f"Daily generation limit reached ({limit}). Try again tomorrow.")
 
-        is_admin = user.telegram_user_id in [
-            int(i.strip()) for i in str(settings.admin_ids).split(",")
-            if i.strip().isdigit()
-        ]
+        is_admin = user.telegram_user_id in settings.admin_ids_list
+
+        logger.info(
+            f"[ADMIN CHECK] telegram_id={user.telegram_user_id} "
+            f"admin_ids={settings.admin_ids_list} "
+            f"is_admin={is_admin}"
+        )
 
         cost = credits if credits is not None else self._get_credit_cost(provider)
         

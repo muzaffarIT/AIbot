@@ -75,8 +75,8 @@ export default function HomePage() {
       }
 
       if (!backendUser?.telegram_user_id) {
-        setError(userError ? t(language, "common.profileSyncFailed") : "");
-        setLoading(false);
+        // Continue showing loading spinner/state natively rather than a hard error
+        setLoading(true);
         return;
       }
 

@@ -46,6 +46,17 @@ class Settings(BaseSettings):
 
     payment_provider: str = "stars"
     admin_ids: str = ""
+
+    @property
+    def admin_ids_list(self) -> list[int]:
+        if not self.admin_ids:
+            return []
+        return [
+            int(x.strip())
+            for x in self.admin_ids.split(",")
+            if x.strip().isdigit()
+        ]
+
     welcome_credits: int = 10
     daily_credits: int = 3
     max_free_gens_per_day: int = 5

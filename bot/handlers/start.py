@@ -2,6 +2,7 @@ from aiogram import Router, Bot, types
 from aiogram.types import Message, ReplyKeyboardRemove
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramForbiddenError
 
 from bot.keyboards.reply_menu import main_reply_keyboard
 from bot.keyboards.main_menu import main_inline_keyboard
@@ -82,7 +83,16 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
         name = user.first_name or message.from_user.username or "друг"
 
         # Remove any lingering old reply keyboards
-        await message.answer("👋", reply_markup=ReplyKeyboardRemove())
+        try:
+            await message.answer("👋", reply_markup=ReplyKeyboardRemove())
+        except TelegramForbiddenError:
+            import logging
+            logging.warning(f"User {message.from_user.id} blocked bot")
+            return
+        except Exception as e:
+            import logging
+            logging.error(f"Start error: {e}")
+            return
 
         if lang == "uz":
             text = (

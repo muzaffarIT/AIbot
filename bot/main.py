@@ -78,12 +78,10 @@ async def main() -> None:
     # but before generic message filters.
     dp.include_router(reply_router)
 
-    logging.info(f"[BOT] Starting polling...")
+    logging.info(f"[BOT] Webhook deleted, starting polling...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
-    except KeyboardInterrupt:
-        pass
     finally:
         await bot.session.close()
 

@@ -4,6 +4,7 @@ import json as json_lib
 import requests
 import asyncio
 from aiogram import Bot
+from aiogram.exceptions import TelegramForbiddenError
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from backend.db.session import SessionLocal
@@ -136,6 +137,8 @@ async def _notify(telegram_id, url, provider, prompt, credits):
                 caption=caption
             )
         logger.info(f"[NOTIFY] Sent to {telegram_id} ✅")
+    except TelegramForbiddenError:
+        logger.warning(f"[NOTIFY] User {telegram_id} blocked the bot")
     except Exception as e:
         logger.error(f"[NOTIFY] Failed: {e}")
     finally:
@@ -340,6 +343,8 @@ def run_generation_job(job_id: int) -> dict | None:
                         loop.run_until_complete(bot.session.close())
                     finally:
                         loop.close()
+            except TelegramForbiddenError:
+                logger.warning(f"[JOB {job_id}] User {user.telegram_user_id} blocked bot")
             except Exception as notify_err:
                 logger.error(f"[JOB {job_id}] Notify failed: {notify_err}")
 
@@ -365,6 +370,10 @@ async def _notify_success(chat_id: int, bot_token: str, provider: str, prompt: s
             await bot.send_video(chat_id=chat_id, video=url, caption=text, reply_markup=markup)
         else:
             await bot.send_photo(chat_id=chat_id, photo=url, caption=text, reply_markup=markup)
+    except TelegramForbiddenError:
+        logger.warning(f"[NOTIFY_SUCCESS] User {chat_id} blocked the bot")
+    except Exception as e:
+        logger.error(f"[NOTIFY_SUCCESS] Failed: {e}")
     finally:
         await bot.session.close()
 
@@ -383,6 +392,10 @@ async def _notify_achievements(chat_id: int, bot_token: str, achievements_with_b
                 f"🏆 <b>Новое достижение!</b>\n\n{ach.emoji} <b>{name}</b>\n🎁 Бонус: <b>+{bonus}</b> кредитов!"
             )
             await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+    except TelegramForbiddenError:
+        logger.warning(f"[NOTIFY_ACHVS] User {chat_id} blocked the bot")
+    except Exception as e:
+        logger.error(f"[NOTIFY_ACHVS] Failed: {e}")
     finally:
         await bot.session.close()
 
@@ -395,6 +408,8 @@ async def _notify_failed(chat_id: int, provider: str, prompt: str):
     try:
         text = f"❌ Ошибка генерации ({provider}).\nВаш промпт: <i>{prompt[:100]}...</i>\n\nКредиты возвращены на баланс."  # type: ignore
         await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+    except TelegramForbiddenError:
+        logger.warning(f"[NOTIFY_FAILED] User {chat_id} blocked the bot")
     except Exception as e:
         logger.error(f"Failed to send failed notification to {chat_id}: {e}")
     finally:
@@ -429,6 +444,8 @@ def cleanup_stale_jobs_task() -> None:
                             loop.run_until_complete(bot.send_message(user.telegram_user_id, msg))
                         finally:
                             loop.close()
+    except TelegramForbiddenError:
+        pass
     except Exception as e:
         logger.error(f"[Cleanup] Error during stale jobs cleanup: {e}")
     finally:
