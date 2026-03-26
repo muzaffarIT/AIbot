@@ -27,6 +27,7 @@ class User(Base):
     )
     referred_by_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     referral_earnings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    referral_bonus_paid: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     # Daily streak
     last_daily_claim: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

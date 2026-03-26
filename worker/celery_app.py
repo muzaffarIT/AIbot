@@ -1,6 +1,7 @@
 import os
 from celery import Celery
 from celery.signals import worker_process_init
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,19 +21,19 @@ celery_app = Celery(
 celery_app.conf.beat_schedule = {
     "financial-monitor-daily": {
         "task": "worker.tasks.monitoring_tasks.financial_monitor_task",
-        "schedule": 3600.0,  # Run every hour to be safe, though requirements say daily
+        "schedule": crontab(minute=0, hour=0),
     },
     "cleanup-stale-jobs": {
         "task": "worker.tasks.generation_tasks.cleanup_stale_jobs_task",
-        "schedule": 600.0,   # Every 10 mins
+        "schedule": crontab(minute=0, hour=0),
     },
     "daily-bonus-reminder": {
         "task": "worker.tasks.notification_tasks.daily_reminder_task",
-        "schedule": 3600.0 * 24, # Every 24h
+        "schedule": crontab(minute=0, hour=0),
     },
     "lifecycle-notification": {
         "task": "worker.tasks.notification_tasks.lifecycle_notification_task",
-        "schedule": 3600.0 * 12, # Every 12h
+        "schedule": crontab(minute=0, hour=0),
     }
 }
 

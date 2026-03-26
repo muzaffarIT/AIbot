@@ -43,7 +43,9 @@ async def handle_photo_input(message: Message, state: FSMContext, bot: Bot) -> N
     caption = message.caption or ""
     # Caption logic: if user sent photo with caption, save caption as prompt
     if caption.strip():
-        await state.update_data(prompt=caption.strip())
+        from bot.services.translator import translate_prompt
+        translated = translate_prompt(caption.strip())
+        await state.update_data(prompt=translated, original_prompt=caption.strip())
     
     await state.update_data(source_image_url=file_url)
     
@@ -195,7 +197,11 @@ async def handle_veo_prompt_msg(message: Message, state: FSMContext) -> None:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(message.from_user.id)
         lang = user.language_code or "ru"
-        await state.update_data(prompt=prompt)
+        
+        from bot.services.translator import translate_prompt
+        translated = translate_prompt(prompt)
+        await state.update_data(prompt=translated, original_prompt=prompt)
+        
         await state.set_state(VeoStates.waiting_for_quality)
         
         from bot.keyboards.quality_menu import get_quality_keyboard
@@ -207,25 +213,3 @@ async def handle_veo_prompt_msg(message: Message, state: FSMContext) -> None:
         db.close()
 
 
-@router.message(KlingStates.waiting_for_prompt, F.text)
-async def handle_kling_prompt_msg(message: Message, state: FSMContext) -> None:
-    prompt = message.text or ""
-    if len(prompt) < 3 or len(prompt) > 500:
-        await message.answer("❌ Длина промпта: от 3 до 500 символов.")
-        return
-    
-    db = get_db_session()
-    try:
-        user_service = UserService(db)
-        user = user_service.get_user_by_telegram_id(message.from_user.id)
-        lang = user.language_code or "ru"
-        await state.update_data(prompt=prompt)
-        await state.set_state(KlingStates.waiting_for_quality)
-        
-        from bot.keyboards.quality_menu import get_quality_keyboard
-        await message.answer(
-            i18n.t(lang, "quality.select"),
-            reply_markup=get_quality_keyboard("kling", lang)
-        )
-    finally:
-        db.close()

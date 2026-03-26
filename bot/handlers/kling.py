@@ -35,30 +35,21 @@ async def create_kling_job(message: Message, state: FSMContext) -> None:
 
     db = get_db_session()
     try:
-        user = UserService(db).get_or_create_user(
-            telegram_user_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name,
-            last_name=message.from_user.last_name,
-        )
-        job = GenerationService(db).create_job_for_user(
-            telegram_user_id=user.telegram_user_id,
-            provider=AIProvider.KLING,
-            prompt=message.text or "",
-        )
-
-        lines = [
-            "⏳ Задача на анимацию через Kling Motion создана и отправлена в очередь.",
-            f"ID: {job.id}",
-        ]
-        msg = await message.answer("\n".join(lines))
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(message.from_user.id)
+        if not user:
+            return
+        lang = user.language_code or "ru"
         
-        # Start background progress tracking
-        asyncio.create_task(
-            track_generation_progress(message.bot, message.chat.id, msg.message_id, job.id)
+        from bot.services.translator import translate_prompt
+        translated = translate_prompt(prompt)
+        await state.update_data(prompt=translated, original_prompt=prompt)
+        await state.set_state(KlingStates.waiting_for_quality)
+        
+        from bot.keyboards.quality_menu import get_quality_keyboard
+        await message.answer(
+            i18n.t(lang, "quality.select"),
+            reply_markup=get_quality_keyboard("kling", lang)
         )
-    except ValueError as exc:
-        await message.answer(str(exc))
     finally:
-        await state.clear()
         db.close()

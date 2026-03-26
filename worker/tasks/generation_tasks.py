@@ -424,7 +424,11 @@ def cleanup_stale_jobs_task() -> None:
                             if lang == "ru" else
                             "⚠️ Generatsiya muvaffaqiyatsiz. Kreditlar qaytarildi."
                         )
-                        asyncio.run(bot.send_message(user.telegram_user_id, msg))
+                        loop = asyncio.new_event_loop()
+                        try:
+                            loop.run_until_complete(bot.send_message(user.telegram_user_id, msg))
+                        finally:
+                            loop.close()
     except Exception as e:
         logger.error(f"[Cleanup] Error during stale jobs cleanup: {e}")
     finally:

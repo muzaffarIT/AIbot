@@ -20,6 +20,7 @@ class GenerationJobRepository:
         status: str,
         credits_reserved: int,
         job_payload: dict | None = None,
+        original_prompt: str | None = None,
     ) -> GenerationJob:
         job = GenerationJob(
             user_id=user_id,
@@ -29,6 +30,7 @@ class GenerationJobRepository:
             status=status,
             credits_reserved=credits_reserved,
             job_payload=job_payload,
+            original_prompt=original_prompt,
         )
         self.db.add(job)
         self.db.commit()

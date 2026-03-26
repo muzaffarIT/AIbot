@@ -36,7 +36,9 @@ async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
         user = user_service.get_user_by_telegram_id(message.from_user.id)
         lang = user.language_code or "ru"
         
-        await state.update_data(prompt=prompt)
+        from bot.services.translator import translate_prompt
+        translated = translate_prompt(prompt)
+        await state.update_data(prompt=translated, original_prompt=prompt)
         await state.set_state(NanoBananaStates.waiting_for_quality)
         
         await message.answer(

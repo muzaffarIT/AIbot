@@ -62,6 +62,8 @@
     "daily.streak_badge": "🏅 «{badge}» nishoni olindi!",
     "daily.reminder": "☀️ Kunlik bonusni olishni unutma!\n🔥 Streak: {streak} kun. Uzma!",
     "prompts.tip": "💡 Maslahat: promptlar ingliz tilida yaxshiroq ishlaydi!",
+    "prompt_hint": "✏️ Nima yaratmoqchi ekanligingizni tasvirlab bering.\n💡 <i>Maslahat: Istagan tilingizda yozing (RU/UZ), yaxshi natija uchun biz avtomatik ravishda ingliz tiliga tarjima qilamiz!</i>",
+    "translation_notice": "🌍 Sizning promptingiz neyroset uchun ingliz tiliga avtomatik tarjima qilindi.",
     "prompts.selected": "✨ Siz uchun prompt:\n\n<i>{prompt}</i>\n\nBuni ishlatamizmi?",
     "prompts.btn.use": "✅ Ishlatish",
     "prompts.btn.another": "🔄 Boshqa",

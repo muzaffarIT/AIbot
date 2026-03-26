@@ -54,7 +54,7 @@ async def process_successful_payment(message: Message, bot: Bot) -> None:
             logger.info(f"Payment success: user={user.telegram_user_id}, credited={credited_amount}")
 
             # Trigger referral bonus if user was referred
-            if user.referred_by_telegram_id and not _has_made_previous_purchase(user.id, db):
+            if user.referred_by_telegram_id and not user.referral_bonus_paid:
                 from bot.handlers.referral import notify_referrer_on_purchase
                 import asyncio
                 asyncio.create_task(
@@ -78,12 +78,3 @@ async def process_successful_payment(message: Message, bot: Bot) -> None:
     finally:
         db.close()
 
-
-def _has_made_previous_purchase(user_id: int, db) -> bool:
-    """Check if user had previous successful payments (to avoid double referral bonus)."""
-    from backend.models.credit_transaction import CreditTransaction
-    count = db.query(CreditTransaction).filter(
-        CreditTransaction.user_id == user_id,
-        CreditTransaction.transaction_type == "telegram_stars_purchase"
-    ).count()
-    return count > 1  # current one already credited, so > 1 means has previous

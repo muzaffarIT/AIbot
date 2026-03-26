@@ -123,12 +123,15 @@ async def notify_referrer_on_purchase(bot: Bot, referred_user_id: int) -> None:
         
         # Update stats
         referrer.referral_earnings = (referrer.referral_earnings or 0) + bonus
+        referred.referral_bonus_paid = True
         db.commit()
 
         # Notify
-        text = i18n.t(lang, "referral.purchase_notify")
+        RU = text = i18n.t("ru", "referral.purchase_notify", default="🎉 Твой реферал совершил первую покупку!\n💰 Начислено кредитов!")
+        UZ = i18n.t("uz", "referral.purchase_notify", default="🎉 Referalingiz birinchi xaridni qildi!\n💰 Kredit berildi!")
+        
         try:
-            await bot.send_message(referrer.telegram_user_id, text)
+            await bot.send_message(referrer.telegram_user_id, RU if lang == "ru" else UZ)
         except Exception as e:
             logger.error(f"[Referral] Failed to send notification message to {referrer.telegram_user_id}: {e}")
             
@@ -137,3 +140,4 @@ async def notify_referrer_on_purchase(bot: Bot, referred_user_id: int) -> None:
         logger.error(f"[Referral] notify_referrer_on_purchase error: {e}")
     finally:
         db.close()
+

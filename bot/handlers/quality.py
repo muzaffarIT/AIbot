@@ -31,6 +31,7 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
 
     state_data = await state.get_data()
     prompt = state_data.get("prompt")
+    original_prompt = state_data.get("original_prompt")
     source_image_url = state_data.get("source_image_url")
     
     if not prompt:
@@ -69,6 +70,7 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
             telegram_user_id=user.telegram_user_id,
             provider=provider,
             prompt=prompt,
+            original_prompt=original_prompt,
             source_image_url=source_image_url,
             job_payload=payload,
             credits=cost,

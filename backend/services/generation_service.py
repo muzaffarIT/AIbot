@@ -55,6 +55,7 @@ class GenerationService:
         telegram_user_id: int,
         provider: str,
         prompt: str,
+        original_prompt: str | None = None,
         source_image_url: str | None = None,
         job_payload: dict | None = None,
         credits: int | None = None,
@@ -90,28 +91,41 @@ class GenerationService:
         if daily_count >= limit:
             raise ValueError(f"Daily generation limit reached ({limit}). Try again tomorrow.")
 
+        is_admin = user.telegram_user_id in [
+            int(i.strip()) for i in str(settings.admin_ids).split(",")
+            if i.strip().isdigit()
+        ]
+
         cost = credits if credits is not None else self._get_credit_cost(provider)
-        current_balance = self.balance_service.get_balance_value(user.id)
-        if current_balance < cost:
-            raise ValueError("Not enough credits")
+        
+        if not is_admin:
+            current_balance = self.balance_service.get_balance_value(user.id)
+            if current_balance < cost:
+                raise ValueError("Not enough credits")
 
         job = self.repo.create_job(
             user_id=user.id,
             provider=provider,
             prompt=prompt.strip(),
+            original_prompt=original_prompt.strip() if original_prompt else None,
             source_image_url=source_image_url,
             status=JobStatus.PENDING,
-            credits_reserved=cost,
+            credits_reserved=cost if not is_admin else 0,
             job_payload=job_payload or {}
         )
-        self.balance_service.subtract_credits(
-            user_id=user.id,
-            amount=cost,
-            transaction_type=CreditTransactionType.RESERVE,
-            reference_type="generation_job",
-            reference_id=str(job.id),
-            comment=f"Credits reserved for {provider} generation job",
-        )
+        
+        if not is_admin:
+            self.balance_service.subtract_credits(
+                user_id=user.id,
+                amount=cost,
+                transaction_type=CreditTransactionType.RESERVE,
+                reference_type="generation_job",
+                reference_id=str(job.id),
+                comment=f"Credits reserved for {provider} generation job",
+            )
+        else:
+            logger.info(f"[ADMIN] No credit deduction for {user.telegram_user_id}")
+
 
         should_process_now = settings.generation_process_now if process_now is None else process_now
         if should_process_now:

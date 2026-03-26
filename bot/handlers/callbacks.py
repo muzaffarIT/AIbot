@@ -67,78 +67,24 @@ async def process_gen_start(callback: CallbackQuery, state: FSMContext) -> None:
     finally:
         db.close()
 
-    from bot.keyboards.quality import nano_quality_keyboard, veo_quality_keyboard, kling_quality_keyboard
+    await state.update_data(provider=provider, lang=lang)
+
     if provider == "nano_banana":
-        title = "🍌 <b>Nano Banana</b> — выбери качество:" if lang != "uz" else "🍌 <b>Nano Banana</b> — sifatni tanlang:"
-        kb = nano_quality_keyboard(lang)
+        await state.set_state(NanoBananaStates.waiting_for_prompt)
+        prompt_text = i18n.t(lang, "gen.prompt.nano")
     elif provider == "veo":
-        title = "🎬 <b>Veo 3</b> — выбери качество:" if lang != "uz" else "🎬 <b>Veo 3</b> — sifatni tanlang:"
-        kb = veo_quality_keyboard(lang)
+        await state.set_state(VeoStates.waiting_for_prompt)
+        prompt_text = i18n.t(lang, "gen.prompt.veo")
     elif provider == "kling":
-        title = "🎥 <b>Kling Motion</b> — выбери качество:" if lang != "uz" else "🎥 <b>Kling Motion</b> — sifatni tanlang:"
-        kb = kling_quality_keyboard(lang)
+        await state.set_state(KlingStates.waiting_for_prompt)
+        prompt_text = i18n.t(lang, "gen.prompt.kling")
     else:
         await callback.answer("Неизвестный провайдер.")
         return
 
-    await state.update_data(provider=provider, lang=lang)
-    await callback.message.answer(title, reply_markup=kb, parse_mode="HTML")
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("nano_quality:"))
-async def process_nano_quality(callback: CallbackQuery, state: FSMContext) -> None:
-    quality = callback.data.split(":")[1]
-    from bot.keyboards.quality import NANO_QUALITY_MAP
-    if quality not in NANO_QUALITY_MAP:
-        await callback.answer("Неизвестное качество.")
-        return
-    cost, overrides = NANO_QUALITY_MAP[quality]
-
-    state_data = await state.get_data()
-    lang = state_data.get("lang", "ru")
-    await state.update_data(quality=quality, cost=cost, payload_overrides=overrides, provider="nano_banana")
-    await state.set_state(NanoBananaStates.waiting_for_prompt)
-    prompt_text = i18n.t(lang, "gen.prompt.nano")
     await callback.message.answer(prompt_text, parse_mode="HTML")
     await callback.answer()
 
-
-@router.callback_query(F.data.startswith("veo_quality:"))
-async def process_veo_quality(callback: CallbackQuery, state: FSMContext) -> None:
-    quality = callback.data.split(":")[1]
-    from bot.keyboards.quality import VEO_QUALITY_MAP
-    if quality not in VEO_QUALITY_MAP:
-        await callback.answer("Неизвестное качество.")
-        return
-    cost, overrides = VEO_QUALITY_MAP[quality]
-
-    state_data = await state.get_data()
-    lang = state_data.get("lang", "ru")
-    await state.update_data(quality=quality, cost=cost, payload_overrides=overrides, provider="veo")
-    await state.set_state(VeoStates.waiting_for_prompt)
-    prompt_text = i18n.t(lang, "gen.prompt.veo")
-    await callback.message.answer(prompt_text, parse_mode="HTML")
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("kling_quality:"))
-async def process_kling_quality(callback: CallbackQuery, state: FSMContext) -> None:
-    parts = callback.data.split(":")
-    quality = f"{parts[1]}:{parts[2]}"
-    from bot.keyboards.quality import KLING_QUALITY_MAP
-    if quality not in KLING_QUALITY_MAP:
-        await callback.answer("Неизвестное качество.")
-        return
-    cost, overrides = KLING_QUALITY_MAP[quality]
-
-    state_data = await state.get_data()
-    lang = state_data.get("lang", "ru")
-    await state.update_data(quality=quality, cost=cost, payload_overrides=overrides, provider="kling")
-    await state.set_state(KlingStates.waiting_for_prompt)
-    prompt_text = i18n.t(lang, "gen.prompt.kling")
-    await callback.message.answer(prompt_text, parse_mode="HTML")
-    await callback.answer()
 
 
 @router.callback_query(F.data == "surprise_me")

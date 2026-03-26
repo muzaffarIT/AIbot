@@ -24,8 +24,10 @@ def _run_migrations(db) -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_notification_at TIMESTAMPTZ",
         # Onboarding
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE NOT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_paid BOOLEAN DEFAULT FALSE NOT NULL",
         # Generation Jobs
         "ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS job_payload JSON",
+        "ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS original_prompt TEXT",
         # Achievements table
         """CREATE TABLE IF NOT EXISTS achievements (
             id SERIAL PRIMARY KEY,

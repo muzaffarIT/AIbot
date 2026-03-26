@@ -14,7 +14,9 @@ class GenerationJob(Base):
 
     provider: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    original_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
 
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending", index=True)
     credits_reserved: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
