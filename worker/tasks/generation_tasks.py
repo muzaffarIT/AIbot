@@ -102,7 +102,7 @@ def poll_task(task_id: str, max_seconds: int = 300,
 
 
 
-async def send_result(telegram_id, result_url, provider, prompt, credits):
+async def _notify(telegram_id, url, provider, prompt, credits):
     if not settings.bot_token:
         logger.error("[NOTIFY] BOT_TOKEN is not set in worker!")
         return
@@ -110,23 +110,32 @@ async def send_result(telegram_id, result_url, provider, prompt, credits):
     try:
         caption = (
             f"✅ Готово!\n"
-            f"🤖 {provider}\n"
             f"💬 {prompt[:100]}\n"
-            f"💰 Потрачено: {credits} кредитов"
+            f"💰 Потрачено: {credits} кр."
         )
-        if provider in ["nano_banana", "nano-banana-pro", AIProvider.NANO_BANANA]:
+        if provider in ("nano_banana", "nano-banana-pro", AIProvider.NANO_BANANA):
             await bot.send_photo(
                 chat_id=telegram_id,
-                photo=result_url,
-                caption=caption
+                photo=url,
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="🔄 Ещё раз",
+                        callback_data=f"gen_again:{provider}"
+                    ),
+                    InlineKeyboardButton(
+                        text="🏠 Меню",
+                        callback_data="start_menu"
+                    )
+                ]])
             )
         else:
             await bot.send_video(
                 chat_id=telegram_id,
-                video=result_url,
+                video=url,
                 caption=caption
             )
-        logger.info(f"[NOTIFY] Sent to {telegram_id}: {result_url[:50]}")
+        logger.info(f"[NOTIFY] Sent to {telegram_id} ✅")
     except Exception as e:
         logger.error(f"[NOTIFY] Failed: {e}")
     finally:
@@ -233,14 +242,24 @@ def run_generation_job(job_id: int) -> dict | None:
         logger.info(f"[KIE] Response body: {response.text[:200]}")
         
         response.raise_for_status()
-        start_data = response.json()
+        resp = response.json()
         
-        data = start_data.get("data", {})
+        code = resp.get("code", 0)
+        msg = resp.get("msg", "")
+
+        if code == 402:
+            raise ValueError(f"KIE: недостаточно кредитов. {msg}")
+        if code == 401:
+            raise ValueError(f"KIE: неверный API ключ. {msg}")
+        if code != 200:
+            raise ValueError(f"KIE error {code}: {msg}")
+
+        data = resp.get("data") or {}
         task_id = (data.get("taskId")
                    or data.get("task_id")
                    or data.get("recordId"))
         if not task_id:
-            raise ValueError(f"No taskId in KIE response: {start_data}")
+            raise ValueError(f"Нет taskId: {resp}")
         logger.info(f"[KIE] Task created: {task_id}")
 
         # 2. Polling
@@ -268,15 +287,26 @@ def run_generation_job(job_id: int) -> dict | None:
                 db.commit()
                 
                 if newly_earned and chat_id and settings.bot_token:
-                    asyncio.run(_notify_achievements(chat_id, settings.bot_token, newly_earned, user.language_code or "ru"))
+                    loop = asyncio.new_event_loop()
+                    try:
+                        loop.run_until_complete(_notify_achievements(chat_id, settings.bot_token, newly_earned, user.language_code or "ru"))
+                    finally:
+                        loop.close()
             except Exception as ach_err:
                 logger.error(f"[Achievement] Worker error: {ach_err}")
                 
             if chat_id:
-                asyncio.run(send_result(
-                    chat_id, final_result_url,
-                    job.provider, job.prompt, job.credits_reserved
-                ))
+                loop = asyncio.new_event_loop()
+                try:
+                    loop.run_until_complete(_notify(
+                        chat_id,
+                        final_result_url,
+                        job.provider,
+                        job.prompt,
+                        job.credits_reserved
+                    ))
+                finally:
+                    loop.close()
             return {"job_id": job.id, "status": "completed", "result_url": final_result_url}
 
     except Exception as e:
@@ -300,13 +330,16 @@ def run_generation_job(job_id: int) -> dict | None:
                 if settings.bot_token:
                     from aiogram import Bot
                     bot = Bot(token=settings.bot_token)
-                    import asyncio
-                    asyncio.run(bot.send_message(
-                        chat_id=user.telegram_user_id,
-                        text=f"⚠️ Генерация не удалась.\n"
-                             f"✅ {job.credits_reserved} кредитов возвращено на баланс."
-                    ))
-                    asyncio.run(bot.session.close())
+                    loop = asyncio.new_event_loop()
+                    try:
+                        loop.run_until_complete(bot.send_message(
+                            chat_id=user.telegram_user_id,
+                            text=f"⚠️ Генерация не удалась.\n"
+                                 f"✅ {job.credits_reserved} кредитов возвращено на баланс."
+                        ))
+                        loop.run_until_complete(bot.session.close())
+                    finally:
+                        loop.close()
             except Exception as notify_err:
                 logger.error(f"[JOB {job_id}] Notify failed: {notify_err}")
 
