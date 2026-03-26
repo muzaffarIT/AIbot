@@ -1,6 +1,6 @@
 import asyncio
 from aiogram import F, Router, Bot
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
 
 from bot.services.db_session import get_db_session

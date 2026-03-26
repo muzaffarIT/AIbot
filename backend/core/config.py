@@ -51,12 +51,11 @@ class Settings(BaseSettings):
     def admin_ids_list(self) -> list[int]:
         if not self.admin_ids:
             return []
-        result = []
-        for x in self.admin_ids.replace(";", ",").split(","):
-            x = x.strip()
-            if x.isdigit():
-                result.append(int(x))
-        return result
+        return [
+            int(x.strip())
+            for x in self.admin_ids.replace(";",",").split(",")
+            if x.strip().isdigit()
+        ]
 
     welcome_credits: int = 10
     daily_credits: int = 3

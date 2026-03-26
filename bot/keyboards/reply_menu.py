@@ -1,5 +1,5 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from aiogram.types.web_app_info import WebAppInfo
+from aiogram.types import (ReplyKeyboardMarkup,
+                            KeyboardButton, WebAppInfo)
 from backend.core.config import settings
 
 def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
@@ -11,7 +11,7 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
                 [KeyboardButton(text="❓ Yordam")],
                 [KeyboardButton(
                     text="🌐 Shaxsiy kabinet",
-                    web_app=WebAppInfo(url=settings.miniapp_url)
+                    web_app=WebAppInfo(url=(settings.miniapp_url or "").rstrip("/"))
                 )],
             ],
             resize_keyboard=True,
@@ -24,7 +24,7 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
             [KeyboardButton(text="❓ Помощь")],
             [KeyboardButton(
                 text="🌐 Открыть кабинет",
-                web_app=WebAppInfo(url=settings.miniapp_url)
+                web_app=WebAppInfo(url=(settings.miniapp_url or "").rstrip("/"))
             )],
         ],
         resize_keyboard=True,

@@ -90,36 +90,17 @@ export default function JobsPage() {
   const { language, telegramUser } = useMiniAppUser();
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
-    if (telegramUser?.id) {
-      loadJobs();
-      const interval = setInterval(loadJobs, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [telegramUser?.id]);
-
-  const loadJobs = async () => {
-    if (!telegramUser?.id) return;
-    
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-
-    try {
-      const tgId = telegramUser.id;
-      const res = await fetch(`/api/jobs/telegram/${tgId}`, { signal: controller.signal });
-      if (res.ok) {
-        const data = await res.json();
-        setJobs(data || []);
-      }
-    } catch (error) {
-      console.error("Failed to load jobs:", error);
-      setJobs([]);
-    } finally {
-      setLoading(false);
-      clearTimeout(timeout);
-    }
-  };
+    if (!telegramUser?.id) { setLoading(false); return }
+    const ctrl = new AbortController()
+    setTimeout(() => ctrl.abort(), 8000)
+    fetch(`/api/jobs/telegram/${telegramUser.id}`,
+          { signal: ctrl.signal })
+      .then(r => r.json())
+      .then(j => setJobs(Array.isArray(j) ? j : []))
+      .catch(() => setJobs([]))
+      .finally(() => setLoading(false))
+  }, [telegramUser?.id])
 
   return (
     <main className="min-h-screen px-5 pt-6 pb-24 overflow-x-hidden">
@@ -197,9 +178,10 @@ export default function JobsPage() {
                 </Link>
               </div>
             )}
-            
             {jobs.length === 0 && !loading && (
-              <p className="text-center text-white/50 mt-4">У тебя пока нет генераций. Создай первую!</p>
+              <p style={{textAlign:'center', color:'#666', marginTop:40}}>
+                У тебя пока нет генераций.<br/>Создай первую через бота!
+              </p>
             )}
           </motion.div>
         )}

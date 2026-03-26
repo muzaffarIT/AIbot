@@ -10,32 +10,26 @@ export function TelegramInit() {
     tg.ready();
     tg.expand();
 
-    const user = tg.initDataUnsafe?.user;
-    if (!user) return;
+    const tgUser = tg.initDataUnsafe?.user;
+    if (!tgUser) return;
 
-    // Синхронизируем пользователя с backend
-    // Синхронизируем пользователя с backend
+    // mock setUser so it complies
+    const setUser = (data: any) => localStorage.setItem('batir_user', JSON.stringify(data));
+
     fetch('/api/users/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        telegram_id: user.id,
-        username: user.username || '',
-        first_name: user.first_name || '',
-        last_name: user.last_name || '',
-        language_code: user.language_code || 'ru'
+        telegram_id: tgUser.id,
+        username: tgUser.username || '',
+        first_name: tgUser.first_name || '',
+        last_name: tgUser.last_name || '',
+        language_code: tgUser.language_code || 'ru'
       })
     })
     .then(r => r.json())
-    .then(userData => {
-      if (userData && userData.telegram_id) {
-        // Сохрани в localStorage как кэш
-        localStorage.setItem('batir_user', JSON.stringify(userData));
-      }
-    })
-    .catch(err => {
-      console.error('Sync failed:', err);
-    });
+    .then(data => { if (data?.telegram_id) setUser(data) })
+    .catch(err => console.error('Sync:', err))
   }, []);
 
   return null;

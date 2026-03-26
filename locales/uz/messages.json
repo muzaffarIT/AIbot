@@ -62,7 +62,7 @@
     "daily.streak_badge": "🏅 «{badge}» nishoni olindi!",
     "daily.reminder": "☀️ Kunlik bonusni olishni unutma!\n🔥 Streak: {streak} kun. Uzma!",
     "prompts.tip": "💡 Maslahat: promptlar ingliz tilida yaxshiroq ishlaydi!",
-    "prompt_hint": "✏️ Nima yaratmoqchi ekanligingizni tasvirlab bering.\n💡 <i>Maslahat: Istagan tilingizda yozing (RU/UZ), yaxshi natija uchun biz avtomatik ravishda ingliz tiliga tarjima qilamiz!</i>",
+    "prompt_hint": "✏️ Nima yaratmoqchiliginizni tasvirlab bering:\\nRus, o'zbek yoki ingliz tilida yozsa bo'ladi!\\n\\nMisol: tungi neon shahar, kinematografik",
     "translation_notice": "🌍 Sizning promptingiz neyroset uchun ingliz tiliga avtomatik tarjima qilindi.",
     "prompts.selected": "✨ Siz uchun prompt:\n\n<i>{prompt}</i>\n\nBuni ishlatamizmi?",
     "prompts.btn.use": "✅ Ishlatish",
@@ -121,6 +121,7 @@
     "errors": {
         "insufficient_funds": "❌ Kreditlar yetarli emas!\nDavom etish uchun paket sotib oling 👇",
         "generation_failed": "❌ Generatsiya muvaffaqiyatsiz. Kreditlar qaytarildi.",
-        "unknown_error": "❌ Xatolik yuz berdi. Qayta urinib ko'ring."
+        "unknown_error": "❌ Xatolik yuz berdi. Qayta urinib ko'ring.",
+        "rate_limit": "⏳ Juda ko'p so'rov. Bir daqiqa kuting."
     }
 }

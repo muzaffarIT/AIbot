@@ -28,33 +28,23 @@ export default function PartnershipPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) {
-      if (!backendUser) return; // wait for backendUser to load
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    // Fallback if the API fails, we use userId (which is the tg id)
-    const defaultRef = `https://t.me/${botUsername}?start=ref_${userId || backendUser?.telegram_user_id}`;
-
-    fetch(`/api/users/${userId}`, { signal: controller.signal })
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 5000)
+    fetch('/api/users/me', { signal: ctrl.signal })
       .then(r => r.json())
       .then(data => {
-        if (data && data.referral_code) {
-          setRefLink(`https://t.me/${botUsername}?start=ref_${data.referral_code}`);
-        } else {
-          setRefLink(defaultRef);
+        if (data?.referral_code) {
+          setRefLink(
+            `https://t.me/harfai_bot?start=ref_${data.referral_code}`
+          )
         }
       })
-      .catch(err => {
-        console.error('Referral load error:', err);
-        setRefLink(defaultRef);
-      })
-      .finally(() => {
-        setLoading(false);
-        clearTimeout(timeout);
-      });
-  }, [userId, backendUser]);
+      .catch(() => setRefLink(''))
+      .finally(() => { setLoading(false); clearTimeout(timer) })
+  }, [])
+
+  if (loading) return <div>Загрузка...</div>
+  if (!refLink) return <div>Не удалось загрузить ссылку</div>
 
   const handleCopy = async () => {
     try {

@@ -103,44 +103,54 @@ def poll_task(task_id: str, max_seconds: int = 300,
 
 
 
-async def _notify(telegram_id, url, provider, prompt, credits):
-    if not settings.bot_token:
-        logger.error("[NOTIFY] BOT_TOKEN is not set in worker!")
+async def _notify_user(telegram_id: int, url: str,
+                       provider: str, prompt: str,
+                       credits: int, bot_token: str):
+    if not bot_token:
+        logger.error("[NOTIFY] BOT_TOKEN не задан!")
         return
-    bot = Bot(token=settings.bot_token)
+    from aiogram import Bot
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from aiogram.exceptions import TelegramForbiddenError
+    bot = Bot(token=bot_token)
     try:
         caption = (
             f"✅ Готово!\n"
             f"💬 {prompt[:100]}\n"
             f"💰 Потрачено: {credits} кр."
         )
-        if provider in ("nano_banana", "nano-banana-pro", AIProvider.NANO_BANANA):
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="🔄 Ещё раз",
+                callback_data=f"gen_again:{provider}"
+            ),
+            InlineKeyboardButton(
+                text="🏠 Меню",
+                callback_data="start_menu"
+            )
+        ]])
+        is_video = provider in (
+            "veo", "veo-3", "kling", "kling-3.0/video"
+        )
+        if is_video:
+            await bot.send_video(
+                chat_id=telegram_id,
+                video=url,
+                caption=caption,
+                reply_markup=kb
+            )
+        else:
             await bot.send_photo(
                 chat_id=telegram_id,
                 photo=url,
                 caption=caption,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(
-                        text="🔄 Ещё раз",
-                        callback_data=f"gen_again:{provider}"
-                    ),
-                    InlineKeyboardButton(
-                        text="🏠 Меню",
-                        callback_data="start_menu"
-                    )
-                ]])
+                reply_markup=kb
             )
-        else:
-            await bot.send_video(
-                chat_id=telegram_id,
-                video=url,
-                caption=caption
-            )
-        logger.info(f"[NOTIFY] Sent to {telegram_id} ✅")
+        logger.info(f"[NOTIFY] ✅ Отправлено {telegram_id}")
     except TelegramForbiddenError:
-        logger.warning(f"[NOTIFY] User {telegram_id} blocked the bot")
+        logger.warning(f"[NOTIFY] {telegram_id} заблокировал бота")
     except Exception as e:
-        logger.error(f"[NOTIFY] Failed: {e}")
+        logger.error(f"[NOTIFY] Ошибка: {e}")
     finally:
         await bot.session.close()
 
@@ -206,8 +216,7 @@ def run_generation_job(job_id: int) -> dict | None:
                 "input": {
                     "prompt": job.prompt,
                     "duration": 8,
-                    "resolution": "720p" if quality == "fast" else "1080p",
-                    "image_input": [job.source_image_url] if job.source_image_url else []
+                    "resolution": "720p" if quality == "fast" else "1080p"
                 }
             }
             poll_interval = 10
@@ -218,12 +227,14 @@ def run_generation_job(job_id: int) -> dict | None:
             mode = job.job_payload.get("mode", "std")
             duration = int(job.job_payload.get("duration", 5))
             payload = {
-                "model": "kling-v3",
+                "model": "kling-3.0/video",
                 "input": {
                     "prompt": job.prompt,
-                    "duration": duration,
+                    "duration": str(duration),
                     "mode": mode,
-                    "image_input": [job.source_image_url] if job.source_image_url else []
+                    "aspect_ratio": "16:9",
+                    "sound": False,
+                    "image_urls": [job.source_image_url] if job.source_image_url else []
                 }
             }
             if duration == 15:
@@ -251,9 +262,11 @@ def run_generation_job(job_id: int) -> dict | None:
         msg = resp.get("msg", "")
 
         if code == 402:
-            raise ValueError(f"KIE: недостаточно кредитов. {msg}")
+            raise ValueError(f"KIE: недостаточно кредитов: {msg}")
         if code == 401:
-            raise ValueError(f"KIE: неверный API ключ. {msg}")
+            raise ValueError(f"KIE: неверный ключ: {msg}")
+        if code == 422:
+            raise ValueError(f"KIE: неверная модель: {msg}")
         if code != 200:
             raise ValueError(f"KIE error {code}: {msg}")
 
@@ -262,7 +275,7 @@ def run_generation_job(job_id: int) -> dict | None:
                    or data.get("task_id")
                    or data.get("recordId"))
         if not task_id:
-            raise ValueError(f"Нет taskId: {resp}")
+            raise ValueError(f"Нет taskId в ответе: {resp}")
         logger.info(f"[KIE] Task created: {task_id}")
 
         # 2. Polling
@@ -301,12 +314,13 @@ def run_generation_job(job_id: int) -> dict | None:
             if chat_id:
                 loop = asyncio.new_event_loop()
                 try:
-                    loop.run_until_complete(_notify(
+                    loop.run_until_complete(_notify_user(
                         chat_id,
                         final_result_url,
                         job.provider,
                         job.prompt,
-                        job.credits_reserved
+                        job.credits_reserved,
+                        settings.bot_token
                     ))
                 finally:
                     loop.close()

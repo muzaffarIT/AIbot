@@ -57,7 +57,9 @@ export default function ProfilePage() {
   };
 
   const tgUser = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-  const displayName = tgUser?.first_name || backendUser?.username || 'Пользователь';
+  const displayName = tgUser?.first_name 
+               || backendUser?.username 
+               || 'Пользователь';
 
   return (
     <main className="min-h-screen px-5 pt-6 pb-24 overflow-x-hidden">

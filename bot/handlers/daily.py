@@ -77,8 +77,13 @@ async def _handle_daily_bonus(telegram_id: int, message: Message, bot: Bot) -> N
                     f"\n\n🏆 <b>Новое достижение!</b>\n{ach.emoji} <b>{name}</b> — +{bonus} кр. 🎉"
                 )
 
-        await message.answer(text, reply_markup=main_reply_keyboard(lang), parse_mode="HTML")
-        logger.info(f"[Daily] user={telegram_id} claimed streak={streak} credits={result['credits']}")
+        from aiogram.exceptions import TelegramForbiddenError
+        try:
+            await message.answer(text, reply_markup=main_reply_keyboard(lang), parse_mode="HTML")
+            logger.info(f"[Daily] user={telegram_id} claimed streak={streak} credits={result['credits']}")
+        except TelegramForbiddenError:
+            logger.warning(f"User blocked bot: {telegram_id}")
+            return
 
     finally:
         db.close()

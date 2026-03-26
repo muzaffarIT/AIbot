@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from datetime import datetime, timezone, timedelta
-from celery import shared_task
+from celery import shared_task\nfrom aiogram.exceptions import TelegramForbiddenError
 from aiogram import Bot
 from sqlalchemy import select
 
@@ -45,6 +45,8 @@ async def _send_daily_reminders():
                 # Rate limiting for Telegram
                 await asyncio.sleep(0.05)
                 
+            except TelegramForbiddenError:
+                logger.warning(f"User blocked bot: {user.telegram_user_id}")
             except Exception as e:
                 logger.error(f"[Reminder] Failed to notify {user.telegram_user_id}: {e}")
         
@@ -102,6 +104,10 @@ async def _send_lifecycle_notifications():
                     user.last_notification_at = now
                     await asyncio.sleep(0.05)
                     
+                except TelegramForbiddenError:
+                    logger.warning(f"User blocked bot: {user.telegram_user_id}")
+                except TelegramForbiddenError:
+                    logger.warning(f"User blocked bot: {user.telegram_user_id}")
                 except Exception as e:
                     logger.error(f"[Lifecycle] Day {day} failed for {user.telegram_user_id}: {e}")
             
