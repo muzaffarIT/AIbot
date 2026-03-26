@@ -108,11 +108,14 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
             )
 
         # Send reply keyboard as main navigation
-        await message.answer(
-            text,
-            reply_markup=main_reply_keyboard(lang),
-            parse_mode="HTML",
-        )
+        try:
+            await message.answer(
+                text,
+                reply_markup=main_reply_keyboard(lang),
+                parse_mode="HTML",
+            )
+        except TelegramForbiddenError:
+            return
 
     finally:
         db.close()

@@ -101,13 +101,23 @@ export default function JobsPage() {
 
   const loadJobs = async () => {
     if (!telegramUser?.id) return;
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     try {
-      const response = await getJobs(telegramUser.id, 20);
-      setJobs(response.jobs);
+      const tgId = telegramUser.id;
+      const res = await fetch(`/api/jobs/telegram/${tgId}`, { signal: controller.signal });
+      if (res.ok) {
+        const data = await res.json();
+        setJobs(data || []);
+      }
     } catch (error) {
       console.error("Failed to load jobs:", error);
+      setJobs([]);
     } finally {
       setLoading(false);
+      clearTimeout(timeout);
     }
   };
 
@@ -186,6 +196,10 @@ export default function JobsPage() {
                   На главную
                 </Link>
               </div>
+            )}
+            
+            {jobs.length === 0 && !loading && (
+              <p className="text-center text-white/50 mt-4">У тебя пока нет генераций. Создай первую!</p>
             )}
           </motion.div>
         )}

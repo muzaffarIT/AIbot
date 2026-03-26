@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, Users, Copy, Check, ChevronRight, Sparkles, Zap, Gift, Share2, CreditCard } from "lucide-react";
 import { t } from "@/lib/miniapp-i18n";
@@ -23,14 +23,45 @@ export default function PartnershipPage() {
 
   const userId = backendUser?.telegram_user_id;
   const botUsername = "batirai_bot"; 
-  const referralLink = `https://t.me/${botUsername}?start=ref_${userId}`;
+
+  const [refLink, setRefLink] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!userId) {
+      if (!backendUser) return; // wait for backendUser to load
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    // Fallback if the API fails, we use userId (which is the tg id)
+    const defaultRef = `https://t.me/${botUsername}?start=ref_${userId || backendUser?.telegram_user_id}`;
+
+    fetch('/api/users/me', { signal: controller.signal })
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.referral_code) {
+          setRefLink(`https://t.me/${botUsername}?start=ref_${data.referral_code}`);
+        } else {
+          setRefLink(defaultRef);
+        }
+      })
+      .catch(err => {
+        console.error('Referral load error:', err);
+        setRefLink(defaultRef);
+      })
+      .finally(() => {
+        setLoading(false);
+        clearTimeout(timeout);
+      });
+  }, [userId, backendUser]);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(referralLink);
+      await navigator.clipboard.writeText(refLink);
     } catch {
       const el = document.createElement('textarea');
-      el.value = referralLink;
+      el.value = refLink;
       document.body.appendChild(el);
       el.select();
       document.execCommand('copy');
@@ -47,7 +78,7 @@ export default function PartnershipPage() {
     const text = language === 'uz' 
       ? "AI botida rasm va video yarating! Ro'yxatdan o'tish uchun 10 kredit oling:"
       : "Создавай крутые AI фото и видео! Получи 10 кредитов при регистрации:";
-    const url = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(text)}`;
+    const url = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(text)}`;
     (window as any).Telegram?.WebApp?.openTelegramLink(url);
   };
 
@@ -82,7 +113,7 @@ export default function PartnershipPage() {
           <label className="text-xs font-bold uppercase tracking-wider text-white/40 px-1">Твоя ссылка</label>
           <div className="flex gap-2">
             <div className="flex-1 glass-input py-3 px-4 text-sm text-white/80 truncate border-white/5 bg-white/5 rounded-2xl font-mono">
-              {userId ? referralLink : "Загрузка..."}
+              {loading ? "Загрузка..." : refLink || "Ошибка загрузки"}
             </div>
             <button 
               onClick={handleCopy}
