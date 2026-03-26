@@ -1,5 +1,6 @@
 import time
 import logging
+import json as json_lib
 import requests
 import asyncio
 from aiogram import Bot
@@ -35,44 +36,70 @@ def _do_post_request(url: str, headers: dict, json_data: dict, max_retries: int 
     raise ValueError("Max retries exceeded")
 
 
-def poll_task(task_id, max_seconds=300, interval=5):
+def poll_task(task_id: str, max_seconds: int = 300,
+              interval: int = 5) -> str | None:
     elapsed = 0
+    url = f"{settings.kie_base_url}/api/v1/jobs/recordInfo"
+    headers = {"Authorization": f"Bearer {settings.kie_api_key}"}
+
     while elapsed < max_seconds:
         time.sleep(interval)
         elapsed += interval
-        
-        r = requests.get(
-            f"{settings.kie_base_url}/api/v1/jobs/result/{task_id}",
-            headers={"Authorization": f"Bearer {settings.kie_api_key}"}
-        )
-        logger.info(f"[KIE POLL] Full response: {r.text[:500]}")
-        resp = r.json()
 
-        # KIE.ai возвращает статус в data объекте
-        task_data = resp.get("data", {})
-        status = task_data.get("status", "")
+        try:
+            r = requests.get(
+                url,
+                params={"taskId": task_id},
+                headers=headers,
+                timeout=30
+            )
+            logger.info(
+                f"[KIE POLL] taskId={task_id} "
+                f"status={r.status_code} "
+                f"elapsed={elapsed}s"
+            )
+            logger.info(f"[KIE POLL] body={r.text[:300]}")
 
-        logger.info(f"[KIE POLL] taskId={task_id} status={status}")
+            if r.status_code != 200:
+                logger.warning(f"[KIE POLL] Non-200: {r.status_code}")
+                continue
 
-        if status in ("success", "completed", "finish"):
-            output = task_data.get("output", {})
-            url = (output.get("imageUrl")
-                   or output.get("image_url")
-                   or output.get("videoUrl")
-                   or output.get("video_url"))
-            if url:
-                logger.info(f"[KIE] Got result URL: {url[:80]}")
-                return url
-            logger.error(f"[KIE] Success but no URL in output: {output}")
-            return None
+            resp = r.json()
+            task_data = resp.get("data", {})
 
-        if status in ("failed", "error"):
-            raise ValueError(f"KIE task failed: {resp}")
+            # ВАЖНО: поле называется "state", не "status"!
+            state = task_data.get("state", "")
+            logger.info(f"[KIE POLL] state={state}")
 
-        # waiting/queuing/generating — продолжаем polling
-        logger.info(f"[KIE POLL] status={status} elapsed={elapsed}s, continuing...")
-    
-    raise TimeoutError(f"KIE task {task_id} timeout")
+            if state == "success":
+                # resultJson — это строка JSON, парсим её
+                result_json_str = task_data.get("resultJson", "")
+                try:
+                    result_json = json_lib.loads(result_json_str)
+                    urls = result_json.get("resultUrls", [])
+                    if urls:
+                        logger.info(f"[KIE] Result: {urls[0]}")
+                        return urls[0]
+                except Exception as parse_err:
+                    logger.error(
+                        f"[KIE] Parse error: {parse_err}, "
+                        f"raw={result_json_str[:200]}"
+                    )
+                # Если resultUrls пустой — ищем в других полях
+                logger.warning(f"[KIE] Success but no URL: {task_data}")
+                return None
+
+            if state == "fail":
+                fail_msg = task_data.get("failMsg", "unknown")
+                raise ValueError(f"KIE task failed: {fail_msg}")
+
+        except requests.RequestException as req_err:
+            logger.error(f"[KIE POLL] Request error: {req_err}")
+
+    raise TimeoutError(
+        f"KIE task {task_id} timeout after {max_seconds}s"
+    )
+
 
 
 async def send_result(telegram_id, result_url, provider, prompt, credits):
