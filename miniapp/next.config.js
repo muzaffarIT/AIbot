@@ -1,19 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
-    const backendUrl =
+    const backend =
       process.env.BACKEND_INTERNAL_URL ||
-      process.env.NEXT_PUBLIC_BACKEND_URL ||
-      'http://localhost:8080'
-
-    console.log('[NEXT] Backend URL:', backendUrl)
-
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${backendUrl}/api/:path*`,
-      },
-    ]
+      'https://backendapp-production-c193.up.railway.app'
+    return [{
+      source: '/api/:path*',
+      destination: `${backend}/api/:path*`,
+    }]
   },
   images: {
     remotePatterns: [
