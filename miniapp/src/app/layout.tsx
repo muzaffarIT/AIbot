@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Inter } from "next/font/google";
 import { BottomNav } from "@/components/BottomNav";
-import { TelegramInit } from "@/components/TelegramInit";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"], variable: "--font-inter" });
 
@@ -26,7 +25,6 @@ export default function RootLayout({
         />
       </head>
       <body className="font-inter antialiased">
-        <TelegramInit />
         {children}
         <BottomNav />
       </body>
