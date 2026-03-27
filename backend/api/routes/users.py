@@ -120,3 +120,61 @@ def get_user(telegram_user_id: int) -> dict:
         return serialize_user(user, credits_balance, referral_count)
     finally:
         db.close()
+
+
+@router.get("/{telegram_user_id}/achievements")
+def get_user_achievements(telegram_user_id: int) -> list:
+    db: Session = SessionLocal()
+    from backend.models.achievement import Achievement
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(telegram_user_id)
+        if not user:
+            return []
+        
+        all_achievements = [
+            {"code": "first_gen",   "name": "Первая генерация", "emoji": "🌱", "bonus": 2,   "required": 1},
+            {"code": "artist_10",   "name": "10 картинок",      "emoji": "🎨", "bonus": 5,   "required": 10},
+            {"code": "director",    "name": "Первое видео",     "emoji": "🎬", "bonus": 5,   "required": 1},
+            {"code": "buyer",       "name": "Первая покупка",   "emoji": "💎", "bonus": 10,  "required": 1},
+            {"code": "streak_7",    "name": "Стрик 7 дней",     "emoji": "🔥", "bonus": 15,  "required": 7},
+            {"code": "referrer_5",  "name": "5 рефералов",      "emoji": "👥", "bonus": 25,  "required": 5},
+            {"code": "centurion",   "name": "100 генераций",    "emoji": "💯", "bonus": 30,  "required": 100},
+            {"code": "legend",      "name": "500 генераций",    "emoji": "👑", "bonus": 100, "required": 500},
+        ]
+        
+        earned_codes = [a.code for a in db.query(Achievement).filter(
+            Achievement.user_id == user.id
+        ).all()]
+        
+        result = []
+        for ach in all_achievements:
+            result.append({
+                **ach,
+                "earned": ach["code"] in earned_codes
+            })
+        
+        return result
+    finally:
+        db.close()
+
+
+@router.get("/{telegram_user_id}/referral")
+def get_referral_info(telegram_user_id: int) -> dict:
+    db: Session = SessionLocal()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(telegram_user_id)
+        if not user:
+            return {
+                "referral_code": "", 
+                "referral_count": 0,
+                "referral_earnings": 0
+            }
+        return {
+            "referral_code": user.referral_code or "",
+            "referral_count": user.referral_count or 0,
+            "referral_earnings": user.referral_earnings or 0
+        }
+    finally:
+        db.close()

@@ -163,7 +163,7 @@ async def cmd_admin(message: Message) -> None:
 
         # ── Format ────────────────────────────────────────────────────────
         lines = [
-            f"📊 <b>Отчёт BATIR AI — {now.strftime('%d.%m.%Y %H:%M')} UTC</b>",
+            f"📊 <b>Отчёт HARF AI — {now.strftime('%d.%m.%Y %H:%M')} UTC</b>",
             "",
             "👥 <b>Пользователи</b>",
             f"  Всего: <b>{total_users}</b>",

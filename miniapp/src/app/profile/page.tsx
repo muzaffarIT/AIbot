@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, type Variants } from "framer-motion";
 import {
   ArrowLeft, User, Flame, Trophy, Lock, Calendar,
@@ -40,8 +40,20 @@ export default function ProfilePage() {
   const { language, backendUser, telegramUser, changeLanguage } = useMiniAppUser();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
-  // In a real app we'd fetch achievements from backend. For now show placeholders.
-  const earnedCodes: string[] = []; // TODO: fetch from GET /api/achievements/{tg_id}
+  const [earnedCodes, setEarnedCodes] = useState<string[]>([]);
+
+  useEffect(() => {
+    const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+    if (!tgUser) return;
+
+    fetch(`/api/users/${tgUser.id}/achievements`)
+      .then(r => r.json())
+      .then(data => {
+        const codes = (data || []).filter((d: any) => d.earned).map((d: any) => d.code);
+        setEarnedCodes(codes);
+      })
+      .catch(err => console.error('Achievements error:', err));
+  }, []);
 
   const streak = (backendUser as any)?.daily_streak ?? 0;
   const registeredAt: string | null = (backendUser as any)?.created_at ?? null;
@@ -167,6 +179,7 @@ export default function ProfilePage() {
                       ? "border-brand-accent/30 bg-brand-accent/5"
                       : "border-white/5 opacity-60"
                   }`}
+                  style={{ opacity: earned ? 1 : 0.4 }}
                 >
                   <div className="flex items-start gap-3">
                     <span className="text-2xl">{a.emoji}</span>

@@ -125,7 +125,10 @@ export default function HomePage() {
               HARF AI
             </div>
             <p style={{color: '#888', marginTop: 8}}>
-              Нейросети в твоём телефоне
+              ✨ Твоя идея → готовый контент за секунды
+            </p>
+            <p style={{color: '#888', fontSize: 13, marginTop: 4}}>
+              Картинки • Видео • Анимация
             </p>
           </div>
         </motion.section>

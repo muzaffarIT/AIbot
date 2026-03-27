@@ -36,7 +36,7 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
 
         text = (
             f"👋 Привет, <b>{name}</b>!\n"
-            f"Добро пожаловать в <b>BATIR AI</b>.\n"
+            f"Добро пожаловать в <b>HARF AI</b>.\n"
             f"У тебя <b>{credits}</b> кредитов.\n\n"
             f"Выбери действие:"
         )

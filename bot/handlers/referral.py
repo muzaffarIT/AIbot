@@ -57,9 +57,9 @@ async def _send_referral_info(telegram_id: int, message, bot: Bot) -> None:
         text = i18n.t(lang, "referral.title",
                       link=ref_link, count=ref_count, earnings=earnings)
 
-        share_text = (f"BATIR AI — sun'iy intellekt yordamida rasm va video yarating! +10 kredit sovg'a 🎁"
+        share_text = (f"HARF AI — sun'iy intellekt yordamida rasm va video yarating! +10 kredit sovg'a 🎁"
                       if lang == "uz" else
-                      f"BATIR AI — создавай картинки и видео с помощью ИИ! +10 кредитов в подарок 🎁")
+                      f"HARF AI — создавай картинки и видео с помощью ИИ! +10 кредитов в подарок 🎁")
         share_url = f"https://t.me/share/url?url={ref_link}&text={share_text}"
 
         await message.answer(

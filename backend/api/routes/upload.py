@@ -15,7 +15,7 @@ from backend.core.config import settings
 
 router = APIRouter()
 
-UPLOAD_DIR = Path("/tmp/batir_uploads")
+UPLOAD_DIR = Path("/tmp/harf_uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_FILE_AGE_SECONDS = 3600  # 1 hour
 

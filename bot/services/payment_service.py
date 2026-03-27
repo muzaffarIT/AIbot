@@ -1,5 +1,5 @@
 """
-Credit packages for BATIR AI (Telegram Stars payments).
+Credit packages for HARF AI (Telegram Stars payments).
 """
 
 import json

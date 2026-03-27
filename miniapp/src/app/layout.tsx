@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin", "cyrillic"], variable: "--font-inter" }
 
 export const metadata: Metadata = {
   title: "HARF AI",
-  description: "Нейросети в твоём телефоне",
+  description: "Создавай. Удивляй. Зарабатывай.",
 };
 
 export default function RootLayout({
