@@ -101,6 +101,97 @@ def poll_task(task_id: str, max_seconds: int = 300,
         f"KIE task {task_id} timeout after {max_seconds}s"
     )
 
+def run_veo3_generation(prompt, quality, source_image_url,
+                        kie_api_key, kie_base_url):
+    """Veo 3 использует отдельный endpoint"""
+    
+    model = "veo3_fast" if quality == "fast" else "veo3_quality"
+    
+    payload = {
+        "prompt": prompt,
+        "model": model,
+        "aspect_ratio": "16:9",
+        "enableTranslation": True
+    }
+    
+    if source_image_url:
+        payload["generationType"] = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+        payload["imageUrls"] = [source_image_url]
+    else:
+        payload["generationType"] = "TEXT_2_VIDEO"
+    
+    headers = {
+        "Authorization": f"Bearer {kie_api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    url = f"{kie_base_url}/api/v1/veo/generate"
+    logger.info(f"[VEO3] POST {url}")
+    logger.info(f"[VEO3] payload: {json_lib.dumps(payload)[:300]}")
+    
+    r = requests.post(url, json=payload, headers=headers, timeout=30)
+    resp = r.json()
+    logger.info(f"[VEO3] Response: {resp}")
+    
+    code = resp.get("code", 0)
+    if code != 200:
+        raise ValueError(f"VEO3 error {code}: {resp.get('msg')}")
+    
+    task_id = resp.get("data", {}).get("taskId")
+    if not task_id:
+        raise ValueError(f"VEO3: нет taskId: {resp}")
+    
+    logger.info(f"[VEO3] Task created: {task_id}")
+    return task_id
+
+def poll_veo3_task(task_id, kie_api_key, kie_base_url,
+                  max_seconds=300, interval=5):
+    """Polling для Veo 3 — отдельный endpoint с другой структурой"""
+    
+    elapsed = 0
+    url = f"{kie_base_url}/api/v1/veo/record-info"
+    headers = {"Authorization": f"Bearer {kie_api_key}"}
+    
+    while elapsed < max_seconds:
+        time.sleep(interval)
+        elapsed += interval
+        
+        try:
+            r = requests.get(
+                url,
+                params={"taskId": task_id},
+                headers=headers,
+                timeout=30
+            )
+            resp = r.json()
+            logger.info(f"[VEO3 POLL] {task_id} elapsed={elapsed}s")
+            logger.info(f"[VEO3 POLL] body={r.text[:300]}")
+            
+            d = resp.get("data", {})
+            flag = d.get("successFlag")
+            # 0 = generating, 1 = success, 2 = failed, 3 = gen_failed
+            
+            logger.info(f"[VEO3 POLL] successFlag={flag}")
+            
+            if flag == 1:  # success!
+                urls = d.get("response", {}).get("resultUrls", [])
+                if urls:
+                    logger.info(f"[VEO3] Result: {urls[0][:80]}")
+                    return urls[0]
+                logger.error(f"[VEO3] Success but no URL: {d}")
+                return None
+            
+            if flag in (2, 3):  # failed
+                raise ValueError(
+                    f"VEO3 failed: {d.get('errorMessage', 'unknown')}"
+                )
+            
+            # flag == 0 → ещё генерируется, продолжаем
+            
+        except requests.RequestException as e:
+            logger.error(f"[VEO3 POLL] request error: {e}")
+    
+    raise TimeoutError(f"VEO3 task {task_id} timeout after {max_seconds}s")
 
 
 async def _notify_user(telegram_id: int, url: str,
@@ -191,94 +282,96 @@ def run_generation_job(job_id: int) -> dict | None:
         }
 
         # Setup provider specific configs
-        if job.provider == AIProvider.NANO_BANANA:
-            url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
-            aspect_ratio = job.job_payload.get("aspect_ratio", "1:1")
-            resolution = job.job_payload.get("resolution", "1K")
-            payload = {
-                "model": "nano-banana-pro",
-                "input": {
-                    "prompt": job.prompt,
-                    "aspect_ratio": aspect_ratio,
-                    "resolution": resolution,
-                    "output_format": "png",
-                    "image_input": [job.source_image_url] if job.source_image_url else []
-                }
-            }
-            poll_interval = 5
-            poll_timeout = 120
-
-        elif job.provider == AIProvider.VEO:
-            url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
-            payload = {
-                "model": "veo-3",
-                "input": {
-                    "prompt": job.prompt,
-                    "aspect_ratio": "16:9"
-                }
-            }
-            poll_interval = 10
-            poll_timeout = 300
-
-        elif job.provider == AIProvider.KLING:
-            url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
-            mode = job.job_payload.get("mode", "std")
-            duration = int(job.job_payload.get("duration", 5))
-            payload = {
-                "model": "kling-3.0/video",
-                "input": {
-                    "prompt": job.prompt,
-                    "duration": str(duration),
-                    "mode": mode,
-                    "aspect_ratio": "16:9",
-                    "sound": False,
-                    "image_urls": [job.source_image_url] if job.source_image_url else []
-                }
-            }
-            if duration == 15:
-                poll_interval = 25
-                poll_timeout = 900
-            elif duration == 10:
-                poll_interval = 20
-                poll_timeout = 600
-            else:
-                poll_interval = 15
-                poll_timeout = 300
+        if job.provider == AIProvider.VEO:
+            task_id = run_veo3_generation(
+                prompt=job.prompt,
+                quality=job.job_payload.get("quality", "fast"),
+                source_image_url=job.source_image_url,
+                kie_api_key=settings.kie_api_key,
+                kie_base_url=settings.kie_base_url
+            )
+            final_result_url = poll_veo3_task(
+                task_id=task_id,
+                kie_api_key=settings.kie_api_key,
+                kie_base_url=settings.kie_base_url
+            )
         else:
-            service.repo.update_job(job, status=JobStatus.FAILED, error_message="Unknown provider", completed=True)
-            return {"job_id": job_id, "status": "failed"}
+            if job.provider == AIProvider.NANO_BANANA:
+                url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
+                aspect_ratio = job.job_payload.get("aspect_ratio", "1:1")
+                resolution = job.job_payload.get("resolution", "1K")
+                payload = {
+                    "model": "nano-banana-pro",
+                    "input": {
+                        "prompt": job.prompt,
+                        "aspect_ratio": aspect_ratio,
+                        "resolution": resolution,
+                        "output_format": "png",
+                        "image_input": [job.source_image_url] if job.source_image_url else []
+                    }
+                }
+                poll_interval = 5
+                poll_timeout = 120
 
-        # 1. Start generation
-        logger.info(f"[KIE] Sending payload: {json_lib.dumps(payload)[:500]}")
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        logger.info(f"[KIE] Response status: {response.status_code}")
-        logger.info(f"[KIE] Response body: {response.text[:200]}")
-        
-        response.raise_for_status()
-        resp = response.json()
-        
-        code = resp.get("code", 0)
-        msg = resp.get("msg", "")
+            elif job.provider == AIProvider.KLING:
+                url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
+                mode = job.job_payload.get("mode", "std")
+                duration = int(job.job_payload.get("duration", 5))
+                payload = {
+                    "model": "kling-3.0/video",
+                    "input": {
+                        "prompt": job.prompt,
+                        "duration": str(duration),
+                        "mode": mode,
+                        "aspect_ratio": "16:9",
+                        "sound": False,
+                        "image_urls": [job.source_image_url] if job.source_image_url else []
+                    }
+                }
+                if duration == 15:
+                    poll_interval = 25
+                    poll_timeout = 900
+                elif duration == 10:
+                    poll_interval = 20
+                    poll_timeout = 600
+                else:
+                    poll_interval = 15
+                    poll_timeout = 300
+            else:
+                service.repo.update_job(job, status=JobStatus.FAILED, error_message="Unknown provider", completed=True)
+                return {"job_id": job_id, "status": "failed"}
 
-        if code == 402:
-            raise ValueError(f"KIE: недостаточно кредитов: {msg}")
-        if code == 401:
-            raise ValueError(f"KIE: неверный ключ: {msg}")
-        if code == 422:
-            raise ValueError(f"KIE: неверная модель: {msg}")
-        if code != 200:
-            raise ValueError(f"KIE error {code}: {msg}")
+            # 1. Start generation
+            logger.info(f"[KIE] Sending payload: {json_lib.dumps(payload)[:500]}")
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            logger.info(f"[KIE] Response status: {response.status_code}")
+            logger.info(f"[KIE] Response body: {response.text[:200]}")
+            
+            response.raise_for_status()
+            resp = response.json()
+            
+            code = resp.get("code", 0)
+            msg = resp.get("msg", "")
 
-        data = resp.get("data") or {}
-        task_id = (data.get("taskId")
-                   or data.get("task_id")
-                   or data.get("recordId"))
-        if not task_id:
-            raise ValueError(f"Нет taskId в ответе: {resp}")
-        logger.info(f"[KIE] Task created: {task_id}")
+            if code == 402:
+                raise ValueError(f"KIE: недостаточно кредитов: {msg}")
+            if code == 401:
+                raise ValueError(f"KIE: неверный ключ: {msg}")
+            if code == 422:
+                raise ValueError(f"KIE: неверная модель: {msg}")
+            if code != 200:
+                raise ValueError(f"KIE error {code}: {msg}")
 
-        # 2. Polling
-        final_result_url = poll_task(task_id, max_seconds=poll_timeout, interval=poll_interval)
+            data = resp.get("data") or {}
+            task_id = (data.get("taskId")
+                       or data.get("task_id")
+                       or data.get("recordId"))
+            if not task_id:
+                raise ValueError(f"Нет taskId в ответе: {resp}")
+            logger.info(f"[KIE] Task created: {task_id}")
+
+            # 2. Polling
+            final_result_url = poll_task(task_id, max_seconds=poll_timeout, interval=poll_interval)
         
         if final_result_url:
             logger.info(f"[KIE] Task result: {final_result_url}")
