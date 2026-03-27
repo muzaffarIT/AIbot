@@ -210,13 +210,11 @@ def run_generation_job(job_id: int) -> dict | None:
 
         elif job.provider == AIProvider.VEO:
             url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
-            quality = job.job_payload.get("quality", "fast")
             payload = {
                 "model": "veo-3",
                 "input": {
                     "prompt": job.prompt,
-                    "duration": 8,
-                    "resolution": "720p" if quality == "fast" else "1080p"
+                    "aspect_ratio": "16:9"
                 }
             }
             poll_interval = 10
@@ -251,6 +249,7 @@ def run_generation_job(job_id: int) -> dict | None:
             return {"job_id": job_id, "status": "failed"}
 
         # 1. Start generation
+        logger.info(f"[KIE] Sending payload: {json_lib.dumps(payload)[:500]}")
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         logger.info(f"[KIE] Response status: {response.status_code}")
         logger.info(f"[KIE] Response body: {response.text[:200]}")

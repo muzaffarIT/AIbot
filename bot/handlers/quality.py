@@ -86,10 +86,20 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
             AIProvider.KLING: "Kling Motion",
         }.get(provider)
         
+        if is_admin:
+            status_text = (
+                "⚡ Задача принята.\n"
+                "👑 Режим администратора — кредиты не списываются."
+            )
+        else:
+            status_text = (
+                f"⏳ <b>{mode_text}</b> — задача #{job.id} принята.\n\n"
+                f"💰 Списано: {cost} кр.\n"
+                f"🔄 Готовим результат..."
+            )
+        
         await callback.message.edit_text(
-            f"⏳ <b>{mode_text}</b> — задача #{job.id} принята.\n\n"
-            f"💰 Списано: {cost} кр.\n"
-            f"🔄 Готовим результат...",
+            status_text,
             parse_mode="HTML"
         )
         
