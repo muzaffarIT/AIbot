@@ -1,7 +1,8 @@
 import logging
 import asyncio
 from datetime import datetime, timezone, timedelta
-from celery import shared_task\nfrom aiogram.exceptions import TelegramForbiddenError
+from celery import shared_task
+from aiogram.exceptions import TelegramForbiddenError
 from aiogram import Bot
 from sqlalchemy import select
 
