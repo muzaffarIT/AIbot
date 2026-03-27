@@ -6,21 +6,35 @@ export function useTelegramUser() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const init = () => {
+    let attempts = 0
+    const check = () => {
       const tg = (window as any).Telegram?.WebApp
-      if (!tg) { setReady(true); return }
-      tg.ready()
-      tg.expand()
-      const user = tg.initDataUnsafe?.user
-      if (user) setTgUser(user)
-      setReady(true)
+      if (tg && tg.initDataUnsafe?.user) {
+        tg.ready()
+        tg.expand()
+        setTgUser(tg.initDataUnsafe.user)
+        setReady(true)
+        console.log('[TG] WebApp ready, user found:', tg.initDataUnsafe.user.id)
+        return true
+      }
+      return false
     }
-    if ((window as any).Telegram?.WebApp) {
-      init()
-    } else {
-      const t = setTimeout(init, 300)
-      return () => clearTimeout(t)
-    }
+
+    if (check()) return
+
+    console.log('[TG] WebApp not ready, starting polling...')
+    const interval = setInterval(() => {
+      attempts++
+      if (check()) {
+        clearInterval(interval)
+      } else if (attempts >= 20) {
+        console.warn('[TG] WebApp polling timeout (2s), user not found')
+        clearInterval(interval)
+        setReady(true)
+      }
+    }, 100)
+
+    return () => clearInterval(interval)
   }, [])
 
   return { tgUser, ready }

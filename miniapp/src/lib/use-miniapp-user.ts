@@ -24,6 +24,7 @@ export function useMiniAppUser() {
     }
 
     async function sync() {
+      console.log('[SYNC] Starting sync for user:', tgUser.id);
       setLoading(true);
       try {
         const beUser = await apiSyncUser({
@@ -33,6 +34,7 @@ export function useMiniAppUser() {
           last_name: tgUser.last_name,
           language_code: tgUser.language_code,
         });
+        console.log('[SYNC] Success:', beUser.id);
         setBackendUser(beUser);
         setLanguage(normalizeLanguage(beUser.language_code));
         localStorage.setItem("miniapp_language", normalizeLanguage(beUser.language_code));
@@ -41,11 +43,12 @@ export function useMiniAppUser() {
         } catch {}
         setError("");
       } catch (e: any) {
-        console.error('Sync error:', e);
+        console.error('[SYNC] Failed:', e);
         const cached = sessionStorage.getItem('harf_user');
         if (cached) {
           try {
             const beUser = JSON.parse(cached);
+            console.log('[SYNC] Loaded from cache after failure');
             setBackendUser(beUser);
             setLanguage(normalizeLanguage(beUser.language_code));
           } catch {}
