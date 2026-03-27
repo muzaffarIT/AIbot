@@ -1,222 +1,188 @@
-"use client";
-
-import Link from "next/link";
-import { useState, useEffect } from "react";
-import { motion, type Variants } from "framer-motion";
-import {
-  ArrowLeft, User, Flame, Trophy, Lock, Calendar,
-  Globe, Check, Star, Zap, Sparkles, Award, Crown,
-  Users, CreditCard, Gift
-} from "lucide-react";
-import { useMiniAppUser } from "@/lib/use-miniapp-user";
-
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
-};
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 15 },
-  visible: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
-};
-
-// All possible achievements with metadata
-const ALL_ACHIEVEMENTS = [
-  { code: "first_gen",  emoji: "🌱", ru: "Первая генерация",   uz: "Birinchi generatsiya", bonus: 2  },
-  { code: "artist_10", emoji: "🎨", ru: "10 картинок",        uz: "10 ta rasm",           bonus: 5  },
-  { code: "director",  emoji: "🎬", ru: "Первое видео",       uz: "Birinchi video",        bonus: 5  },
-  { code: "buyer",     emoji: "💎", ru: "Первая покупка",     uz: "Birinchi xarid",        bonus: 10 },
-  { code: "streak_7",  emoji: "🔥", ru: "Стрик 7 дней",       uz: "7 kunlik streak",       bonus: 15 },
-  { code: "referrer_5",emoji: "👥", ru: "5 рефералов",        uz: "5 ta referal",          bonus: 25 },
-  { code: "centurion", emoji: "💯", ru: "100 генераций",      uz: "100 ta generatsiya",    bonus: 30 },
-  { code: "legend",    emoji: "👑", ru: "500 генераций",      uz: "500 ta generatsiya",    bonus: 100},
-];
-
-const LANG_OPTIONS = [
-  { code: "ru", label: "Русский 🇷🇺" },
-  { code: "uz", label: "O'zbekcha 🇺🇿" },
-];
+'use client'
+import { useEffect, useState } from 'react'
+import { useUser } from '@/hooks/useUser'
 
 export default function ProfilePage() {
-  const { language, backendUser, telegramUser, changeLanguage } = useMiniAppUser();
-  const [langMenuOpen, setLangMenuOpen] = useState(false);
-
-  const [earnedCodes, setEarnedCodes] = useState<string[]>([]);
+  const { user, tgUser, loading } = useUser()
+  const [achievements, setAchievements] = useState<any[]>([])
 
   useEffect(() => {
-    const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
-    if (!tgUser) return;
-
+    if (!tgUser?.id) return
     fetch(`/api/users/${tgUser.id}/achievements`)
       .then(r => r.json())
-      .then(data => {
-        const codes = (data || []).filter((d: any) => d.earned).map((d: any) => d.code);
-        setEarnedCodes(codes);
-      })
-      .catch(err => console.error('Achievements error:', err));
-  }, []);
+      .then(data => setAchievements(Array.isArray(data) ? data : []))
+      .catch(() => setAchievements([]))
+  }, [tgUser])
 
-  const streak = (backendUser as any)?.daily_streak ?? 0;
-  const registeredAt: string | null = (backendUser as any)?.created_at ?? null;
+  const name = tgUser?.first_name || 'Пользователь'
+  const username = tgUser?.username
+    ? `@${tgUser.username}` : ''
+  const balance = user?.credits_balance ?? 0
+  const streak = user?.daily_streak ?? 0
+  const friends = user?.referral_count ?? 0
+  const earnedCount = achievements.filter(a => a.earned).length
 
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString(language === "uz" ? "uz-UZ" : "ru-RU", {
-      year: "numeric", month: "long", day: "numeric",
-    });
-
-  const handleLangChange = (code: string) => {
-    changeLanguage(code);
-    setLangMenuOpen(false);
-  };
-
-  const tgUser = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-  const displayName = tgUser?.first_name 
-               || backendUser?.username 
-               || 'Пользователь';
+  if (loading) return (
+    <div style={{
+      display:'flex', justifyContent:'center',
+      alignItems:'center', height:'80vh', color:'white'
+    }}>
+      Загрузка...
+    </div>
+  )
 
   return (
-    <main className="min-h-screen px-5 pt-6 pb-24 overflow-x-hidden">
-      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="max-w-md mx-auto space-y-6">
-        
-        {/* Header */}
-        <motion.div variants={itemVariants} className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
-              <ArrowLeft className="text-white" size={20} />
-            </Link>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              {language === "uz" ? "Profil" : "Профиль"}
-            </h1>
-          </div>
+    <div style={{
+      background: '#0a0a0f', minHeight: '100vh',
+      color: 'white', padding: '20px 16px 100px'
+    }}>
+      {/* Заголовок */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20
+      }}>
+        <h2 style={{margin: 0, fontSize: 22, fontWeight: 700}}>
+          Профиль
+        </h2>
+        <div style={{
+          background: '#1a1a2e',
+          borderRadius: 20,
+          padding: '6px 14px',
+          fontSize: 13,
+          color: '#a78bfa',
+          border: '1px solid #2d2d4e'
+        }}>
+          🌐 RU
+        </div>
+      </div>
 
-          {/* Language switcher */}
-          <div className="relative">
-            <button
-              onClick={() => setLangMenuOpen(!langMenuOpen)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors text-sm"
-            >
-              <Globe size={16} />
-              {language === "uz" ? "UZ" : "RU"}
-            </button>
-            {langMenuOpen && (
-              <div className="absolute right-0 top-10 z-50 bg-brand-900 border border-white/10 rounded-2xl overflow-hidden shadow-xl shadow-black/40 min-w-[150px]">
-                {LANG_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.code}
-                    onClick={() => handleLangChange(opt.code)}
-                    className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition-colors text-sm text-white/90"
-                  >
-                    {language === opt.code && <Check size={14} className="text-brand-cyan" />}
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
+      {/* Карточка пользователя */}
+      <div style={{
+        background: '#111120',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        border: '1px solid #1f1f35'
+      }}>
+        <div style={{
+          width: 56, height: 56,
+          background: 'linear-gradient(135deg, #7c3aed, #3b82f6)',
+          borderRadius: 14,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 22,
+          fontWeight: 700,
+          flexShrink: 0
+        }}>
+          {name[0]?.toUpperCase()}
+        </div>
+        <div>
+          <p style={{
+            fontWeight: 700, fontSize: 18, margin: '0 0 2px'
+          }}>{name}</p>
+          {username && (
+            <p style={{
+              color: '#666', fontSize: 13, margin: 0
+            }}>{username}</p>
+          )}
+        </div>
+      </div>
 
-        {/* Avatar + name */}
-        <motion.div variants={itemVariants} className="glass-card p-6 flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-primary to-brand-cyan flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-brand-primary/30">
-            {displayName.charAt(0).toUpperCase()}
+      {/* Статистика */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: 10,
+        marginBottom: 20
+      }}>
+        {[
+          { label: 'STREAK', value: streak, icon: '🔥' },
+          { label: 'КРЕДИТЫ', value: balance, icon: '⚡',
+            color: '#a78bfa' },
+          { label: 'ДРУЗЬЯ', value: friends, icon: '👥',
+            color: '#a78bfa' },
+        ].map(stat => (
+          <div key={stat.label} style={{
+            background: '#111120',
+            borderRadius: 14,
+            padding: '14px 10px',
+            textAlign: 'center',
+            border: '1px solid #1f1f35'
+          }}>
+            <p style={{
+              color: '#555', fontSize: 10,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em', margin: '0 0 6px'
+            }}>{stat.label}</p>
+            <p style={{
+              fontSize: 24, fontWeight: 700, margin: 0,
+              color: stat.color || 'white'
+            }}>{stat.value}</p>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xl font-bold text-white truncate">{displayName}</p>
-            {backendUser?.username && (
-              <p className="text-sm text-white/50">@{backendUser.username}</p>
-            )}
-            {registeredAt && (
-              <p className="text-xs text-white/40 mt-1 flex items-center gap-1">
-                <Calendar size={11} />
-                {language === "uz" ? "Ro'yxatdan o'tgan" : "Зарегистрирован"}: {formatDate(registeredAt)}
-              </p>
-            )}
-          </div>
-        </motion.div>
+        ))}
+      </div>
 
-        {/* Stats row */}
-        <motion.section variants={itemVariants} className="grid grid-cols-3 gap-3">
-          <div className="glass-panel p-4 flex flex-col items-center text-center">
-            <Flame size={20} className={`mb-1 ${streak > 0 ? "text-orange-400" : "text-white/20"}`} />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Streak</span>
-            <span className="text-xl font-bold text-white">{streak}</span>
-          </div>
-          <div className="glass-panel p-4 flex flex-col items-center text-center">
-            <Zap size={20} className="mb-1 text-brand-cyan" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-              {language === "uz" ? "Kredit" : "Кредиты"}
-            </span>
-            <span className="text-xl font-bold text-white">{backendUser?.credits_balance ?? 0}</span>
-          </div>
-          <div className="glass-panel p-4 flex flex-col items-center text-center">
-            <Users size={20} className="mb-1 text-brand-primary" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-              {language === "uz" ? "Do'stlar" : "Друзья"}
-            </span>
-            <span className="text-xl font-bold text-white">{backendUser?.referral_count ?? 0}</span>
-          </div>
-        </motion.section>
+      {/* Достижения */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12
+      }}>
+        <p style={{
+          fontWeight: 600, fontSize: 16,
+          margin: 0, display: 'flex',
+          alignItems: 'center', gap: 8
+        }}>
+          🏆 Достижения
+        </p>
+        <span style={{color: '#666', fontSize: 13}}>
+          {earnedCount}/8
+        </span>
+      </div>
 
-        {/* Achievements */}
-        <motion.div variants={itemVariants} className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Trophy size={18} className="text-brand-accent" />
-              {language === "uz" ? "Yutuqlar" : "Достижения"}
-            </h2>
-            <span className="text-xs text-white/40 font-medium">
-              {earnedCodes.length}/{ALL_ACHIEVEMENTS.length}
-            </span>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 10
+      }}>
+        {achievements.map(ach => (
+          <div key={ach.code} style={{
+            background: ach.earned ? '#111120' : '#0d0d18',
+            borderRadius: 14,
+            padding: 14,
+            border: ach.earned
+              ? '1px solid rgba(124,58,237,0.4)'
+              : '1px solid #1a1a2e',
+            opacity: ach.earned ? 1 : 0.6
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: 8
+            }}>
+              <span style={{fontSize: 22}}>{ach.emoji}</span>
+              <span style={{fontSize: 16}}>
+                {ach.earned ? '✅' : '🔒'}
+              </span>
+            </div>
+            <p style={{
+              fontWeight: 600, fontSize: 13,
+              margin: '0 0 4px'
+            }}>{ach.name}</p>
+            <p style={{
+              color: ach.earned ? '#a78bfa' : '#666',
+              fontSize: 12, margin: 0
+            }}>+{ach.bonus} кр.</p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {ALL_ACHIEVEMENTS.map((a) => {
-              const earned = earnedCodes.includes(a.code);
-              return (
-                <div
-                  key={a.code}
-                  className={`glass-card p-4 relative overflow-hidden transition-all ${
-                    earned
-                      ? "border-brand-accent/30 bg-brand-accent/5"
-                      : "border-white/5 opacity-60"
-                  }`}
-                  style={{ opacity: earned ? 1 : 0.4 }}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{a.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-semibold leading-tight ${earned ? "text-white" : "text-white/50"}`}>
-                        {language === "uz" ? a.uz : a.ru}
-                      </p>
-                      <p className="text-[10px] text-brand-accent font-bold mt-0.5">+{a.bonus} кр.</p>
-                    </div>
-                    {earned ? (
-                      <Check size={14} className="text-brand-accent flex-shrink-0" />
-                    ) : (
-                      <Lock size={12} className="text-white/20 flex-shrink-0" />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* Quick links */}
-        <motion.div variants={itemVariants} className="space-y-2">
-          <Link href="/partnership" className="glass-card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
-            <Gift size={20} className="text-brand-primary" />
-            <span className="text-sm font-medium text-white/80">
-              {language === "uz" ? "Referal dasturi" : "Реферальная программа"}
-            </span>
-          </Link>
-          <Link href="/wallet" className="glass-card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
-            <CreditCard size={20} className="text-brand-cyan" />
-            <span className="text-sm font-medium text-white/80">
-              {language === "uz" ? "Balans va to'lovlar" : "Баланс и платежи"}
-            </span>
-          </Link>
-        </motion.div>
-      </motion.div>
-    </main>
-  );
+        ))}
+      </div>
+    </div>
+  )
 }
