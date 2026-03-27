@@ -59,6 +59,8 @@ export default function ReferralPage() {
     )
   }
 
+  if (!ready) return <div style={{padding: 20, color: 'white'}}>Загрузка...</div>;
+
   if (loading) return <div style={{padding:20}}>Загрузка...</div>
 
   return (
