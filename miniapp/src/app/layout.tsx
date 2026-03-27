@@ -7,8 +7,8 @@ import { TelegramInit } from "@/components/TelegramInit";
 const inter = Inter({ subsets: ["latin", "cyrillic"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "BATIR AI",
-  description: "Telegram Mini App for BATIR AI",
+  title: "HARF AI",
+  description: "Нейросети в твоём телефоне",
 };
 
 export default function RootLayout({

@@ -5,7 +5,7 @@ Converts reply keyboard button text into handler actions.
 import asyncio
 import logging
 from aiogram import F, Router, Bot
-from aiogram.types import Message, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.fsm.context import FSMContext
 
 from bot.keyboards.reply_menu import REPLY_BUTTON_ACTIONS
@@ -14,6 +14,7 @@ from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
 from bot.keyboards.reply_menu import main_reply_keyboard
 from bot.keyboards.main_menu import create_submenu_keyboard
+from backend.core.config import settings
 from bot.services.payment_service import BotPaymentService
 from shared.utils.i18n import I18n
 
@@ -61,10 +62,27 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
         elif action == "menu_balance":
             name = user.first_name or message.from_user.username or "друг"
             if lang == "uz":
-                text = f"💰 <b>{name}</b> balansingiz:\n<b>{credits}</b> kredit"
+                text = (
+                    f"💰 Balansingiz: {credits} kredit\n\n"
+                    f"1 kredit = $0.075"
+                )
+                btn_text = "💎 Kredit sotib olish"
             else:
-                text = f"💰 Баланс <b>{name}</b>:\n<b>{credits}</b> кредитов"
-            await message.answer(text, parse_mode="HTML")
+                text = (
+                    f"💰 Ваш баланс: {credits} кредитов\n\n"
+                    f"1 кредит = $0.075"
+                )
+                btn_text = "💎 Купить кредиты"
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text=btn_text,
+                    web_app=WebAppInfo(
+                        url=f"{(settings.miniapp_url or '').rstrip('/')}/plans"
+                    )
+                )
+            ]])
+            await message.answer(text, reply_markup=keyboard)
 
         elif action == "menu_referral":
             from bot.handlers.referral import _send_referral_info

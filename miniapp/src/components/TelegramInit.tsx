@@ -13,8 +13,12 @@ export function TelegramInit() {
     const tgUser = tg.initDataUnsafe?.user;
     if (!tgUser) return;
 
-    // mock setUser so it complies
-    const setUser = (data: any) => localStorage.setItem('batir_user', JSON.stringify(data));
+    // cache in sessionStorage
+    const setUser = (data: any) => {
+      try {
+        sessionStorage.setItem('harf_user', JSON.stringify(data));
+      } catch {}
+    };
 
     fetch('/api/users/sync', {
       method: 'POST',

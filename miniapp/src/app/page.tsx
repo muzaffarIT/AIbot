@@ -114,19 +114,18 @@ export default function HomePage() {
               <Zap size={14} className="text-brand-accent fill-brand-accent/50" />
               {t(language, "home.eyebrow")}
             </div>
-            <h1 className="text-4xl font-extrabold text-white mb-3">
-              BATIR <span className="text-gradient">AI</span>
-            </h1>
-            <p className="text-white/60 text-sm leading-relaxed max-w-[280px]">
-              {loading || userLoading
-                ? t(language, "home.leadLoading")
-                : t(language, "home.leadReady", {
-                    name: getDisplayName(
-                      backendUser?.first_name,
-                      backendUser?.username,
-                      getDisplayName(telegramUser?.first_name, telegramUser?.username, "Creator")
-                    ),
-                  })}
+            <div style={{
+              background: 'linear-gradient(135deg, #7C3AED, #3B82F6)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              fontSize: '2.5rem',
+              fontWeight: 900,
+              letterSpacing: '-0.02em'
+            }}>
+              HARF AI
+            </div>
+            <p style={{color: '#888', marginTop: 8}}>
+              Нейросети в твоём телефоне
             </p>
           </div>
         </motion.section>

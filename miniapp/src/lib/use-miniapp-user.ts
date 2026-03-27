@@ -31,9 +31,6 @@ export function useMiniAppUser() {
       try {
         let beUser: BackendUser;
         try {
-          beUser = await getUser(user.id!);
-        } catch (e: any) {
-          // If 404 or other error, fallback to sync
           beUser = await apiSyncUser({
             telegram_id: user.id!,
             username: user.username,
@@ -41,6 +38,17 @@ export function useMiniAppUser() {
             last_name: user.last_name,
             language_code: user.language_code,
           });
+          try {
+            sessionStorage.setItem('harf_user', JSON.stringify(beUser));
+          } catch {}
+        } catch (e: any) {
+          // If sync fails, load from cache
+          const cached = sessionStorage.getItem('harf_user');
+          if (cached) {
+            beUser = JSON.parse(cached);
+          } else {
+            throw e;
+          }
         }
         setBackendUser(beUser);
         setLanguage(normalizeLanguage(beUser.language_code));

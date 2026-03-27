@@ -22,7 +22,7 @@ export default function PartnershipPage() {
   const [copied, setCopied] = useState(false);
 
   const userId = backendUser?.telegram_user_id;
-  const botUsername = "batirai_bot"; 
+  const botUsername = "harfai_bot"; 
 
   const [refLink, setRefLink] = useState<string>('');
   const [loading, setLoading] = useState(true);

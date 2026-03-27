@@ -7,10 +7,10 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
         return ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text="🎨 Yaratish"),
-                 KeyboardButton(text="💎 Tariflar")],
+                 KeyboardButton(text="💰 Balans")],
                 [KeyboardButton(text="❓ Yordam")],
                 [KeyboardButton(
-                    text="🌐 Shaxsiy kabinet",
+                    text="🌐 Kabinetni ochish",
                     web_app=WebAppInfo(url=(settings.miniapp_url or "").rstrip("/"))
                 )],
             ],
@@ -20,7 +20,7 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🎨 Создать"),
-             KeyboardButton(text="💎 Тарифы")],
+             KeyboardButton(text="💰 Баланс")],
             [KeyboardButton(text="❓ Помощь")],
             [KeyboardButton(
                 text="🌐 Открыть кабинет",
@@ -35,6 +35,10 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
 REPLY_BUTTON_ACTIONS = {
     # RU
     "🎨 Создать":      "menu_create",
+    "💰 Баланс":       "menu_balance",
+    "❓ Помощь":       "menu_help",
     # UZ
     "🎨 Yaratish":     "menu_create",
+    "💰 Balans":       "menu_balance",
+    "❓ Yordam":       "menu_help",
 }
