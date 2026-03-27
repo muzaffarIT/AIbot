@@ -10,7 +10,9 @@ from shared.enums.providers import AIProvider
 from shared.utils.i18n import I18n
 from bot.services.progress import track_generation_progress
 import asyncio
+import logging
 
+logger = logging.getLogger(__name__)
 router = Router()
 i18n = I18n()
 
@@ -29,6 +31,7 @@ async def ask_for_prompt(message: Message, state: FSMContext) -> None:
 @router.message(KlingStates.waiting_for_prompt)
 async def create_kling_job(message: Message, state: FSMContext) -> None:
     prompt = message.text or ""
+    logger.info(f"[KLING] Got prompt: {prompt[:50]}")
     if len(prompt) < 3 or len(prompt) > 500:
         await message.answer("❌ Длина промпта должна быть от 3 до 500 символов. Пожалуйста, отправьте другой промпт.")
         return

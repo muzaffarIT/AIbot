@@ -19,6 +19,7 @@ from bot.handlers.referral import router as referral_router       # /referral
 from bot.handlers.achievements import router as achievements_router  # /achievements
 from bot.handlers.callbacks import router as callbacks_router     # all inline keyboard callbacks
 from bot.handlers.veo import router as veo_router                 # F.photo + veo + kling FSM states
+from bot.handlers.kling import router as kling_router             # Kling FSM state
 from bot.handlers.nanobanana import router as nanobanana_router   # nano banana FSM state
 from bot.handlers.quality import router as quality_router
 from bot.handlers.onboarding import router as onboarding_router
@@ -66,7 +67,8 @@ async def main() -> None:
     dp.include_router(referral_router)     # 9. referral
     dp.include_router(achievements_router)  # 10. achievements
     dp.include_router(veo_router)          # 11. veo (with F.photo)
-    dp.include_router(nanobanana_router)   # 12. nanobanana / kling
+    dp.include_router(kling_router)        # 12. kling router
+    dp.include_router(nanobanana_router)   # 13. nanobanana
     # Kling is currently inside veo_router or nanobanana_router context in some cases, 
     # but the point is to keep the order logic.
     dp.include_router(history_router)      # 13. history
