@@ -34,7 +34,7 @@ def verify_telegram_data(init_data: str) -> dict:
     
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
     
-    secret_key = hmac.new(settings.bot_token.encode(), b"WebAppData", hashlib.sha256).digest()
+    secret_key = hmac.new(b"WebAppData", settings.bot_token.encode(), hashlib.sha256).digest()
     
     calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     
