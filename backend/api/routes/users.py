@@ -52,7 +52,7 @@ def get_referral_count(db: Session, telegram_id: int) -> int:
 
 @router.post("/sync")
 def sync_user(payload: SyncUserRequest, token_user: dict = Depends(verify_tma_auth), db: Session = Depends(get_db)) -> dict:
-    if payload.telegram_id != token_user.get("id"):
+    if str(payload.telegram_id) != str(token_user.get("id")):
         raise HTTPException(status_code=403, detail="Telegram ID mismatch")
     """Upsert user from Mini App. Always returns 200 with user data."""
     try:
@@ -88,7 +88,7 @@ def sync_user(payload: SyncUserRequest, token_user: dict = Depends(verify_tma_au
 
 @router.post("/ensure")
 def ensure_user(payload: EnsureUserRequest, token_user: dict = Depends(verify_tma_auth), db: Session = Depends(get_db)) -> dict:
-    if payload.telegram_user_id != token_user.get("id"):
+    if str(payload.telegram_user_id) != str(token_user.get("id")):
         raise HTTPException(status_code=403, detail="Telegram ID mismatch")
     try:
         user_service = UserService(db)
