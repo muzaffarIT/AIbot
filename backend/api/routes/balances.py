@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 
-from backend.db.session import SessionLocal
+from backend.api.deps import get_db
 from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
 
@@ -26,8 +26,8 @@ def serialize_transaction(transaction) -> dict:
 def get_balance_transactions_by_telegram_user_id(
     telegram_user_id: int,
     limit: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db)
 ) -> dict:
-    db: Session = SessionLocal()
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)
@@ -50,8 +50,7 @@ def get_balance_transactions_by_telegram_user_id(
 
 
 @router.get("/telegram/{telegram_user_id}")
-def get_balance_by_telegram_user_id(telegram_user_id: int) -> dict:
-    db: Session = SessionLocal()
+def get_balance_by_telegram_user_id(telegram_user_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)

@@ -1,7 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from backend.db.session import SessionLocal
+from backend.api.deps import get_db
 from backend.services.plan_service import PlanService
 
 router = APIRouter()
@@ -9,8 +9,7 @@ router = APIRouter()
 
 @router.get("")
 @router.get("/")
-def get_active_plans() -> list[dict]:
-    db: Session = SessionLocal()
+def get_active_plans(db: Session = Depends(get_db)) -> list[dict]:
     try:
         plan_service = PlanService(db)
         plans = plan_service.get_active_plans()

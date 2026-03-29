@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -6,6 +6,7 @@ from backend.db.session import SessionLocal
 from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
 from backend.models.user import User
+from backend.api.deps import verify_tma_auth, get_db
 
 router = APIRouter()
 
@@ -50,9 +51,10 @@ def get_referral_count(db: Session, telegram_id: int) -> int:
 
 
 @router.post("/sync")
-def sync_user(payload: SyncUserRequest) -> dict:
+def sync_user(payload: SyncUserRequest, token_user: dict = Depends(verify_tma_auth), db: Session = Depends(get_db)) -> dict:
+    if payload.telegram_id != token_user.get("id"):
+        raise HTTPException(status_code=403, detail="Telegram ID mismatch")
     """Upsert user from Mini App. Always returns 200 with user data."""
-    db: Session = SessionLocal()
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)
@@ -85,8 +87,9 @@ def sync_user(payload: SyncUserRequest) -> dict:
 
 
 @router.post("/ensure")
-def ensure_user(payload: EnsureUserRequest) -> dict:
-    db: Session = SessionLocal()
+def ensure_user(payload: EnsureUserRequest, token_user: dict = Depends(verify_tma_auth), db: Session = Depends(get_db)) -> dict:
+    if payload.telegram_user_id != token_user.get("id"):
+        raise HTTPException(status_code=403, detail="Telegram ID mismatch")
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)
@@ -106,8 +109,7 @@ def ensure_user(payload: EnsureUserRequest) -> dict:
 
 
 @router.get("/{telegram_user_id}")
-def get_user(telegram_user_id: int) -> dict:
-    db: Session = SessionLocal()
+def get_user(telegram_user_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         user_service = UserService(db)
         balance_service = BalanceService(db)
@@ -123,8 +125,7 @@ def get_user(telegram_user_id: int) -> dict:
 
 
 @router.get("/{telegram_id}/achievements")
-async def get_achievements(telegram_id: int):
-    db: Session = SessionLocal()
+async def get_achievements(telegram_id: int, db: Session = Depends(get_db)):
     from backend.models.achievement import Achievement
     try:
         user_service = UserService(db)
@@ -152,8 +153,7 @@ async def get_achievements(telegram_id: int):
 
 
 @router.get("/{telegram_id}/referral")
-async def get_referral(telegram_id: int):
-    db: Session = SessionLocal()
+async def get_referral(telegram_id: int, db: Session = Depends(get_db)):
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(telegram_id)

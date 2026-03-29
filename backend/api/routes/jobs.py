@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.db.session import SessionLocal
+from backend.api.deps import get_db
 from backend.services.generation_service import GenerationService
 
 router = APIRouter()
@@ -39,8 +39,8 @@ def serialize_job(job) -> dict:
 def get_user_jobs(
     telegram_user_id: int,
     limit: int = Query(default=20, ge=1, le=50),
+    db: Session = Depends(get_db)
 ) -> dict:
-    db: Session = SessionLocal()
     try:
         service = GenerationService(db)
         jobs = service.get_user_jobs(telegram_user_id, limit=limit)
@@ -55,8 +55,7 @@ def get_user_jobs(
 
 
 @router.get("/{job_id}")
-def get_job(job_id: int) -> dict:
-    db: Session = SessionLocal()
+def get_job(job_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         service = GenerationService(db)
         job = service.get_job(job_id)
@@ -68,8 +67,7 @@ def get_job(job_id: int) -> dict:
 
 
 @router.post("/")
-def create_job(payload: CreateJobRequest) -> dict:
-    db: Session = SessionLocal()
+def create_job(payload: CreateJobRequest, db: Session = Depends(get_db)) -> dict:
     try:
         service = GenerationService(db)
         job = service.create_job_for_user(

@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.db.session import SessionLocal
+from backend.api.deps import get_db
 from backend.db.repositories.plans import PlanRepository
 from backend.services.user_service import UserService
 from backend.services.order_service import OrderService
@@ -34,8 +34,7 @@ def serialize_order(order, plan_name: str | None = None, plan_code: str | None =
 
 
 @router.get("/telegram/{telegram_user_id}")
-def get_user_orders(telegram_user_id: int, limit: int = Query(default=10, ge=1, le=50)) -> dict:
-    db: Session = SessionLocal()
+def get_user_orders(telegram_user_id: int, limit: int = Query(default=10, ge=1, le=50), db: Session = Depends(get_db)) -> dict:
     try:
         user_service = UserService(db)
         order_service = OrderService(db)
@@ -67,8 +66,7 @@ def get_user_orders(telegram_user_id: int, limit: int = Query(default=10, ge=1, 
 
 
 @router.post("/")
-def create_order(payload: CreateOrderRequest) -> dict:
-    db: Session = SessionLocal()
+def create_order(payload: CreateOrderRequest, db: Session = Depends(get_db)) -> dict:
     try:
         user_service = UserService(db)
         order_service = OrderService(db)

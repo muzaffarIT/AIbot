@@ -15,3 +15,30 @@ def extract_bearer_token(header_value: str | None) -> str | None:
     if header_value.lower().startswith(prefix):
         return header_value[len(prefix):].strip()
     return None
+
+import hashlib
+import hmac
+import urllib.parse
+from fastapi import HTTPException
+from backend.core.config import settings
+
+def verify_telegram_data(init_data: str) -> dict:
+    if not settings.bot_token:
+        raise HTTPException(500, "BOT_TOKEN not configured")
+
+    parsed_data = dict(urllib.parse.parse_qsl(init_data))
+    if 'hash' not in parsed_data:
+        raise HTTPException(401, "Missing hash in initData")
+    
+    received_hash = parsed_data.pop('hash')
+    
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
+    
+    secret_key = hmac.new(b"WebAppData", settings.bot_token.encode(), hashlib.sha256).digest()
+    
+    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    
+    if calculated_hash != received_hash:
+        raise HTTPException(401, "Invalid Signature")
+        
+    return parsed_data

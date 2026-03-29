@@ -9,8 +9,7 @@ from backend.integrations.payments.base import (
     sanitize_headers,
 )
 from backend.services.payment_webhook_service import PaymentWebhookService
-from backend.db.session import SessionLocal
-
+from sqlalchemy.orm import Session
 
 async def parse_request_payload(request: Request) -> tuple[dict, str]:
     raw_bytes = await request.body()
@@ -40,12 +39,12 @@ async def parse_request_payload(request: Request) -> tuple[dict, str]:
 async def handle_payment_webhook(
     request: Request,
     provider: BasePaymentProvider,
+    db: Session,
 ) -> dict:
     payload, raw_text = await parse_request_payload(request)
     auth_headers = dict(request.headers)
     logged_headers = sanitize_headers(auth_headers)
 
-    db = SessionLocal()
     try:
         service = PaymentWebhookService(db)
         payment = service.handle_callback(
@@ -67,5 +66,3 @@ async def handle_payment_webhook(
         raise HTTPException(status_code=400, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    finally:
-        db.close()

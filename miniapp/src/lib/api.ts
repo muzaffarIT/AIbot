@@ -136,13 +136,24 @@ export async function fetchJson<T>(
 ): Promise<T> {
   const url = BACKEND_URL ? `${BACKEND_URL}${path}` : path;
 
+  let initData = "";
+  if (typeof window !== "undefined") {
+    initData = (window as any).Telegram?.WebApp?.initData || "";
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as any || {}),
+  };
+
+  if (initData) {
+    headers["Authorization"] = `tma ${initData}`;
+  }
+
   const response = await fetch(url, {
     cache: "no-store",
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers || {}),
-    },
+    headers,
   });
 
   if (!response.ok) {

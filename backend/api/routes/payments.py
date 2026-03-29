@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.db.session import SessionLocal
+from backend.api.deps import get_db
 from backend.services.payment_service import PaymentService
 
 router = APIRouter()
@@ -31,8 +31,7 @@ def serialize_payment(payment) -> dict:
 
 
 @router.post("/")
-def create_payment(payload: CreatePaymentRequest) -> dict:
-    db: Session = SessionLocal()
+def create_payment(payload: CreatePaymentRequest, db: Session = Depends(get_db)) -> dict:
     try:
         payment_service = PaymentService(db)
 
@@ -50,8 +49,7 @@ def create_payment(payload: CreatePaymentRequest) -> dict:
 
 
 @router.get("/order/{order_id}")
-def get_order_payments(order_id: int) -> dict:
-    db: Session = SessionLocal()
+def get_order_payments(order_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         payment_service = PaymentService(db)
         payments = payment_service.get_order_payments(order_id)
@@ -65,8 +63,7 @@ def get_order_payments(order_id: int) -> dict:
 
 
 @router.post("/{payment_id}/confirm")
-def confirm_payment(payment_id: int) -> dict:
-    db: Session = SessionLocal()
+def confirm_payment(payment_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         payment_service = PaymentService(db)
         payment = payment_service.confirm_payment(payment_id)
