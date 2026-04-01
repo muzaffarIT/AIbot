@@ -1,0 +1,36 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend (FastAPI)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
+      "port": 8000,
+      "cwd": ".",
+      "env": {"PYTHONPATH": "."}
+    },
+    {
+      "name": "MiniApp (Next.js)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "cwd": "miniapp"
+    },
+    {
+      "name": "Bot (aiogram)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "bot.main"],
+      "port": null,
+      "cwd": ".",
+      "env": {"PYTHONPATH": "."}
+    },
+    {
+      "name": "Worker (Celery)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "celery", "-A", "worker.main.celery_app", "worker", "-l", "info"],
+      "port": null,
+      "cwd": ".",
+      "env": {"PYTHONPATH": "."}
+    }
+  ]
+}
