@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowLeft, Zap, Star, Image as ImageIcon, Video } from "lucide-react";
+import { ArrowLeft, Zap, CreditCard } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 
 const containerVariants: Variants = {
@@ -24,8 +23,7 @@ const PLANS = [
     descRu: "Для знакомства с нейросетями",
     descUz: "Neyrosetlar bilan tanishish uchun",
     credits: 100,
-    stars: 580,
-    amount: 7.5,
+    priceUzs: 59_000,
     popular: false,
     btnClass: "bg-white/10 text-white hover:bg-white/20",
     featuresRu: ["✓ Базовый доступ", "✓ Стандартная очередь"],
@@ -39,8 +37,7 @@ const PLANS = [
     descRu: "Для активного использования",
     descUz: "Faol foydalanish uchun",
     credits: 300,
-    stars: 1450,
-    amount: 22.5,
+    priceUzs: 149_000,
     popular: true,
     btnClass: "bg-brand-primary text-white shadow-lg shadow-brand-primary/30",
     featuresRu: ["✓ Все нейросети", "✓ Быстрая очередь"],
@@ -54,8 +51,7 @@ const PLANS = [
     descRu: "Для создателей контента",
     descUz: "Kontent yaratuvchilar uchun",
     credits: 600,
-    stars: 2600,
-    amount: 45.0,
+    priceUzs: 269_000,
     popular: false,
     btnClass: "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30",
     featuresRu: ["✓ Все нейросети", "✓ Без ограничений", "✓ Приоритет"],
@@ -69,8 +65,7 @@ const PLANS = [
     descRu: "Для профессионалов",
     descUz: "Professionallar uchun",
     credits: 1500,
-    stars: 5800,
-    amount: 112.5,
+    priceUzs: 590_000,
     popular: false,
     btnClass: "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-500/30",
     featuresRu: ["✓ Выделенный сервер", "✓ Все нейросети", "✓ Без очереди"],
@@ -84,55 +79,19 @@ const GEN_PRICES = [
   { icon: "🎥", nameRu: "Kling",       nameUz: "Kling",       fromRu: "от 40 кр.", fromUz: "40 kr.dan" },
 ];
 
+function fmtUzs(n: number) {
+  return n.toLocaleString("ru-RU") + " сум";
+}
+
 export default function PlansPage() {
-  const { language, telegramUser } = useMiniAppUser();
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPackage, setSelectedPackage] = useState<{ id: string; amount: number } | null>(null);
+  const { language } = useMiniAppUser();
 
-  const PAYMENTS_ENABLED = {
-    click: false,
-    payme: false,
-    stars: true
-  };
-
-  const CLICK_SERVICE_ID = process.env.NEXT_PUBLIC_CLICK_SERVICE_ID;
-  const CLICK_MERCHANT_ID = process.env.NEXT_PUBLIC_CLICK_MERCHANT_ID;
-  const PAYME_MERCHANT_ID = process.env.NEXT_PUBLIC_PAYME_MERCHANT_ID;
-
-  const handleBuy = (packageId: string, amount: number) => {
-    setSelectedPackage({ id: packageId, amount });
-    setShowPaymentModal(true);
-  };
-
-  const payWithClick = (pkg: { id: string; amount: number }) => {
-    const userId = (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    const amountUZS = Math.round(pkg.amount * 12800);
-    const url = `https://my.click.uz/services/pay` +
-      `?service_id=${CLICK_SERVICE_ID}` +
-      `&merchant_id=${CLICK_MERCHANT_ID}` +
-      `&amount=${amountUZS}` +
-      `&transaction_param=${userId}:${pkg.id}` +
-      `&return_url=${encodeURIComponent(window.location.href)}`;
-    window.open(url, '_blank');
-  };
-
-  const payWithPayme = (pkg: { id: string; amount: number }) => {
-    const userId = (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    const amountTiyins = Math.round(pkg.amount * 12800 * 100);
-    const params = btoa(JSON.stringify({
-      m: PAYME_MERCHANT_ID,
-      "ac.user_id": String(userId),
-      "ac.package_id": pkg.id,
-      a: amountTiyins,
-      l: "ru"
-    }));
-    window.open(`https://checkout.paycom.uz/${params}`, '_blank');
-  };
-
-  const payWithStars = (pkg: { id: string; amount: number }) => {
+  const handleBuy = (planId: string) => {
     const tg = (window as any).Telegram?.WebApp;
-    tg?.sendData?.(JSON.stringify({ action: "buy_plan", package_id: pkg.id }));
-    tg?.close?.();
+    if (tg?.sendData) {
+      tg.sendData(JSON.stringify({ action: "buy_plan", package_id: planId }));
+      tg.close();
+    }
   };
 
   return (
@@ -149,6 +108,16 @@ export default function PlansPage() {
           </h1>
         </motion.div>
 
+        {/* Payment method notice */}
+        <motion.div variants={itemVariants} className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10">
+          <CreditCard className="text-brand-cyan shrink-0" size={22} />
+          <p className="text-sm text-white/70">
+            {language === "uz"
+              ? "To'lov karta orqali. Tanlangandan so'ng botda karta raqami ko'rsatiladi."
+              : "Оплата по карте. После выбора бот пришлёт реквизиты карты."}
+          </p>
+        </motion.div>
+
         {/* Packages */}
         <motion.div variants={itemVariants} className="space-y-4">
           {PLANS.map((plan) => (
@@ -163,7 +132,7 @@ export default function PlansPage() {
                   {language === "uz" ? "MASHHUR" : "ПОПУЛЯРНЫЙ"}
                 </div>
               )}
-              
+
               <div className="flex flex-col gap-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
@@ -190,11 +159,11 @@ export default function PlansPage() {
                 </div>
 
                 <button
-                  onClick={() => handleBuy(plan.id, plan.amount)}
-                  className={`mt-2 flex items-center justify-center gap-1.5 font-bold px-4 py-3 rounded-xl transition-all active:scale-95 w-full ${plan.btnClass}`}
+                  onClick={() => handleBuy(plan.id)}
+                  className={`mt-2 flex items-center justify-center gap-2 font-bold px-4 py-3 rounded-xl transition-all active:scale-95 w-full ${plan.btnClass}`}
                 >
-                  <Star size={16} />
-                  {plan.stars.toLocaleString()}
+                  <CreditCard size={16} />
+                  {fmtUzs(plan.priceUzs)}
                 </button>
               </div>
             </div>
@@ -224,44 +193,10 @@ export default function PlansPage() {
 
           <p className="text-xs text-white/30 text-center px-4">
             {language === "uz"
-              ? "1 ⭐ Telegram Star ≈ 0.013 USD • Kreditlar muddatsiz"
-              : "1 ⭐ Telegram Star ≈ 0.013 USD • Кредиты бессрочные"}
+              ? "Kreditlar muddatsiz amal qiladi"
+              : "Кредиты бессрочные"}
           </p>
         </motion.div>
-
-        {showPaymentModal && selectedPackage && (
-          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-5">
-            <div className="bg-brand-900 border border-white/10 p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-xl">
-              <h3 className="text-lg font-bold text-white text-center">
-                {language === "uz" ? "To'lov usulini tanlang" : "Выбери способ оплаты"}
-              </h3>
-              
-              <div className="space-y-3">
-                {PAYMENTS_ENABLED.click && (
-                  <button onClick={() => payWithClick(selectedPackage)} className="w-full flex items-center gap-3 p-4 bg-white/5 hover:bg-white/10 transition-colors rounded-xl text-white font-medium">
-                    <span className="text-xl">💳</span> Click (Uzcard, Humo, Visa)
-                  </button>
-                )}
-                {PAYMENTS_ENABLED.payme && (
-                  <button onClick={() => payWithPayme(selectedPackage)} className="w-full flex items-center gap-3 p-4 bg-white/5 hover:bg-white/10 transition-colors rounded-xl text-white font-medium">
-                    <span className="text-xl">💳</span> Payme (Humo, Uzcard)
-                  </button>
-                )}
-                {PAYMENTS_ENABLED.stars && (
-                  <button onClick={() => payWithStars(selectedPackage)} className="w-full flex items-center gap-3 p-4 bg-brand-primary/20 border border-brand-primary/30 hover:bg-brand-primary/40 transition-colors rounded-xl text-white font-medium shadow-md shadow-brand-primary/20">
-                    <Star className="text-brand-accent fill-brand-accent" size={20} /> Telegram Stars
-                  </button>
-                )}
-              </div>
-              <button 
-                onClick={() => setShowPaymentModal(false)}
-                className="w-full py-3 mt-2 text-white/50 hover:text-white transition-colors text-sm font-medium"
-              >
-                {language === "uz" ? "Bekor qilish" : "Отмена"}
-              </button>
-            </div>
-          </div>
-        )}
 
       </motion.div>
     </main>

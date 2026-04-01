@@ -161,7 +161,7 @@ async def get_referral(telegram_id: int, db: Session = Depends(get_db)):
             return {"referral_code":"","referral_count":0, "referral_earnings":0}
         return {
             "referral_code": user.referral_code or "",
-            "referral_count": user.referral_count or 0,
+            "referral_count": get_referral_count(db, user.telegram_user_id),
             "referral_earnings": user.referral_earnings or 0
         }
     finally:
