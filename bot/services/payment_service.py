@@ -1,88 +1,284 @@
 """
-Credit packages for HARF AI (Telegram Stars payments).
+Manual card-based payment service for HARF AI.
+Flow: user picks a plan → bot shows card details → user confirms payment
+     → admins get notified → admin approves/rejects → credits added.
 """
 
-import json
+import logging
 from aiogram import Bot
-from aiogram.types import LabeledPrice
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+from backend.services.order_service import OrderService
+from backend.services.payment_service import PaymentService
+from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
+from backend.core.config import settings
 from bot.services.db_session import get_db_session
 
+logger = logging.getLogger(__name__)
+
+# Credit packages — price in UZS (сум), credits for HARF AI
 PACKAGES = {
     "start": {
         "name": "⚡ Start",
         "description": "100 кредитов. ~20 картинок Nano Banana или 3 видео Veo fast.",
         "credits": 100,
-        "stars": 580,
-        "price_usd": "$7.50",
+        "price_uzs": 59_000,
+        "plan_code": "start",
     },
     "pro": {
         "name": "💎 Pro",
         "description": "300 кредитов. ~60 картинок или 10 видео Veo fast. Популярный выбор.",
         "credits": 300,
-        "stars": 1450,
-        "price_usd": "$19.00",
+        "price_uzs": 149_000,
+        "plan_code": "pro",
     },
     "creator": {
         "name": "🚀 Creator",
         "description": "600 кредитов. ~120 картинок или 20 видео Veo.",
         "credits": 600,
-        "stars": 2600,
-        "price_usd": "$34.00",
+        "price_uzs": 269_000,
+        "plan_code": "creator",
     },
     "ultra": {
         "name": "👑 Ultra",
         "description": "1500 кредитов. Максимальный пакет для профессионалов.",
         "credits": 1500,
-        "stars": 5800,
-        "price_usd": "$75.00",
+        "price_uzs": 590_000,
+        "plan_code": "ultra",
     },
 }
 
 
-class BotPaymentService:
+def _fmt(amount: int) -> str:
+    """Format UZS amount with spaces: 149000 → '149 000'"""
+    return f"{amount:,}".replace(",", " ")
+
+
+class ManualPaymentService:
+    """Handles the full manual payment lifecycle."""
+
     @staticmethod
-    async def send_invoice(bot: Bot, chat_id: int, package_id: str) -> None:
+    async def send_invoice(bot: Bot, chat_id: int, telegram_user_id: int, package_id: str) -> int | None:
+        """
+        Create Order + Payment records, then send card invoice to user.
+        Returns payment_id or None on failure.
+        """
         if package_id not in PACKAGES:
-            raise ValueError(f"Unknown package id: {package_id}")
+            raise ValueError(f"Unknown package: {package_id}")
 
         pkg = PACKAGES[package_id]
-
-        await bot.send_invoice(
-            chat_id=chat_id,
-            title=pkg["name"],
-            description=pkg["description"],
-            payload=f"credits:{package_id}:{pkg['credits']}",
-            provider_token="",   # Empty = Telegram Stars
-            currency="XTR",      # XTR = Telegram Stars
-            prices=[LabeledPrice(label=pkg["name"], amount=pkg["stars"])],
-        )
-
-    @staticmethod
-    def process_successful_payment(user_id: int, payload: str) -> int:
-        """
-        Parse payload like 'credits:pro:300' and credit the user's wallet.
-        Returns the credited amount.
-        """
-        parts = payload.split(":")
-        if len(parts) != 3 or parts[0] != "credits":
-            return 0
-
-        try:
-            amount = int(parts[2])
-        except ValueError:
-            return 0
+        card = settings.card_number or "—"
+        owner = settings.card_owner or "—"
 
         db = get_db_session()
-        result_amount = 0
         try:
-            balance_service = BalanceService(db)
-            balance_service.add_credits(user_id, amount, "telegram_stars_purchase")
+            user_service = UserService(db)
+            order_service = OrderService(db)
+            payment_service = PaymentService(db)
+
+            user = user_service.get_user_by_telegram_id(telegram_user_id)
+            if not user:
+                user = user_service.get_or_create_user(
+                    telegram_user_id=telegram_user_id,
+                    username=None,
+                    first_name=None,
+                    last_name=None,
+                )
+
+            # Check if user already has a pending payment
+            from backend.db.repositories.payments import PaymentRepository
+            from shared.enums.payment_status import PaymentStatus
+            pay_repo = PaymentRepository(db)
+            existing = pay_repo.get_pending_manual_payment(user.id)
+            if existing:
+                await bot.send_message(
+                    chat_id,
+                    f"⚠️ У вас уже есть активная заявка на оплату <b>#{existing.id}</b>.\n"
+                    f"Дождитесь подтверждения или отмените её.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(
+                            text="❌ Отменить заявку",
+                            callback_data=f"manual_cancel:{existing.id}"
+                        )
+                    ]])
+                )
+                return existing.id
+
+            order = order_service.create_order_for_plan(
+                user_id=user.id,
+                plan_code=pkg["plan_code"],
+                payment_method="manual_card",
+            )
+            payment = payment_service.create_payment_for_order(
+                order_id=order.id,
+                provider="manual",
+                method="card",
+            )
             db.commit()
-            result_amount = amount
+
+            price_fmt = _fmt(pkg["price_uzs"])
+            await bot.send_message(
+                chat_id,
+                f"💳 <b>Оплата — {pkg['name']}</b>\n\n"
+                f"📦 {pkg['description']}\n\n"
+                f"💰 Сумма: <b>{price_fmt} сум</b>\n\n"
+                f"Переведите на карту:\n"
+                f"<code>{card}</code>\n"
+                f"Получатель: <b>{owner}</b>\n\n"
+                f"<i>После перевода нажмите кнопку ниже</i>",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text="✅ Я оплатил",
+                        callback_data=f"manual_paid:{payment.id}"
+                    )],
+                    [InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=f"manual_cancel:{payment.id}"
+                    )],
+                ])
+            )
+            return payment.id
+
         except Exception as e:
-            print(f"Failed to credit: {e}")
             db.rollback()
+            logger.error(f"ManualPaymentService.send_invoice error: {e}")
+            raise
         finally:
             db.close()
-        return result_amount
+
+    @staticmethod
+    async def notify_admins_payment_submitted(bot: Bot, payment_id: int, telegram_user_id: int,
+                                               user_full_name: str, username: str | None,
+                                               package_id: str) -> None:
+        """Notify all admins that a user claims to have paid."""
+        pkg = PACKAGES.get(package_id, {})
+        pkg_name = pkg.get("name", "?")
+        price_fmt = _fmt(pkg.get("price_uzs", 0))
+        uname = f"@{username}" if username else "—"
+
+        for admin_id in settings.admin_ids_list:
+            try:
+                await bot.send_message(
+                    admin_id,
+                    f"⚡ <b>НОВАЯ ОПЛАТА #{payment_id}</b>\n\n"
+                    f"👤 {user_full_name}\n"
+                    f"🔗 {uname}\n"
+                    f"🆔 <code>{telegram_user_id}</code>\n\n"
+                    f"📦 {pkg_name}\n"
+                    f"💰 {price_fmt} сум\n\n"
+                    f"Проверь карту и нажми кнопку:",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(
+                            text="✅ Подтвердить",
+                            callback_data=f"manual_confirm:{payment_id}"
+                        ),
+                        InlineKeyboardButton(
+                            text="❌ Отклонить",
+                            callback_data=f"manual_reject_menu:{payment_id}"
+                        ),
+                    ]])
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify admin {admin_id}: {e}")
+
+    @staticmethod
+    async def confirm_payment(bot: Bot, payment_id: int) -> dict:
+        """Admin confirmed the payment — credit user and notify them."""
+        db = get_db_session()
+        try:
+            payment_service = PaymentService(db)
+            order_service = OrderService(db)
+            balance_service = BalanceService(db)
+
+            payment = payment_service.confirm_payment(payment_id)
+            order = order_service.get_order_by_id(payment.order_id)
+            if not order:
+                raise ValueError("Order not found")
+
+            from backend.db.repositories.plans import PlanRepository
+            plan_repo = PlanRepository(db)
+            plan = plan_repo.get_by_id(order.plan_id)
+
+            balance = balance_service.get_balance_value(order.user_id)
+
+            # Get telegram_user_id
+            user_service = UserService(db)
+            user = user_service.get_user_by_id(order.user_id)
+
+            db.commit()
+
+            if user:
+                credits = plan.credits_amount if plan else 0
+                try:
+                    await bot.send_message(
+                        user.telegram_user_id,
+                        f"✅ <b>Оплата подтверждена!</b>\n\n"
+                        f"📦 {plan.name if plan else 'Пакет'}\n"
+                        f"💰 Начислено: <b>{credits}</b> кредитов\n"
+                        f"💳 Текущий баланс: <b>{balance}</b> кредитов\n\n"
+                        f"Спасибо! Теперь создавай нейроарт 🎨",
+                        parse_mode="HTML",
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to notify user {user.telegram_user_id}: {e}")
+
+            return {"payment_id": payment_id, "balance": balance}
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"confirm_payment error: {e}")
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    async def reject_payment(bot: Bot, payment_id: int, reason: str) -> None:
+        """Admin rejected the payment — cancel and notify user."""
+        db = get_db_session()
+        try:
+            from backend.db.repositories.payments import PaymentRepository
+            from backend.db.repositories.orders import OrderRepository
+            from shared.enums.payment_status import PaymentStatus
+            from shared.enums.order_status import OrderStatus
+
+            pay_repo = PaymentRepository(db)
+            order_repo = OrderRepository(db)
+
+            payment = pay_repo.get_by_id(payment_id)
+            if not payment:
+                raise ValueError("Payment not found")
+
+            pay_repo.update_status(payment, PaymentStatus.FAILED)
+            order = order_repo.get_by_id(payment.order_id)
+            if order:
+                order_repo.update_status(order, OrderStatus.CANCELLED)
+
+            user_service = UserService(db)
+            order_service = OrderService(db)
+            ord_ = order_service.get_order_by_id(payment.order_id)
+            user = user_service.get_user_by_id(ord_.user_id) if ord_ else None
+
+            db.commit()
+
+            if user:
+                try:
+                    await bot.send_message(
+                        user.telegram_user_id,
+                        f"❌ <b>Оплата #{payment_id} отклонена</b>\n\n"
+                        f"Причина: {reason}\n\n"
+                        f"Если это ошибка, обратитесь в поддержку: @{settings.support_username}",
+                        parse_mode="HTML",
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to notify user on rejection: {e}")
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"reject_payment error: {e}")
+            raise
+        finally:
+            db.close()

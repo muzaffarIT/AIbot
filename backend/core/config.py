@@ -44,8 +44,11 @@ class Settings(BaseSettings):
     payme_merchant_id: str | None = None
     payme_secret_key: str | None = None
 
-    payment_provider: str = "stars"
+    payment_provider: str = "manual"
     admin_ids: str = ""
+
+    card_number: str = ""
+    card_owner: str = ""
 
     @property
     def admin_ids_list(self) -> list[int]:

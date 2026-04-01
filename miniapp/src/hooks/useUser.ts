@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useTelegramUser } from './useTelegramUser'
+import { syncUser } from '@/lib/api'
 
 export function useUser() {
   const { tgUser, ready: tgReady } = useTelegramUser()
@@ -15,24 +16,16 @@ export function useUser() {
       return
     }
 
-    fetch('/api/users/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        telegram_id: tgUser.id,
-        username: tgUser.username || '',
-        first_name: tgUser.first_name || '',
-        last_name: tgUser.last_name || '',
-        language_code: tgUser.language_code || 'ru'
-      })
-    })
-    .then(r => {
-      if (!r.ok) throw new Error(`Sync failed: HTTP ${r.status}`)
-      return r.json()
+    syncUser({
+      telegram_id: tgUser.id,
+      username: tgUser.username || '',
+      first_name: tgUser.first_name || '',
+      last_name: tgUser.last_name || '',
+      language_code: tgUser.language_code || 'ru',
     })
     .then(data => {
       setUser(data)
-      console.log('[USER] Synced:', data?.telegram_id,
+      console.log('[USER] Synced:', data?.telegram_user_id,
                   'balance:', data?.credits_balance)
     })
     .catch(err => {

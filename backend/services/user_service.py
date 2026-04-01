@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 
@@ -5,6 +6,8 @@ from backend.db.repositories.users import UserRepository
 from backend.services.balance_service import BalanceService
 from backend.models.user import User
 from backend.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class UserService:
