@@ -11,10 +11,13 @@
     },
     {
       "name": "MiniApp (Next.js)",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "/opt/homebrew/bin/npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
-      "cwd": "miniapp"
+      "cwd": "/Users/user/Desktop/ai-bot-platform/.claude/worktrees/admiring-sinoussi/miniapp",
+      "env": {
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+      }
     },
     {
       "name": "Bot (aiogram)",
