@@ -7,16 +7,37 @@ Flow:
   4. Admin clicks "❌ Отклонить" → reject reason menu → user notified
 """
 
+import json
 import logging
 from aiogram import F, Router, Bot
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import Command
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from backend.core.config import settings
 from bot.services.payment_service import ManualPaymentService, PACKAGES
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+
+# ── MiniApp web_app_data ────────────────────────────────────────────────────
+
+@router.message(F.web_app_data)
+async def web_app_data_handler(message: Message, bot: Bot) -> None:
+    """Handle buy requests sent from the Telegram MiniApp."""
+    data = message.web_app_data.data
+    try:
+        parsed = json.loads(data)
+        if parsed.get("action") == "buy_plan":
+            package_id = parsed.get("package_id")
+            if package_id and package_id in PACKAGES:
+                await ManualPaymentService.send_invoice(
+                    bot=bot,
+                    chat_id=message.chat.id,
+                    telegram_user_id=message.from_user.id,
+                    package_id=package_id,
+                )
+    except Exception as e:
+        logger.error(f"web_app_data_handler error: {e}")
 
 
 def _is_admin(user_id: int) -> bool:

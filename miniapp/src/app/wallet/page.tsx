@@ -108,7 +108,7 @@ export default function WalletPage() {
                  </div>
                  <div className="text-left">
                    <div className="font-semibold">{t(language, "wallet.buyCredits")}</div>
-                   <div className="text-xs text-white/50">Пополнить через Telegram Stars</div>
+                   <div className="text-xs text-white/50">Пополнить по карте</div>
                  </div>
               </div>
               <ChevronRight size={20} className="text-white/30 group-hover:text-white/70 transition-colors" />
