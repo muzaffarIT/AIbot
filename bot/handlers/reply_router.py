@@ -15,7 +15,7 @@ from backend.services.balance_service import BalanceService
 from bot.keyboards.reply_menu import main_reply_keyboard
 from bot.keyboards.main_menu import create_submenu_keyboard
 from backend.core.config import settings
-from bot.services.payment_service import BotPaymentService
+from bot.services.payment_service import ManualPaymentService, PACKAGES
 from shared.utils.i18n import I18n
 
 logger = logging.getLogger(__name__)
@@ -103,27 +103,26 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
 async def _send_plans(message: Message, bot: Bot, user, lang: str) -> None:
     """Send plans/pricing information."""
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    from bot.services.payment_service import BotPaymentService
 
-    packages = BotPaymentService.get_packages()
-    if not packages:
-        await message.answer("💎 Тарифы временно недоступны." if lang != "uz" else "💎 Tariflar vaqtincha mavjud emas.")
-        return
+    def _fmt(n: int) -> str:
+        return f"{n:,}".replace(",", " ")
 
     lines = ["💎 <b>" + ("Kreditlar paketi:" if lang == "uz" else "Кредитные пакеты:") + "</b>\n"]
     buttons = []
-    for pkg in packages:
-        name = pkg.get("name", "")
-        price = pkg.get("price_stars", 0)
-        credits = pkg.get("credits", 0)
-        lines.append(f"• {name} — {credits} кр. / {price}⭐")
+    for pkg_id, pkg in PACKAGES.items():
+        name = pkg["name"]
+        price = _fmt(pkg["price_uzs"])
+        credits = pkg["credits"]
+        lines.append(f"• {name} — {credits} кр. / {price} сум")
         buttons.append([InlineKeyboardButton(
-            text=f"{name} — {price}⭐",
-            callback_data=f"buy:{pkg['id']}"
+            text=f"{name} — {price} сум",
+            callback_data=f"buy_pkg:{pkg_id}"
         )])
 
+    buttons.append([InlineKeyboardButton(text="← Назад", callback_data="start_menu")])
+
     await message.answer(
-        "\n".join(lines),
+        "\n".join(lines) + "\n\n<i>Оплата по карте — реквизиты придут после выбора.</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
