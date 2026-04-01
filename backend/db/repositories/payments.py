@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, join
 from sqlalchemy.orm import Session
 
 from backend.models.payment import Payment
+from backend.models.order import Order
 
 
 class PaymentRepository:
@@ -92,3 +93,18 @@ class PaymentRepository:
 
     def update_status(self, payment: Payment, status: str) -> Payment:
         return self.update_payment(payment, status=status)
+
+    def get_pending_manual_payment(self, user_id: int) -> Payment | None:
+        """Return the latest pending manual payment for a user, if any."""
+        stmt = (
+            select(Payment)
+            .join(Order, Payment.order_id == Order.id)
+            .where(
+                Order.user_id == user_id,
+                Payment.provider == "manual",
+                Payment.status.in_(("created", "processing")),
+            )
+            .order_by(Payment.id.desc())
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalar_one_or_none()

@@ -1,6 +1,6 @@
 import asyncio
 from aiogram import F, Router, Bot
-from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from bot.services.db_session import get_db_session
@@ -215,22 +215,25 @@ async def process_menu_balance(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "menu_plans")
 async def process_menu_plans(callback: CallbackQuery) -> None:
-    from backend.core.config import settings
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-    from bot.services.payment_service import PACKAGES, BotPaymentService
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from bot.services.payment_service import PACKAGES
+
+    def _fmt(n: int) -> str:
+        return f"{n:,}".replace(",", " ")
 
     rows = []
     for pkg_id, pkg in PACKAGES.items():
         rows.append([
             InlineKeyboardButton(
-                text=f"{pkg['name']} — {pkg['price_usd']} ({pkg['credits']} кр.)",
+                text=f"{pkg['name']} — {_fmt(pkg['price_uzs'])} сум ({pkg['credits']} кр.)",
                 callback_data=f"buy_pkg:{pkg_id}"
             )
         ])
     rows.append([InlineKeyboardButton(text="← Назад", callback_data="start_menu")])
 
     await callback.message.answer(
-        "💎 <b>Выберите пакет кредитов:</b>",
+        "💎 <b>Выберите пакет кредитов:</b>\n\n"
+        "Оплата по карте — реквизиты придут после выбора.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -239,10 +242,15 @@ async def process_menu_plans(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("buy_pkg:"))
 async def process_buy_package(callback: CallbackQuery, bot: Bot) -> None:
-    from bot.services.payment_service import BotPaymentService
+    from bot.services.payment_service import ManualPaymentService
     package_id = callback.data.split(":")[1]
     try:
-        await BotPaymentService.send_invoice(bot, callback.from_user.id, package_id)
+        await ManualPaymentService.send_invoice(
+            bot=bot,
+            chat_id=callback.from_user.id,
+            telegram_user_id=callback.from_user.id,
+            package_id=package_id,
+        )
         await callback.answer()
     except Exception as e:
         await callback.answer(f"Ошибка: {e}", show_alert=True)
