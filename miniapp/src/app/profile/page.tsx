@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion, type Variants } from "framer-motion";
 import {
-  ArrowLeft, User, Flame, Trophy, Lock, Calendar,
-  Globe, Check, Star, Zap, Sparkles, Award, Crown,
-  Users, CreditCard, Gift
+  ArrowLeft, Flame, Trophy, Lock, Calendar,
+  Globe, Check, Zap, Users, CreditCard, Gift,
 } from "lucide-react";
+import { useTelegramAuth } from "@/hooks/useTelegramAuth";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
-import { fetchJson } from "@/lib/api";
+import { api, type AchievementItem } from "@/lib/api";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -20,73 +20,70 @@ const itemVariants: Variants = {
   visible: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
 };
 
-// All possible achievements with metadata
-const ALL_ACHIEVEMENTS = [
-  { code: "first_gen",  emoji: "🌱", ru: "Первая генерация",   uz: "Birinchi generatsiya", bonus: 2  },
-  { code: "artist_10", emoji: "🎨", ru: "10 картинок",        uz: "10 ta rasm",           bonus: 5  },
-  { code: "director",  emoji: "🎬", ru: "Первое видео",       uz: "Birinchi video",        bonus: 5  },
-  { code: "buyer",     emoji: "💎", ru: "Первая покупка",     uz: "Birinchi xarid",        bonus: 10 },
-  { code: "streak_7",  emoji: "🔥", ru: "Стрик 7 дней",       uz: "7 kunlik streak",       bonus: 15 },
-  { code: "referrer_5",emoji: "👥", ru: "5 рефералов",        uz: "5 ta referal",          bonus: 25 },
-  { code: "centurion", emoji: "💯", ru: "100 генераций",      uz: "100 ta generatsiya",    bonus: 30 },
-  { code: "legend",    emoji: "👑", ru: "500 генераций",      uz: "500 ta generatsiya",    bonus: 100},
-];
-
 const LANG_OPTIONS = [
   { code: "ru", label: "Русский 🇷🇺" },
   { code: "uz", label: "O'zbekcha 🇺🇿" },
 ];
 
 export default function ProfilePage() {
-  const { language, backendUser, telegramUser, loading: userLoading, changeLanguage } = useMiniAppUser();
+  const { tgUser, userData, loading } = useTelegramAuth();
+  const { language, changeLanguage } = useMiniAppUser();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
-  const [earnedCodes, setEarnedCodes] = useState<string[]>([]);
+  const [achievements, setAchievements] = useState<AchievementItem[]>([]);
 
   useEffect(() => {
-    if (!backendUser?.telegram_user_id) return;
-
-    fetchJson<Array<{ code: string; earned: boolean }>>(
-      `/api/users/${backendUser.telegram_user_id}/achievements`
-    )
-      .then(data => {
-        const codes = (data || []).filter(d => d.earned).map(d => d.code);
-        setEarnedCodes(codes);
-      })
-      .catch(err => console.error('Achievements error:', err));
-  }, [backendUser?.telegram_user_id]);
-
-  const streak = (backendUser as any)?.daily_streak ?? 0;
-  const registeredAt: string | null = (backendUser as any)?.created_at ?? null;
-
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString(language === "uz" ? "uz-UZ" : "ru-RU", {
-      year: "numeric", month: "long", day: "numeric",
-    });
+    const id = userData?.telegram_user_id ?? tgUser?.id;
+    if (!id) return;
+    api.getAchievements(id)
+      .then(setAchievements)
+      .catch(() => {});
+  }, [userData?.telegram_user_id, tgUser?.id]);
 
   const handleLangChange = (code: string) => {
     changeLanguage(code);
     setLangMenuOpen(false);
   };
 
-  const displayName = telegramUser?.first_name
-               || backendUser?.username
-               || backendUser?.first_name
-               || 'Пользователь';
+  const displayName =
+    tgUser?.first_name ||
+    userData?.username ||
+    userData?.first_name ||
+    "Пользователь";
 
-  if (userLoading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  const streak = userData?.daily_streak ?? 0;
+  const credits = userData?.credits_balance ?? 0;
+  const referralCount = userData?.referral_count ?? 0;
+  const registeredAt = userData?.created_at ?? null;
+  const earnedCount = achievements.filter((a) => a.earned).length;
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString(language === "uz" ? "uz-UZ" : "ru-RU", {
+      year: "numeric", month: "long", day: "numeric",
+    });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen px-5 pt-6 pb-24 overflow-x-hidden">
-      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="max-w-md mx-auto space-y-6">
-        
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="max-w-md mx-auto space-y-6"
+      >
         {/* Header */}
         <motion.div variants={itemVariants} className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
+            <Link
+              href="/"
+              className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            >
               <ArrowLeft className="text-white" size={20} />
             </Link>
             <h1 className="text-2xl font-bold text-white tracking-tight">
@@ -127,13 +124,14 @@ export default function ProfilePage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xl font-bold text-white truncate">{displayName}</p>
-            {backendUser?.username && (
-              <p className="text-sm text-white/50">@{backendUser.username}</p>
+            {(tgUser?.username || userData?.username) && (
+              <p className="text-sm text-white/50">@{tgUser?.username || userData?.username}</p>
             )}
             {registeredAt && (
               <p className="text-xs text-white/40 mt-1 flex items-center gap-1">
                 <Calendar size={11} />
-                {language === "uz" ? "Ro'yxatdan o'tgan" : "Зарегистрирован"}: {formatDate(registeredAt)}
+                {language === "uz" ? "Ro'yxatdan o'tgan" : "Зарегистрирован"}:{" "}
+                {formatDate(registeredAt)}
               </p>
             )}
           </div>
@@ -151,14 +149,14 @@ export default function ProfilePage() {
             <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">
               {language === "uz" ? "Kredit" : "Кредиты"}
             </span>
-            <span className="text-xl font-bold text-white">{backendUser?.credits_balance ?? 0}</span>
+            <span className="text-xl font-bold text-white">{credits}</span>
           </div>
           <div className="glass-panel p-4 flex flex-col items-center text-center">
             <Users size={20} className="mb-1 text-brand-primary" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">
               {language === "uz" ? "Do'stlar" : "Друзья"}
             </span>
-            <span className="text-xl font-bold text-white">{backendUser?.referral_count ?? 0}</span>
+            <span className="text-xl font-bold text-white">{referralCount}</span>
           </div>
         </motion.section>
 
@@ -170,52 +168,64 @@ export default function ProfilePage() {
               {language === "uz" ? "Yutuqlar" : "Достижения"}
             </h2>
             <span className="text-xs text-white/40 font-medium">
-              {earnedCodes.length}/{ALL_ACHIEVEMENTS.length}
+              {earnedCount}/{achievements.length || 8}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {ALL_ACHIEVEMENTS.map((a) => {
-              const earned = earnedCodes.includes(a.code);
-              return (
-                <div
-                  key={a.code}
-                  className={`glass-card p-4 relative overflow-hidden transition-all ${
-                    earned
-                      ? "border-brand-accent/30 bg-brand-accent/5"
-                      : "border-white/5 opacity-60"
-                  }`}
-                  style={{ opacity: earned ? 1 : 0.4 }}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{a.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-semibold leading-tight ${earned ? "text-white" : "text-white/50"}`}>
-                        {language === "uz" ? a.uz : a.ru}
-                      </p>
+            {(achievements.length
+              ? achievements
+              : Array.from({ length: 8 }, (_, i) => ({
+                  code: `a${i}`,
+                  name: "...",
+                  emoji: "🏆",
+                  bonus: 0,
+                  earned: false,
+                }))
+            ).map((a) => (
+              <div
+                key={a.code}
+                className={`glass-card p-4 relative overflow-hidden transition-all ${
+                  a.earned ? "border-brand-accent/30 bg-brand-accent/5" : "border-white/5"
+                }`}
+                style={{ opacity: a.earned ? 1 : 0.4 }}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">{a.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-semibold leading-tight ${a.earned ? "text-white" : "text-white/50"}`}>
+                      {a.name}
+                    </p>
+                    {a.bonus > 0 && (
                       <p className="text-[10px] text-brand-accent font-bold mt-0.5">+{a.bonus} кр.</p>
-                    </div>
-                    {earned ? (
-                      <Check size={14} className="text-brand-accent flex-shrink-0" />
-                    ) : (
-                      <Lock size={12} className="text-white/20 flex-shrink-0" />
                     )}
                   </div>
+                  {a.earned ? (
+                    <Check size={14} className="text-brand-accent flex-shrink-0" />
+                  ) : (
+                    <Lock size={12} className="text-white/20 flex-shrink-0" />
+                  )}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </motion.div>
 
         {/* Quick links */}
         <motion.div variants={itemVariants} className="space-y-2">
-          <Link href="/referral" className="glass-card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
+          <Link
+            href="/referral"
+            className="glass-card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors"
+          >
             <Gift size={20} className="text-brand-primary" />
             <span className="text-sm font-medium text-white/80">
               {language === "uz" ? "Referal dasturi" : "Реферальная программа"}
             </span>
           </Link>
-          <Link href="/wallet" className="glass-card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
+          <Link
+            href="/wallet"
+            className="glass-card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors"
+          >
             <CreditCard size={20} className="text-brand-cyan" />
             <span className="text-sm font-medium text-white/80">
               {language === "uz" ? "Balans va to'lovlar" : "Баланс и платежи"}

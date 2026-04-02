@@ -96,11 +96,18 @@ export default function PlansPage() {
 
   return (
     <main className="min-h-screen px-5 pt-6 pb-24 overflow-x-hidden">
-      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="max-w-md mx-auto space-y-6">
-
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="max-w-md mx-auto space-y-6"
+      >
         {/* Header */}
         <motion.div variants={itemVariants} className="flex items-center gap-3">
-          <Link href="/" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
+          <Link
+            href="/"
+            className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+          >
             <ArrowLeft className="text-white" size={20} />
           </Link>
           <h1 className="text-2xl font-bold text-white tracking-tight">
@@ -108,8 +115,11 @@ export default function PlansPage() {
           </h1>
         </motion.div>
 
-        {/* Payment method notice */}
-        <motion.div variants={itemVariants} className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10">
+        {/* Payment notice */}
+        <motion.div
+          variants={itemVariants}
+          className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10"
+        >
           <CreditCard className="text-brand-cyan shrink-0" size={22} />
           <p className="text-sm text-white/70">
             {language === "uz"
@@ -124,7 +134,9 @@ export default function PlansPage() {
             <div
               key={plan.id}
               className={`glass-card p-5 relative overflow-hidden transition-all ${
-                plan.popular ? "border-brand-primary/50 shadow-lg shadow-brand-primary/10" : "border-white/5"
+                plan.popular
+                  ? "border-brand-primary/50 shadow-lg shadow-brand-primary/10"
+                  : "border-white/5"
               }`}
             >
               {plan.popular && (
@@ -190,14 +202,10 @@ export default function PlansPage() {
               </div>
             ))}
           </div>
-
           <p className="text-xs text-white/30 text-center px-4">
-            {language === "uz"
-              ? "Kreditlar muddatsiz amal qiladi"
-              : "Кредиты бессрочные"}
+            {language === "uz" ? "Kreditlar muddatsiz amal qiladi" : "Кредиты бессрочные"}
           </p>
         </motion.div>
-
       </motion.div>
     </main>
   );

@@ -1,5 +1,4 @@
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.trim() || "";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type BackendUser = {
   id: number;
@@ -10,6 +9,8 @@ export type BackendUser = {
   language_code: string;
   credits_balance?: number;
   referral_count?: number;
+  daily_streak?: number;
+  created_at?: string | null;
 };
 
 export type BalanceResponse = {
@@ -107,9 +108,24 @@ export type PaymentResponse = {
   plan_name?: string;
 };
 
+export type AchievementItem = {
+  code: string;
+  name: string;
+  emoji: string;
+  bonus: number;
+  earned: boolean;
+};
+
+export type ReferralData = {
+  referral_code: string;
+  referral_count: number;
+  referral_earnings: number;
+};
+
+// ─── Error class ──────────────────────────────────────────────────────────────
+
 export class ApiError extends Error {
   status: number;
-
   constructor(message: string, status: number) {
     super(message);
     this.name = "ApiError";
@@ -117,51 +133,90 @@ export class ApiError extends Error {
   }
 }
 
-async function readErrorMessage(response: Response) {
-  try {
-    const data = (await response.json()) as { detail?: string };
-    if (data?.detail) {
-      return data.detail;
-    }
-  } catch {
-    return response.statusText || `Request failed: ${response.status}`;
-  }
+// ─── Core request ─────────────────────────────────────────────────────────────
 
-  return response.statusText || `Request failed: ${response.status}`;
-}
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL?.trim() ?? "";
 
-export async function fetchJson<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = BACKEND_URL ? `${BACKEND_URL}${path}` : path;
 
+  // Always include TMA auth when available
   let initData = "";
   if (typeof window !== "undefined") {
-    initData = (window as any).Telegram?.WebApp?.initData || "";
+    initData = window.Telegram?.WebApp?.initData ?? "";
   }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(options?.headers as any || {}),
+    ...(options?.headers as Record<string, string> ?? {}),
   };
-
   if (initData) {
     headers["Authorization"] = `tma ${initData}`;
   }
 
-  const response = await fetch(url, {
+  const res = await fetch(url, {
     cache: "no-store",
     ...options,
     headers,
   });
 
-  if (!response.ok) {
-    throw new ApiError(await readErrorMessage(response), response.status);
+  if (!res.ok) {
+    let msg = res.statusText || `Request failed: ${res.status}`;
+    try {
+      const data = (await res.json()) as { detail?: string };
+      if (data?.detail) msg = data.detail;
+    } catch {}
+    throw new ApiError(msg, res.status);
   }
 
-  return (await response.json()) as T;
+  return res.json() as Promise<T>;
 }
+
+// ─── fetchJson (legacy alias, same behaviour) ─────────────────────────────────
+
+export async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
+  return request<T>(path, options);
+}
+
+// ─── Clean api object ─────────────────────────────────────────────────────────
+
+export const api = {
+  syncUser: (data: {
+    telegram_id: number;
+    username?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    language_code?: string | null;
+  }) =>
+    request<BackendUser>("/api/users/sync", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getProfile: (telegramId: number) =>
+    request<BackendUser>(`/api/users/${telegramId}`),
+
+  getAchievements: (telegramId: number) =>
+    request<AchievementItem[]>(`/api/users/${telegramId}/achievements`),
+
+  getReferral: (telegramId: number) =>
+    request<ReferralData>(`/api/users/${telegramId}/referral`),
+
+  getJobs: (telegramId: number, limit = 20) =>
+    request<GenerationJobsResponse>(`/api/jobs/telegram/${telegramId}?limit=${limit}`),
+
+  getPlans: () => request<Plan[]>("/api/plans"),
+
+  getBalanceHistory: (telegramId: number, limit = 20) =>
+    request<BalanceHistoryResponse>(
+      `/api/balances/telegram/${telegramId}/transactions?limit=${limit}`
+    ),
+
+  getOrders: (telegramId: number, limit = 10) =>
+    request<OrdersResponse>(`/api/orders/telegram/${telegramId}?limit=${limit}`),
+};
+
+// ─── Legacy named exports (used by existing pages) ────────────────────────────
 
 export async function ensureUser(payload: {
   telegram_user_id: number;
@@ -170,14 +225,10 @@ export async function ensureUser(payload: {
   last_name?: string | null;
   language_code?: string | null;
 }) {
-  return fetchJson<BackendUser>(`/api/users/ensure`, {
+  return request<BackendUser>("/api/users/ensure", {
     method: "POST",
     body: JSON.stringify(payload),
   });
-}
-
-export async function getUser(telegramUserId: number) {
-  return fetchJson<BackendUser>(`/api/users/${telegramUserId}`);
 }
 
 export async function syncUser(payload: {
@@ -187,47 +238,42 @@ export async function syncUser(payload: {
   last_name?: string | null;
   language_code?: string | null;
 }) {
-  return fetchJson<BackendUser>(`/api/users/sync`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return api.syncUser(payload);
+}
+
+export async function getUser(telegramUserId: number) {
+  return api.getProfile(telegramUserId);
 }
 
 export async function updateLanguage(telegramUserId: number, language: string) {
-  return fetchJson<{ success: boolean; language: string }>(`/api/users/language`, {
+  return request<{ success: boolean; language: string }>("/api/users/language", {
     method: "PATCH",
     body: JSON.stringify({ telegram_user_id: telegramUserId, language }),
   });
 }
 
 export async function getBalance(telegramUserId: number) {
-  return fetchJson<BalanceResponse>(`/api/balances/telegram/${telegramUserId}`);
+  return request<BalanceResponse>(`/api/balances/telegram/${telegramUserId}`);
 }
 
 export async function getBalanceHistory(telegramUserId: number, limit = 10) {
-  return fetchJson<BalanceHistoryResponse>(
-    `/api/balances/telegram/${telegramUserId}/transactions?limit=${limit}`
-  );
+  return api.getBalanceHistory(telegramUserId, limit);
 }
 
 export async function getPlans() {
-  return fetchJson<Plan[]>(`/api/plans`);
+  return api.getPlans();
 }
 
 export async function getOrders(telegramUserId: number, limit = 10) {
-  return fetchJson<OrdersResponse>(
-    `/api/orders/telegram/${telegramUserId}?limit=${limit}`
-  );
+  return api.getOrders(telegramUserId, limit);
 }
 
 export async function getJobs(telegramUserId: number, limit = 10) {
-  return fetchJson<GenerationJobsResponse>(
-    `/api/jobs/telegram/${telegramUserId}?limit=${limit}`
-  );
+  return api.getJobs(telegramUserId, limit);
 }
 
 export async function getJob(jobId: number) {
-  return fetchJson<GenerationJob>(`/api/jobs/${jobId}`);
+  return request<GenerationJob>(`/api/jobs/${jobId}`);
 }
 
 export async function createJob(payload: {
@@ -237,7 +283,7 @@ export async function createJob(payload: {
   source_image_url?: string;
   process_now?: boolean;
 }) {
-  return fetchJson<GenerationJob>(`/api/jobs/`, {
+  return request<GenerationJob>("/api/jobs/", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -249,7 +295,7 @@ export async function createOrder(payload: {
   email?: string | null;
   payment_method?: string | null;
 }) {
-  return fetchJson<OrderSummary>(`/api/orders/`, {
+  return request<OrderSummary>("/api/orders/", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -260,14 +306,14 @@ export async function createPayment(payload: {
   provider: string;
   method: string;
 }) {
-  return fetchJson<PaymentResponse>(`/api/payments/`, {
+  return request<PaymentResponse>("/api/payments/", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function confirmPayment(paymentId: number) {
-  return fetchJson<PaymentResponse>(`/api/payments/${paymentId}/confirm`, {
+  return request<PaymentResponse>(`/api/payments/${paymentId}/confirm`, {
     method: "POST",
   });
 }
