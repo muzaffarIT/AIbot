@@ -1,11 +1,12 @@
 "use client";
 
 export type TelegramUser = {
-  id?: number;
-  username?: string;
-  first_name?: string;
+  id: number;
+  first_name: string;
   last_name?: string;
+  username?: string;
   language_code?: string;
+  photo_url?: string;
 };
 
 declare global {
@@ -19,7 +20,9 @@ declare global {
         initData?: string;
         initDataUnsafe?: {
           user?: TelegramUser;
+          start_param?: string;
         };
+        colorScheme?: "light" | "dark";
         HapticFeedback?: {
           impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
           notificationOccurred: (type: "error" | "success" | "warning") => void;
@@ -30,17 +33,30 @@ declare global {
   }
 }
 
-export function initTelegramWebApp() {
-  if (typeof window === "undefined") return;
-
-  const webApp = window.Telegram?.WebApp;
-  if (!webApp) return;
-
-  webApp.ready();
-  webApp.expand();
+export function getTelegramWebApp() {
+  if (typeof window === "undefined") return null;
+  return window.Telegram?.WebApp ?? null;
 }
 
-export function getTelegramUser() {
-  if (typeof window === "undefined") return null;
-  return window.Telegram?.WebApp?.initDataUnsafe?.user ?? null;
+export function getTelegramUser(): TelegramUser | null {
+  const tg = getTelegramWebApp();
+  return tg?.initDataUnsafe?.user ?? null;
+}
+
+export function getInitData(): string {
+  const tg = getTelegramWebApp();
+  return tg?.initData ?? "";
+}
+
+export function initTelegram(): boolean {
+  const tg = getTelegramWebApp();
+  if (!tg) return false;
+  tg.ready();
+  tg.expand();
+  return true;
+}
+
+// Legacy alias
+export function initTelegramWebApp() {
+  initTelegram();
 }

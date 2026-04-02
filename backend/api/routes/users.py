@@ -44,6 +44,8 @@ def serialize_user(user, credits_balance: int, referral_count: int = 0) -> dict:
         "language_code": user.language_code,
         "credits_balance": credits_balance,
         "referral_count": referral_count,
+        "daily_streak": getattr(user, "daily_streak", 0) or 0,
+        "created_at": user.created_at.isoformat() if getattr(user, "created_at", None) else None,
     }
 
 def get_referral_count(db: Session, telegram_id: int) -> int:
