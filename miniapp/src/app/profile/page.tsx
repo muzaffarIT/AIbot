@@ -9,7 +9,7 @@ import {
   Users, CreditCard, Gift
 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
-import { useTelegramUser } from "@/hooks/useTelegramUser";
+import { fetchJson } from "@/lib/api";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -38,23 +38,22 @@ const LANG_OPTIONS = [
 ];
 
 export default function ProfilePage() {
-  const { language, backendUser, telegramUser, changeLanguage } = useMiniAppUser();
+  const { language, backendUser, telegramUser, loading: userLoading, changeLanguage } = useMiniAppUser();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
-
   const [earnedCodes, setEarnedCodes] = useState<string[]>([]);
-  const { tgUser, ready } = useTelegramUser();
 
   useEffect(() => {
-    if (!ready || !tgUser?.id) return;
+    if (!backendUser?.telegram_user_id) return;
 
-    fetch(`/api/users/${tgUser.id}/achievements`)
-      .then(r => r.json())
+    fetchJson<Array<{ code: string; earned: boolean }>>(
+      `/api/users/${backendUser.telegram_user_id}/achievements`
+    )
       .then(data => {
-        const codes = (data || []).filter((d: any) => d.earned).map((d: any) => d.code);
+        const codes = (data || []).filter(d => d.earned).map(d => d.code);
         setEarnedCodes(codes);
       })
       .catch(err => console.error('Achievements error:', err));
-  }, [ready, tgUser]);
+  }, [backendUser?.telegram_user_id]);
 
   const streak = (backendUser as any)?.daily_streak ?? 0;
   const registeredAt: string | null = (backendUser as any)?.created_at ?? null;
@@ -69,11 +68,16 @@ export default function ProfilePage() {
     setLangMenuOpen(false);
   };
 
-  const displayName = tgUser?.first_name 
-               || backendUser?.username 
+  const displayName = telegramUser?.first_name
+               || backendUser?.username
+               || backendUser?.first_name
                || 'Пользователь';
 
-  if (!ready) return <div style={{padding: 20, color: 'white'}}>Загрузка...</div>;
+  if (userLoading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <main className="min-h-screen px-5 pt-6 pb-24 overflow-x-hidden">
@@ -205,7 +209,7 @@ export default function ProfilePage() {
 
         {/* Quick links */}
         <motion.div variants={itemVariants} className="space-y-2">
-          <Link href="/partnership" className="glass-card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
+          <Link href="/referral" className="glass-card p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
             <Gift size={20} className="text-brand-primary" />
             <span className="text-sm font-medium text-white/80">
               {language === "uz" ? "Referal dasturi" : "Реферальная программа"}

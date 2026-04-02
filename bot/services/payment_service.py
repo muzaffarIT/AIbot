@@ -119,15 +119,27 @@ class ManualPaymentService:
             db.commit()
 
             price_fmt = _fmt(pkg["price_uzs"])
+            visa_card = settings.visa_card_number or ""
+            visa_owner = settings.visa_card_owner or ""
+
+            cards_text = ""
+            if card:
+                cards_text += f"\n💳 <b>Humo / Uzcard</b>\n<code>{card}</code>\nПолучатель: <b>{owner}</b>"
+            if visa_card:
+                cards_text += f"\n\n💳 <b>Visa</b>\n<code>{visa_card}</code>\nПолучатель: <b>{visa_owner}</b>"
+            if not cards_text:
+                cards_text = "\n⚠️ Реквизиты временно не настроены. Обратитесь в поддержку."
+
             await bot.send_message(
                 chat_id,
                 f"💳 <b>Оплата — {pkg['name']}</b>\n\n"
-                f"📦 {pkg['description']}\n\n"
-                f"💰 Сумма: <b>{price_fmt} сум</b>\n\n"
-                f"Переведите на карту:\n"
-                f"<code>{card}</code>\n"
-                f"Получатель: <b>{owner}</b>\n\n"
-                f"<i>После перевода нажмите кнопку ниже</i>",
+                f"📦 {pkg['description']}\n"
+                f"💰 Сумма: <b>{price_fmt} сум</b>\n"
+                f"🎁 Кредиты: <b>{pkg['credits']}</b>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"Переведите на одну из карт:{cards_text}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"<i>После перевода нажмите кнопку ниже 👇</i>",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(

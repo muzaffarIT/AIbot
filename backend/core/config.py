@@ -49,6 +49,8 @@ class Settings(BaseSettings):
 
     card_number: str = ""
     card_owner: str = ""
+    visa_card_number: str = ""
+    visa_card_owner: str = ""
 
     @property
     def admin_ids_list(self) -> list[int]:

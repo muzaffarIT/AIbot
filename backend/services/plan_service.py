@@ -18,36 +18,50 @@ class PlanService:
         default_plans = [
             {
                 "code": "start",
-                "name": "Start",
+                "name": "⚡ Start",
                 "description": "100 кредитов для старта",
-                "price": 7.5,
-                "currency": "USD",
+                "price": 59000,
+                "currency": "UZS",
                 "credits_amount": 100,
-                "duration_days": 30,
+                "duration_days": None,
             },
             {
                 "code": "pro",
-                "name": "Pro",
+                "name": "💎 Pro",
                 "description": "300 кредитов для активного использования",
-                "price": 19.0,
-                "currency": "USD",
+                "price": 149000,
+                "currency": "UZS",
                 "credits_amount": 300,
-                "duration_days": 30,
+                "duration_days": None,
             },
             {
-                "code": "max",
-                "name": "Max",
-                "description": "1000 кредитов для интенсивной работы",
-                "price": 49.0,
-                "currency": "USD",
-                "credits_amount": 1000,
-                "duration_days": 30,
+                "code": "creator",
+                "name": "🚀 Creator",
+                "description": "600 кредитов для создателей контента",
+                "price": 269000,
+                "currency": "UZS",
+                "credits_amount": 600,
+                "duration_days": None,
+            },
+            {
+                "code": "ultra",
+                "name": "👑 Ultra",
+                "description": "1500 кредитов для профессионалов",
+                "price": 590000,
+                "currency": "UZS",
+                "credits_amount": 1500,
+                "duration_days": None,
             },
         ]
 
         for item in default_plans:
             existing = self.repo.get_by_code(item["code"])
             if existing:
+                # Update price/currency if changed
+                if existing.price != item["price"] or existing.currency != item["currency"]:
+                    existing.price = item["price"]
+                    existing.currency = item["currency"]
+                    self.repo.db.commit()
                 continue
 
             self.repo.create_plan(
