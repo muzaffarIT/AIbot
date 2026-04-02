@@ -11,6 +11,18 @@ export interface TgUser {
   language_code?: string;
 }
 
+/** Парсим user из initData напрямую (fallback если initDataUnsafe пуст) */
+function parseUserFromInitData(initData: string): TgUser | null {
+  try {
+    const params = new URLSearchParams(initData);
+    const userJson = params.get("user");
+    if (!userJson) return null;
+    const u = JSON.parse(decodeURIComponent(userJson));
+    if (u?.id) return u as TgUser;
+  } catch {}
+  return null;
+}
+
 export function useTelegramAuth() {
   const [tgUser, setTgUser] = useState<TgUser | null>(null);
   const [userData, setUserData] = useState<BackendUser | null>(null);
@@ -35,7 +47,6 @@ export function useTelegramAuth() {
         }
       } catch (err: any) {
         if (!cancelled) {
-          // Fallback: попробуем загрузить из кэша
           try {
             const cached = sessionStorage.getItem("harf_user");
             if (cached) {
@@ -51,43 +62,47 @@ export function useTelegramAuth() {
       }
     };
 
-    // Polling: ждём пока initDataUnsafe.user станет доступен
-    // Telegram WebApp может быть загружен, но user ещё не заполнен
-    let attempts = 0;
-    const MAX_ATTEMPTS = 30; // 3 секунды (30 × 100ms)
+    const getUser = (tg: any): TgUser | null => {
+      // Способ 1: initDataUnsafe (стандартный)
+      const u = tg?.initDataUnsafe?.user;
+      if (u?.id) return u as TgUser;
 
-    const check = () => {
+      // Способ 2: парсим initData напрямую (fallback для Desktop)
+      if (tg?.initData) return parseUserFromInitData(tg.initData);
+
+      return null;
+    };
+
+    // Polling: ждём пока user станет доступен (до 3 секунд)
+    let attempts = 0;
+    const MAX_ATTEMPTS = 30;
+
+    const check = (): boolean => {
       const tg = (window as any).Telegram?.WebApp;
 
-      if (tg?.initDataUnsafe?.user?.id) {
-        // Telegram готов, user доступен
+      const user = getUser(tg);
+      if (user) {
         tg.ready();
         tg.expand();
-        const user = tg.initDataUnsafe.user as TgUser;
         if (!cancelled) setTgUser(user);
         void syncWithBackend(user);
         return true;
       }
 
       attempts++;
-
       if (attempts >= MAX_ATTEMPTS) {
-        // Timeout: Telegram не предоставил данные
         if (!cancelled) {
           const tgExists = !!(window as any).Telegram?.WebApp;
           setError(tgExists ? "Нет данных пользователя" : "Откройте через Telegram");
           setLoading(false);
         }
-        return true; // stop polling
+        return true;
       }
-
       return false;
     };
 
-    // Сразу пробуем
     if (check()) return;
 
-    // Иначе polling каждые 100ms
     const interval = setInterval(() => {
       if (check()) clearInterval(interval);
     }, 100);
@@ -98,12 +113,9 @@ export function useTelegramAuth() {
     };
   }, []);
 
-  // Кэшируем userData в sessionStorage при изменении
   useEffect(() => {
     if (userData) {
-      try {
-        sessionStorage.setItem("harf_user", JSON.stringify(userData));
-      } catch {}
+      try { sessionStorage.setItem("harf_user", JSON.stringify(userData)); } catch {}
     }
   }, [userData]);
 
