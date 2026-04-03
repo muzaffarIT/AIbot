@@ -37,7 +37,6 @@ def create_submenu_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
                 [InlineKeyboardButton(text="🍌 Nano Banana — rasm (5 kr.)", callback_data="gen_start:nano_banana")],
                 [InlineKeyboardButton(text="🎬 Veo 3 — video 8s Google (30 kr.)", callback_data="gen_start:veo")],
                 [InlineKeyboardButton(text="🎥 Kling Motion — video (40 kr.)", callback_data="gen_start:kling")],
-                [InlineKeyboardButton(text="✨ Meni hayrat qoldiring", callback_data="surprise_me")],
                 [InlineKeyboardButton(text="← Orqaga", callback_data="start_menu")],
             ]
         )
@@ -46,7 +45,6 @@ def create_submenu_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🍌 Nano Banana — картинка (5 кр.)", callback_data="gen_start:nano_banana")],
             [InlineKeyboardButton(text="🎬 Veo 3 — видео 8 сек (30 кр.)", callback_data="gen_start:veo")],
             [InlineKeyboardButton(text="🎥 Kling Motion — видео (40 кр.)", callback_data="gen_start:kling")],
-            [InlineKeyboardButton(text="✨ Удиви меня", callback_data="surprise_me")],
             [InlineKeyboardButton(text="← Назад", callback_data="start_menu")],
         ]
     )

@@ -88,9 +88,25 @@ class ManualPaymentService:
 
             # Check if user already has a pending payment
             from backend.db.repositories.payments import PaymentRepository
+            from backend.db.repositories.orders import OrderRepository as _OrderRepo
             from shared.enums.payment_status import PaymentStatus
+            from shared.enums.order_status import OrderStatus as _OrderStatus
+            from datetime import datetime, timezone, timedelta
             pay_repo = PaymentRepository(db)
             existing = pay_repo.get_pending_manual_payment(user.id)
+
+            # Auto-cancel payments older than 24 hours
+            if existing:
+                age = datetime.now(timezone.utc) - existing.created_at.replace(tzinfo=timezone.utc)
+                if age > timedelta(hours=24):
+                    pay_repo.update_status(existing, PaymentStatus.CANCELLED)
+                    order_repo2 = _OrderRepo(db)
+                    order2 = order_repo2.get_by_id(existing.order_id)
+                    if order2:
+                        order_repo2.update_status(order2, _OrderStatus.CANCELLED)
+                    db.commit()
+                    existing = None
+
             if existing:
                 await bot.send_message(
                     chat_id,

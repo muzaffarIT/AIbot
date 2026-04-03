@@ -49,9 +49,18 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
 
 @router.callback_query(F.data == "menu_create")
 async def process_menu_create(callback: CallbackQuery) -> None:
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
+
+    title = "🎨 <b>Turni tanlang:</b>" if lang == "uz" else "🎨 <b>Выбери тип генерации:</b>"
     await callback.message.edit_text(
-        "🎨 <b>Выбери тип генерации:</b>",
-        reply_markup=create_submenu_keyboard(),
+        title,
+        reply_markup=create_submenu_keyboard(lang),
         parse_mode="HTML",
     )
     await callback.answer()
