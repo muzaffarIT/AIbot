@@ -87,7 +87,7 @@ function fmtUzs(n: number) {
 }
 
 export default function PlansPage() {
-  const { language, userData } = useMiniAppUser();
+  const { language, backendUser: userData } = useMiniAppUser();
   const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [buyError, setBuyError] = useState("");
