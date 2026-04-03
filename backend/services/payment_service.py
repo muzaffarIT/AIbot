@@ -1,9 +1,11 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.db.repositories.orders import OrderRepository
 from backend.db.repositories.payments import PaymentRepository
 from backend.db.repositories.plans import PlanRepository
 from backend.models.payment import Payment
+from backend.models.credit_transaction import CreditTransaction
 from shared.dto.payment_payloads import PaymentWebhookEvent
 from shared.enums.payment_status import PaymentStatus
 from shared.enums.credit_transaction_type import CreditTransactionType
@@ -13,6 +15,7 @@ from backend.services.order_service import OrderService
 
 class PaymentService:
     def __init__(self, db: Session) -> None:
+        self.db = db
         self.repo = PaymentRepository(db)
         self.order_repo = OrderRepository(db)
         self.plan_repo = PlanRepository(db)
@@ -94,14 +97,23 @@ class PaymentService:
         updated_payment = self.repo.update_status(payment, PaymentStatus.PAID)
         self.order_service.mark_order_paid(order.id)
 
-        self.balance_service.add_credits(
-            user_id=order.user_id,
-            amount=plan.credits_amount,
-            transaction_type=CreditTransactionType.TOPUP,
-            reference_type="payment",
-            reference_id=str(updated_payment.id),
-            comment=f"Credits added after successful payment for plan {plan.code}",
-        )
+        # Double payment protection: skip if credits were already added for this payment
+        already_credited = self.db.execute(
+            select(CreditTransaction).where(
+                CreditTransaction.reference_type == "payment",
+                CreditTransaction.reference_id == str(updated_payment.id),
+            )
+        ).scalar_one_or_none()
+
+        if not already_credited:
+            self.balance_service.add_credits(
+                user_id=order.user_id,
+                amount=plan.credits_amount,
+                transaction_type=CreditTransactionType.TOPUP,
+                reference_type="payment",
+                reference_id=str(updated_payment.id),
+                comment=f"Credits added after successful payment for plan {plan.code}",
+            )
 
         return updated_payment
 

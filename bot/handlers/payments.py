@@ -36,8 +36,16 @@ async def web_app_data_handler(message: Message, bot: Bot) -> None:
                     telegram_user_id=message.from_user.id,
                     package_id=package_id,
                 )
+            else:
+                await message.answer("⚠️ Неизвестный тариф. Попробуйте снова.")
     except Exception as e:
         logger.error(f"web_app_data_handler error: {e}")
+        try:
+            await message.answer(
+                "⚠️ Произошла ошибка при создании заявки. Попробуйте ещё раз или обратитесь в поддержку."
+            )
+        except Exception:
+            pass
 
 
 def _is_admin(user_id: int) -> bool:

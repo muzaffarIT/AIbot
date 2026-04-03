@@ -85,7 +85,7 @@ def check_and_award_achievements(
     purchase_count = db.execute(
         select(sqlfunc.count()).where(
             CreditTransaction.user_id == user_id,
-            CreditTransaction.transaction_type == "telegram_stars_purchase",
+            CreditTransaction.reference_type == "payment",
         )
     ).scalar() or 0
 

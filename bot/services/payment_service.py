@@ -238,6 +238,31 @@ class ManualPaymentService:
                 except Exception as e:
                     logger.error(f"Failed to notify user {user.telegram_user_id}: {e}")
 
+                # Check and award achievements after payment
+                try:
+                    from bot.services.achievements import check_and_award_achievements
+                    newly_awarded = check_and_award_achievements(
+                        db=db,
+                        user_id=order.user_id,
+                        telegram_id=user.telegram_user_id,
+                        lang=user.language_code or "ru",
+                    )
+                    db.commit()
+                    for ach, bonus in newly_awarded:
+                        try:
+                            await bot.send_message(
+                                user.telegram_user_id,
+                                f"🏆 <b>Достижение разблокировано!</b>\n\n"
+                                f"{ach.emoji} <b>{ach.name_ru}</b>\n"
+                                f"{ach.description_ru}\n"
+                                f"💰 +{bonus} кредитов",
+                                parse_mode="HTML",
+                            )
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logger.error(f"Achievement check error after payment: {e}")
+
             return {"payment_id": payment_id, "balance": balance}
 
         except Exception as e:
