@@ -1,10 +1,19 @@
+import logging
+
+import httpx
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.api.deps import get_db
+from backend.core.config import settings
 from backend.services.payment_service import PaymentService
+from backend.services.order_service import OrderService
+from backend.services.user_service import UserService
+from backend.db.repositories.payments import PaymentRepository
+from shared.enums.payment_status import PaymentStatus
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -87,5 +96,161 @@ def confirm_payment(payment_id: int, db: Session = Depends(get_db)) -> dict:
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        db.close()
+
+
+class CreateManualPaymentRequest(BaseModel):
+    telegram_user_id: int
+    plan_code: str
+
+
+@router.post("/create-manual")
+def create_manual_payment(payload: CreateManualPaymentRequest, db: Session = Depends(get_db)) -> dict:
+    """Create order + payment for manual card flow. Returns card details."""
+    try:
+        user_service = UserService(db)
+        order_service = OrderService(db)
+        payment_service = PaymentService(db)
+        pay_repo = PaymentRepository(db)
+
+        user = user_service.get_user_by_telegram_id(payload.telegram_user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Return existing pending payment instead of creating duplicate
+        existing = pay_repo.get_pending_manual_payment(user.id)
+        if existing:
+            from backend.db.repositories.orders import OrderRepository
+            from backend.db.repositories.plans import PlanRepository
+            order_repo = OrderRepository(db)
+            plan_repo = PlanRepository(db)
+            order = order_repo.get_by_id(existing.order_id)
+            plan = plan_repo.get_by_id(order.plan_id) if order else None
+            return {
+                "payment_id": existing.id,
+                "order_id": order.id if order else None,
+                "order_number": order.order_number if order else None,
+                "amount": existing.amount,
+                "currency": existing.currency,
+                "credits": plan.credits_amount if plan else 0,
+                "plan_name": plan.name if plan else None,
+                "plan_code": plan.code if plan else None,
+                "card_number": settings.card_number or "",
+                "card_owner": settings.card_owner or "",
+                "visa_card_number": settings.visa_card_number or "",
+                "visa_card_owner": settings.visa_card_owner or "",
+                "already_pending": True,
+            }
+
+        order = order_service.create_order_for_plan(
+            user_id=user.id,
+            plan_code=payload.plan_code,
+            payment_method="manual_card",
+        )
+        payment = payment_service.create_payment_for_order(
+            order_id=order.id,
+            provider="manual",
+            method="card",
+        )
+        db.commit()
+
+        from backend.db.repositories.plans import PlanRepository
+        plan = PlanRepository(db).get_by_id(order.plan_id)
+
+        return {
+            "payment_id": payment.id,
+            "order_id": order.id,
+            "order_number": order.order_number,
+            "amount": payment.amount,
+            "currency": payment.currency,
+            "credits": plan.credits_amount if plan else 0,
+            "plan_name": plan.name if plan else None,
+            "plan_code": plan.code if plan else None,
+            "card_number": settings.card_number or "",
+            "card_owner": settings.card_owner or "",
+            "visa_card_number": settings.visa_card_number or "",
+            "visa_card_owner": settings.visa_card_owner or "",
+            "already_pending": False,
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"create_manual_payment error: {e}")
+        raise HTTPException(status_code=500, detail="Не удалось создать заявку")
+    finally:
+        db.close()
+
+
+@router.post("/{payment_id}/notify-paid")
+async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
+    """User claims they paid. Mark as processing and notify admins via Telegram."""
+    try:
+        pay_repo = PaymentRepository(db)
+        payment = pay_repo.get_by_id(payment_id)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if payment.status == PaymentStatus.PAID:
+            return {"status": "already_paid"}
+
+        if payment.status not in (PaymentStatus.CREATED, PaymentStatus.PROCESSING):
+            raise HTTPException(status_code=400, detail="Payment cannot be notified")
+
+        pay_repo.update_status(payment, PaymentStatus.PROCESSING)
+        db.commit()
+
+        from backend.db.repositories.orders import OrderRepository
+        from backend.db.repositories.plans import PlanRepository
+        order_repo = OrderRepository(db)
+        plan_repo = PlanRepository(db)
+
+        order = order_repo.get_by_id(payment.order_id)
+        plan = plan_repo.get_by_id(order.plan_id) if order else None
+        user = UserService(db).get_user_by_id(order.user_id) if order else None
+
+        if settings.bot_token and settings.admin_ids_list and user:
+            plan_name = plan.name if plan else "—"
+            amount_fmt = f"{int(payment.amount):,}".replace(",", " ")
+            uname = f"@{user.username}" if user.username else "—"
+            full_name = user.first_name or "—"
+            import json as _json
+            confirm_kb = _json.dumps({"inline_keyboard": [[
+                {"text": "✅ Подтвердить", "callback_data": f"manual_confirm:{payment_id}"},
+                {"text": "❌ Отклонить", "callback_data": f"manual_reject_menu:{payment_id}"},
+            ]]})
+            for admin_id in settings.admin_ids_list:
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        await client.post(
+                            f"https://api.telegram.org/bot{settings.bot_token}/sendMessage",
+                            json={
+                                "chat_id": admin_id,
+                                "text": (
+                                    f"⚡ <b>НОВАЯ ОПЛАТА #{payment_id}</b>\n\n"
+                                    f"👤 {full_name}\n"
+                                    f"🔗 {uname}\n"
+                                    f"🆔 <code>{user.telegram_user_id}</code>\n\n"
+                                    f"📦 {plan_name}\n"
+                                    f"💰 {amount_fmt} сум\n\n"
+                                    f"Проверь карту и нажми кнопку:"
+                                ),
+                                "parse_mode": "HTML",
+                                "reply_markup": confirm_kb,
+                            },
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to notify admin {admin_id}: {e}")
+
+        return {"status": "notified", "payment_id": payment_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"notify_paid error: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка уведомления")
     finally:
         db.close()

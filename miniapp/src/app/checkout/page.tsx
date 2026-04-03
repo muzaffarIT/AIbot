@@ -9,12 +9,15 @@ type CheckoutPageProps = {
     orderId?: string;
     orderNumber?: string;
     paymentId?: string;
+    cardNumber?: string;
+    cardOwner?: string;
+    visaCardNumber?: string;
+    visaCardOwner?: string;
+    alreadyPending?: string;
   }>;
 };
 
-export default async function CheckoutPage({
-  searchParams,
-}: CheckoutPageProps) {
+export default async function CheckoutPage({ searchParams }: CheckoutPageProps) {
   const params = await searchParams;
 
   return (
@@ -26,6 +29,11 @@ export default async function CheckoutPage({
       orderId={params.orderId}
       orderNumber={params.orderNumber}
       paymentId={params.paymentId}
+      cardNumber={params.cardNumber}
+      cardOwner={params.cardOwner}
+      visaCardNumber={params.visaCardNumber}
+      visaCardOwner={params.visaCardOwner}
+      alreadyPending={params.alreadyPending}
     />
   );
 }

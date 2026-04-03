@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, Zap, CreditCard } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
+import { api } from "@/lib/api";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -84,13 +87,35 @@ function fmtUzs(n: number) {
 }
 
 export default function PlansPage() {
-  const { language } = useMiniAppUser();
+  const { language, userData } = useMiniAppUser();
+  const router = useRouter();
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [buyError, setBuyError] = useState("");
 
-  const handleBuy = (planId: string) => {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg?.sendData) {
-      tg.sendData(JSON.stringify({ action: "buy_plan", package_id: planId }));
-      tg.close();
+  const handleBuy = async (planId: string) => {
+    if (!userData?.telegram_user_id) {
+      setBuyError(language === "uz" ? "Foydalanuvchi topilmadi" : "Пользователь не найден");
+      return;
+    }
+    try {
+      setLoadingPlan(planId);
+      setBuyError("");
+      const result = await api.createManualPayment({
+        telegram_user_id: userData.telegram_user_id,
+        plan_code: planId,
+      });
+      router.push(
+        `/checkout?paymentId=${result.payment_id}&orderId=${result.order_id}` +
+        `&orderNumber=${encodeURIComponent(result.order_number ?? "")}&planName=${encodeURIComponent(result.plan_name ?? "")}` +
+        `&credits=${result.credits}&amount=${result.amount}&currency=${encodeURIComponent(result.currency ?? "UZS")}` +
+        `&cardNumber=${encodeURIComponent(result.card_number ?? "")}&cardOwner=${encodeURIComponent(result.card_owner ?? "")}` +
+        `&visaCardNumber=${encodeURIComponent(result.visa_card_number ?? "")}&visaCardOwner=${encodeURIComponent(result.visa_card_owner ?? "")}` +
+        `&alreadyPending=${result.already_pending ? "1" : "0"}`
+      );
+    } catch {
+      setBuyError(language === "uz" ? "Xatolik yuz berdi. Qayta urinib ko'ring." : "Ошибка при создании заявки. Попробуйте снова.");
+    } finally {
+      setLoadingPlan(null);
     }
   };
 
@@ -123,10 +148,16 @@ export default function PlansPage() {
           <CreditCard className="text-brand-cyan shrink-0" size={22} />
           <p className="text-sm text-white/70">
             {language === "uz"
-              ? "To'lov karta orqali. Tanlangandan so'ng botda karta raqami ko'rsatiladi."
-              : "Оплата по карте. После выбора бот пришлёт реквизиты карты."}
+              ? "To'lov karta orqali. Tanlangandan so'ng karta raqami ko'rsatiladi."
+              : "Оплата по карте. После выбора появятся реквизиты для оплаты."}
           </p>
         </motion.div>
+
+        {buyError && (
+          <motion.div variants={itemVariants} className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+            {buyError}
+          </motion.div>
+        )}
 
         {/* Packages */}
         <motion.div variants={itemVariants} className="space-y-4">
@@ -172,10 +203,13 @@ export default function PlansPage() {
 
                 <button
                   onClick={() => handleBuy(plan.id)}
-                  className={`mt-2 flex items-center justify-center gap-2 font-bold px-4 py-3 rounded-xl transition-all active:scale-95 w-full ${plan.btnClass}`}
+                  disabled={loadingPlan !== null}
+                  className={`mt-2 flex items-center justify-center gap-2 font-bold px-4 py-3 rounded-xl transition-all active:scale-95 w-full disabled:opacity-60 ${plan.btnClass}`}
                 >
                   <CreditCard size={16} />
-                  {fmtUzs(plan.priceUzs)}
+                  {loadingPlan === plan.id
+                    ? (language === "uz" ? "Yuklanmoqda..." : "Загрузка...")
+                    : fmtUzs(plan.priceUzs)}
                 </button>
               </div>
             </div>

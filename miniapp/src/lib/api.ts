@@ -108,6 +108,22 @@ export type PaymentResponse = {
   plan_name?: string;
 };
 
+export type ManualPaymentResult = {
+  payment_id: number;
+  order_id: number;
+  order_number: string;
+  amount: number;
+  currency: string;
+  credits: number;
+  plan_name: string;
+  plan_code: string;
+  card_number: string;
+  card_owner: string;
+  visa_card_number: string;
+  visa_card_owner: string;
+  already_pending: boolean;
+};
+
 export type AchievementItem = {
   code: string;
   name: string;
@@ -214,6 +230,17 @@ export const api = {
 
   getOrders: (telegramId: number, limit = 10) =>
     request<OrdersResponse>(`/api/orders/telegram/${telegramId}?limit=${limit}`),
+
+  createManualPayment: (data: { telegram_user_id: number; plan_code: string }) =>
+    request<ManualPaymentResult>("/api/payments/create-manual", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  notifyPaid: (paymentId: number) =>
+    request<{ status: string; payment_id: number }>(`/api/payments/${paymentId}/notify-paid`, {
+      method: "POST",
+    }),
 };
 
 // ─── Legacy named exports (used by existing pages) ────────────────────────────
