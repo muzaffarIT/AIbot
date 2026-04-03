@@ -241,6 +241,11 @@ export const api = {
     request<{ status: string; payment_id: number }>(`/api/payments/${paymentId}/notify-paid`, {
       method: "POST",
     }),
+
+  cancelPayment: (paymentId: number) =>
+    request<{ status: string; payment_id: number }>(`/api/payments/${paymentId}/cancel`, {
+      method: "POST",
+    }),
 };
 
 // ─── Legacy named exports (used by existing pages) ────────────────────────────

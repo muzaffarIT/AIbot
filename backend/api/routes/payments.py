@@ -212,7 +212,15 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
         plan = plan_repo.get_by_id(order.plan_id) if order else None
         user = UserService(db).get_user_by_id(order.user_id) if order else None
 
-        if settings.bot_token and settings.admin_ids_list and user:
+        if not settings.bot_token:
+            logger.error("notify_paid: BOT_TOKEN not configured in environment")
+            return {"status": "notified", "payment_id": payment_id, "warn": "BOT_TOKEN missing"}
+
+        if not settings.admin_ids_list:
+            logger.error("notify_paid: ADMIN_IDS not configured in environment")
+            return {"status": "notified", "payment_id": payment_id, "warn": "ADMIN_IDS missing"}
+
+        if user:
             plan_name = plan.name if plan else "—"
             amount_fmt = f"{int(payment.amount):,}".replace(",", " ")
             uname = f"@{user.username}" if user.username else "—"
@@ -225,7 +233,7 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
             for admin_id in settings.admin_ids_list:
                 try:
                     async with httpx.AsyncClient(timeout=10) as client:
-                        await client.post(
+                        resp = await client.post(
                             f"https://api.telegram.org/bot{settings.bot_token}/sendMessage",
                             json={
                                 "chat_id": admin_id,
@@ -242,6 +250,8 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
                                 "reply_markup": confirm_kb,
                             },
                         )
+                        if not resp.is_success:
+                            logger.error(f"Telegram API error for admin {admin_id}: {resp.text}")
                 except Exception as e:
                     logger.error(f"Failed to notify admin {admin_id}: {e}")
 
@@ -252,5 +262,39 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
         db.rollback()
         logger.error(f"notify_paid error: {e}")
         raise HTTPException(status_code=500, detail="Ошибка уведомления")
+    finally:
+        db.close()
+
+
+@router.post("/{payment_id}/cancel")
+def cancel_payment(payment_id: int, db: Session = Depends(get_db)) -> dict:
+    """User cancels their own pending payment."""
+    try:
+        from backend.db.repositories.orders import OrderRepository
+        from shared.enums.order_status import OrderStatus
+
+        pay_repo = PaymentRepository(db)
+        order_repo = OrderRepository(db)
+
+        payment = pay_repo.get_by_id(payment_id)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if payment.status not in (PaymentStatus.CREATED, PaymentStatus.PROCESSING):
+            raise HTTPException(status_code=400, detail="Cannot cancel payment in this state")
+
+        pay_repo.update_status(payment, PaymentStatus.CANCELLED)
+        order = order_repo.get_by_id(payment.order_id)
+        if order:
+            order_repo.update_status(order, OrderStatus.CANCELLED)
+        db.commit()
+
+        return {"status": "cancelled", "payment_id": payment_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"cancel_payment error: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка отмены")
     finally:
         db.close()

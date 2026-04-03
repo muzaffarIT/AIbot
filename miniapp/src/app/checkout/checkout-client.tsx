@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
+import { api } from "@/lib/api";
 
 type CheckoutClientProps = {
   planName?: string;
@@ -38,13 +40,31 @@ export default function CheckoutClient({
   alreadyPending,
 }: CheckoutClientProps) {
   const { language } = useMiniAppUser();
+  const router = useRouter();
   const [notified, setNotified] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
   const [error, setError] = useState("");
 
   const parsedAmount = Number(amount || "0");
   const parsedPaymentId = Number(paymentId || "0");
   const isRu = language !== "uz";
+
+  async function handleCancel() {
+    if (!parsedPaymentId) return;
+    try {
+      setCancelling(true);
+      setError("");
+      await api.cancelPayment(parsedPaymentId);
+      setCancelled(true);
+      setTimeout(() => router.push("/plans"), 1500);
+    } catch (e: any) {
+      setError(e?.message ?? (isRu ? "Ошибка отмены" : "Bekor qilishda xatolik"));
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   async function handlePaid() {
     if (!parsedPaymentId) return;
@@ -115,11 +135,28 @@ export default function CheckoutClient({
           )}
         </div>
 
-        {alreadyPending === "1" && (
-          <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300">
-            {isRu
-              ? "⚠️ У вас уже есть активная заявка на оплату. Оплатите по реквизитам ниже и нажмите «Я оплатил»."
-              : "⚠️ Sizda allaqachon faol to'lov arizasi mavjud. Quyidagi ma'lumotlar bo'yicha to'lang."}
+        {alreadyPending === "1" && !cancelled && (
+          <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300 space-y-3">
+            <p>
+              {isRu
+                ? "⚠️ У вас уже есть активная заявка. Оплатите по реквизитам ниже или отмените её."
+                : "⚠️ Sizda allaqachon faol ariza mavjud. Quyida to'lang yoki bekor qiling."}
+            </p>
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="w-full py-2 rounded-xl bg-white/10 text-white/70 text-sm font-medium hover:bg-white/15 transition-colors disabled:opacity-50"
+            >
+              {cancelling
+                ? (isRu ? "Отмена..." : "Bekor qilinmoqda...")
+                : (isRu ? "✕ Отменить заявку и выбрать другой тариф" : "✕ Arizani bekor qilish")}
+            </button>
+          </div>
+        )}
+
+        {cancelled && (
+          <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-sm text-green-300 text-center">
+            {isRu ? "✓ Заявка отменена. Переходим к тарифам..." : "✓ Ariza bekor qilindi..."}
           </div>
         )}
 
