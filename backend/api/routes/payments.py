@@ -220,6 +220,9 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
             logger.error("notify_paid: ADMIN_IDS not configured in environment")
             return {"status": "notified", "payment_id": payment_id, "warn": "ADMIN_IDS missing"}
 
+        bot_token = settings.bot_token.strip()
+        tg_errors = []
+
         if user:
             plan_name = plan.name if plan else "—"
             amount_fmt = f"{int(payment.amount):,}".replace(",", " ")
@@ -234,7 +237,7 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
                 try:
                     async with httpx.AsyncClient(timeout=10) as client:
                         resp = await client.post(
-                            f"https://api.telegram.org/bot{settings.bot_token}/sendMessage",
+                            f"https://api.telegram.org/bot{bot_token}/sendMessage",
                             json={
                                 "chat_id": admin_id,
                                 "text": (
@@ -251,11 +254,18 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
                             },
                         )
                         if not resp.is_success:
-                            logger.error(f"Telegram API error for admin {admin_id}: {resp.text}")
+                            err = f"admin {admin_id}: {resp.text}"
+                            logger.error(f"Telegram API error — {err}")
+                            tg_errors.append(err)
                 except Exception as e:
-                    logger.error(f"Failed to notify admin {admin_id}: {e}")
+                    err = f"admin {admin_id}: {e}"
+                    logger.error(f"Failed to notify — {err}")
+                    tg_errors.append(err)
 
-        return {"status": "notified", "payment_id": payment_id}
+        result: dict = {"status": "notified", "payment_id": payment_id}
+        if tg_errors:
+            result["tg_errors"] = tg_errors
+        return result
     except HTTPException:
         raise
     except Exception as e:
