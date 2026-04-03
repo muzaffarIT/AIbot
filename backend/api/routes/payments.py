@@ -118,8 +118,21 @@ def create_manual_payment(payload: CreateManualPaymentRequest, db: Session = Dep
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Auto-cancel pending payments older than 24h
+        from datetime import datetime, timezone, timedelta
+        from shared.enums.order_status import OrderStatus as _OS
+        stale = pay_repo.get_pending_manual_payment(user.id)
+        if stale:
+            age = datetime.now(timezone.utc) - stale.created_at.replace(tzinfo=timezone.utc)
+            if age > timedelta(hours=24):
+                from backend.db.repositories.orders import OrderRepository as _OR2
+                pay_repo.update_status(stale, PaymentStatus.CANCELLED)
+                _OR2(db).update_status(_OR2(db).get_by_id(stale.order_id), _OS.CANCELLED)
+                db.commit()
+                stale = None
+
         # Return existing pending payment instead of creating duplicate
-        existing = pay_repo.get_pending_manual_payment(user.id)
+        existing = stale
         if existing:
             from backend.db.repositories.orders import OrderRepository
             from backend.db.repositories.plans import PlanRepository

@@ -69,6 +69,20 @@ def sync_user(payload: SyncUserRequest, token_user: dict = Depends(verify_tma_au
                 last_name=payload.last_name,
                 language_code=payload.language_code,
             )
+
+            # Award any earned-but-unclaimed achievements silently on sync
+            try:
+                from bot.services.achievements import check_and_award_achievements
+                check_and_award_achievements(
+                    db=db,
+                    user_id=user.id,
+                    telegram_id=user.telegram_user_id,
+                    lang=user.language_code or "ru",
+                )
+                db.commit()
+            except Exception:
+                pass  # Never crash sync due to achievement errors
+
             credits_balance = balance_service.get_balance_value(user.id)
             referral_count = get_referral_count(db, user.telegram_user_id)
             return serialize_user(user, credits_balance, referral_count)

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { motion, type Variants } from "framer-motion";
-import { Clock, CheckCircle2, XCircle, RefreshCcw, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, RefreshCcw, AlertCircle, Image as ImageIcon, ExternalLink } from "lucide-react";
 import { useTelegramAuth } from "@/hooks/useTelegramAuth";
 import { api, type GenerationJob } from "@/lib/api";
 
@@ -93,52 +93,65 @@ export default function JobsPage() {
         {jobs.length ? (
           <motion.div variants={itemVariants} className="space-y-3">
             {jobs.map((job) => (
-              <div
-                key={job.id}
-                className="glass-card p-4 flex gap-3"
-              >
-                {/* Preview thumbnail (only for image providers) */}
-                {job.result_url && job.provider !== "veo" && (
-                  <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5">
-                    <Image
-                      src={job.result_url}
-                      alt="Результат"
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
-                  </div>
-                )}
+              <div key={job.id} className="glass-card p-4 flex flex-col gap-3">
+                <div className="flex gap-3">
+                  {/* Preview thumbnail (only for image providers) */}
+                  {job.result_url && job.provider === "nano_banana" && (
+                    <a href={job.result_url} target="_blank" rel="noreferrer"
+                       className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5 block">
+                      <Image
+                        src={job.result_url}
+                        alt="Результат"
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </a>
+                  )}
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <StatusIcon status={job.status} />
-                    <span className="text-sm font-semibold text-white">
-                      {providerLabel(job.provider)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <StatusIcon status={job.status} />
+                      <span className="text-sm font-semibold text-white">
+                        {providerLabel(job.provider)}
+                      </span>
+                    </div>
+                    {(job as any).original_prompt || job.prompt ? (
+                      <p className="text-xs text-white/50 truncate">
+                        {((job as any).original_prompt || job.prompt || "").slice(0, 60)}
+                      </p>
+                    ) : null}
+                    <p className="text-[11px] text-white/30 mt-1">{formatDate(job.created_at)}</p>
+                  </div>
+
+                  <div className="shrink-0 flex flex-col items-end justify-between">
+                    <span
+                      className={`text-xs font-bold ${
+                        job.status === "completed"
+                          ? "text-green-400"
+                          : job.status === "failed"
+                          ? "text-red-400"
+                          : "text-amber-400"
+                      }`}
+                    >
+                      {statusLabel(job.status)}
                     </span>
+                    <span className="text-[10px] text-white/20 font-mono">#{job.id}</span>
                   </div>
-                  {(job as any).original_prompt || job.prompt ? (
-                    <p className="text-xs text-white/50 truncate">
-                      {((job as any).original_prompt || job.prompt || "").slice(0, 60)}
-                    </p>
-                  ) : null}
-                  <p className="text-[11px] text-white/30 mt-1">{formatDate(job.created_at)}</p>
                 </div>
 
-                <div className="shrink-0 flex flex-col items-end justify-between">
-                  <span
-                    className={`text-xs font-bold ${
-                      job.status === "completed"
-                        ? "text-green-400"
-                        : job.status === "failed"
-                        ? "text-red-400"
-                        : "text-amber-400"
-                    }`}
+                {/* Open result button */}
+                {job.status === "completed" && job.result_url && (
+                  <a
+                    href={job.result_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-2 py-2 rounded-xl bg-brand-primary/20 border border-brand-primary/30 text-brand-cyan text-sm font-semibold hover:bg-brand-primary/30 transition-colors"
                   >
-                    {statusLabel(job.status)}
-                  </span>
-                  <span className="text-[10px] text-white/20 font-mono">#{job.id}</span>
-                </div>
+                    <ExternalLink size={14} />
+                    {job.provider === "nano_banana" ? "Открыть картинку" : "Открыть видео"}
+                  </a>
+                )}
               </div>
             ))}
           </motion.div>

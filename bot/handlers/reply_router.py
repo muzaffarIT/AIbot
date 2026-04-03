@@ -88,6 +88,16 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
             from bot.handlers.referral import _send_referral_info
             await _send_referral_info(message.from_user.id, message, bot)
 
+        elif action == "menu_language":
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            await message.answer(
+                "🌍 Выберите язык / Tilni tanlang:",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="🇷🇺 Русский", callback_data="set_lang:ru"),
+                    InlineKeyboardButton(text="🇺🇿 O'zbek", callback_data="set_lang:uz"),
+                ]])
+            )
+
         elif action == "menu_help":
             from bot.handlers.help import show_help_cmd
             await show_help_cmd(message)
