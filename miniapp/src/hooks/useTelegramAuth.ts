@@ -36,7 +36,7 @@ function getUser(tg: any): TgUser | null {
 
 function loadCachedUser(): BackendUser | null {
   try {
-    const s = sessionStorage.getItem("harf_user");
+    const s = localStorage.getItem("harf_user");
     return s ? (JSON.parse(s) as BackendUser) : null;
   } catch {
     return null;
@@ -126,7 +126,7 @@ export function useTelegramAuth() {
   useEffect(() => {
     if (userData) {
       try {
-        sessionStorage.setItem("harf_user", JSON.stringify(userData));
+        localStorage.setItem("harf_user", JSON.stringify(userData));
       } catch {}
     }
   }, [userData]);
