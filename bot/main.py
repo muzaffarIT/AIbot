@@ -29,6 +29,7 @@ from bot.handlers.balance import router as balance_router
 from bot.handlers.history import router as history_router
 from bot.handlers.admin import router as admin_router
 from bot.handlers.cabinet import router as cabinet_router
+from bot.handlers.language import router as language_router
 from bot.middlewares.rate_limit import GenerationRateLimitMiddleware
 
 load_dotenv()
@@ -60,6 +61,7 @@ async def main() -> None:
     dp.include_router(onboarding_router)   # 2. onboarding (Block 2)
     dp.include_router(start_router)        # 3. start
     dp.include_router(cabinet_router)      # 4. cabinet (🌐 mini app button)
+    dp.include_router(language_router)     # 5. language switcher
     dp.include_router(prompts_router)      # 5. surprise me
     dp.include_router(quality_router)      # 6. quality selection
     dp.include_router(callbacks_router)    # 7. callbacks

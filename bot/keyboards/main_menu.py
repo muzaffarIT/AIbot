@@ -2,9 +2,35 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from backend.core.config import settings
 
 
-def main_inline_keyboard() -> InlineKeyboardMarkup:
-    """Main menu inline keyboard — used everywhere instead of ReplyKeyboardMarkup."""
+def main_inline_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
+    """Main menu inline keyboard — bilingual (ru/uz)."""
     miniapp_url = (settings.miniapp_url or "").rstrip("/")
+    if lang == "uz":
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🎨 Yaratish", callback_data="menu_create"),
+                    InlineKeyboardButton(text="💎 Tariflar", callback_data="menu_plans"),
+                ],
+                [
+                    InlineKeyboardButton(text="📊 Ishlarim", callback_data="history_cmd"),
+                    InlineKeyboardButton(text="💰 Balans", callback_data="menu_balance"),
+                ],
+                [
+                    InlineKeyboardButton(text="👥 Hamkorlik", callback_data="menu_referral"),
+                    InlineKeyboardButton(text="❓ Yordam", callback_data="menu_help"),
+                ],
+                [
+                    InlineKeyboardButton(text="🌍 Til: O'zbek 🇺🇿", callback_data="menu_language"),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🌐 Kabinetni ochish",
+                        web_app=WebAppInfo(url=miniapp_url),
+                    ),
+                ],
+            ]
+        )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -18,6 +44,9 @@ def main_inline_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="👥 Партнёрам", callback_data="menu_referral"),
                 InlineKeyboardButton(text="❓ Помощь", callback_data="menu_help"),
+            ],
+            [
+                InlineKeyboardButton(text="🌍 Язык: Русский 🇷🇺", callback_data="menu_language"),
             ],
             [
                 InlineKeyboardButton(

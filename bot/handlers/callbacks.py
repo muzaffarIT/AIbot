@@ -31,17 +31,30 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
             first_name=callback.from_user.first_name,
             last_name=callback.from_user.last_name,
         )
+        lang = (user.language_code if user else None) or "ru"
         credits = balance_service.get_balance_value(user.id)
-        name = user.first_name or callback.from_user.username or "друг"
+        name = user.first_name or callback.from_user.username or ("do'st" if lang == "uz" else "друг")
 
-        text = (
-            f"👋 Привет, <b>{name}</b>!\n"
-            f"Добро пожаловать в <b>HARF AI</b>.\n"
-            f"У тебя <b>{credits}</b> кредитов.\n\n"
-            f"Выбери действие:"
-        )
+        if lang == "uz":
+            text = (
+                f"👋 Salom, <b>{name}</b>!\n"
+                f"<b>HARF AI</b> ga xush kelibsiz.\n"
+                f"Sizda <b>{credits}</b> kredit bor.\n\n"
+                f"Nima qilamiz?"
+            )
+        else:
+            text = (
+                f"👋 Привет, <b>{name}</b>!\n"
+                f"Добро пожаловать в <b>HARF AI</b>.\n"
+                f"У тебя <b>{credits}</b> кредитов.\n\n"
+                f"Выбери действие:"
+            )
+        from bot.keyboards.main_menu import main_inline_keyboard
         await callback.message.edit_text(text, reply_markup=None, parse_mode="HTML")
-        await callback.message.answer("👇 Выберите действие в меню ниже:")
+        await callback.message.answer(
+            "👇 Выберите действие:" if lang == "ru" else "👇 Amalni tanlang:",
+            reply_markup=main_inline_keyboard(lang),
+        )
         await callback.answer()
     finally:
         db.close()
