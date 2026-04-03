@@ -11,26 +11,50 @@ export interface TgUser {
   language_code?: string;
 }
 
-/** Парсим user из initData напрямую (fallback если initDataUnsafe пуст) */
+/** Парсим user из initData (fallback для Telegram Desktop) */
 function parseUserFromInitData(initData: string): TgUser | null {
   try {
     const params = new URLSearchParams(initData);
-    const userJson = params.get("user");
-    if (!userJson) return null;
-    const u = JSON.parse(decodeURIComponent(userJson));
+    const raw = params.get("user");
+    if (!raw) return null;
+    // URLSearchParams.get() уже декодирует %, так что просто парсим
+    const u = JSON.parse(raw);
     if (u?.id) return u as TgUser;
   } catch {}
   return null;
 }
 
+function getUser(tg: any): TgUser | null {
+  if (!tg) return null;
+  // Метод 1: initDataUnsafe (стандартный)
+  const u = tg.initDataUnsafe?.user;
+  if (u?.id) return u as TgUser;
+  // Метод 2: парсим initData напрямую
+  if (tg.initData) return parseUserFromInitData(tg.initData);
+  return null;
+}
+
+function loadCachedUser(): BackendUser | null {
+  try {
+    const s = sessionStorage.getItem("harf_user");
+    return s ? (JSON.parse(s) as BackendUser) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useTelegramAuth() {
+  // Сразу грузим из кэша — не показываем лоадер при повторных заходах
   const [tgUser, setTgUser] = useState<TgUser | null>(null);
-  const [userData, setUserData] = useState<BackendUser | null>(null);
+  const [userData, setUserData] = useState<BackendUser | null>(loadCachedUser);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    // Если уже есть кэш — снимаем loading сразу, но всё равно пробуем обновить
+    if (userData) setLoading(false);
 
     const syncWithBackend = async (user: TgUser) => {
       try {
@@ -46,15 +70,8 @@ export function useTelegramAuth() {
           setError(null);
         }
       } catch (err: any) {
-        if (!cancelled) {
-          try {
-            const cached = sessionStorage.getItem("harf_user");
-            if (cached) {
-              setUserData(JSON.parse(cached) as BackendUser);
-              setError(null);
-              return;
-            }
-          } catch {}
+        // Если sync упал — не показываем ошибку если есть кэш
+        if (!cancelled && !userData) {
           setError(err?.message ?? "Ошибка синхронизации");
         }
       } finally {
@@ -62,25 +79,14 @@ export function useTelegramAuth() {
       }
     };
 
-    const getUser = (tg: any): TgUser | null => {
-      // Способ 1: initDataUnsafe (стандартный)
-      const u = tg?.initDataUnsafe?.user;
-      if (u?.id) return u as TgUser;
-
-      // Способ 2: парсим initData напрямую (fallback для Desktop)
-      if (tg?.initData) return parseUserFromInitData(tg.initData);
-
-      return null;
-    };
-
-    // Polling: ждём пока user станет доступен (до 3 секунд)
+    // Polling: ждём initData до 5 секунд (50 × 100ms)
     let attempts = 0;
-    const MAX_ATTEMPTS = 30;
+    const MAX_ATTEMPTS = 50;
 
     const check = (): boolean => {
       const tg = (window as any).Telegram?.WebApp;
-
       const user = getUser(tg);
+
       if (user) {
         tg.ready();
         tg.expand();
@@ -92,8 +98,11 @@ export function useTelegramAuth() {
       attempts++;
       if (attempts >= MAX_ATTEMPTS) {
         if (!cancelled) {
-          const tgExists = !!(window as any).Telegram?.WebApp;
-          setError(tgExists ? "Нет данных пользователя" : "Откройте через Telegram");
+          // Не показываем жёсткую ошибку если есть кэш
+          if (!loadCachedUser()) {
+            const tgExists = !!(window as any).Telegram?.WebApp;
+            setError(tgExists ? "Нет данных пользователя" : "Откройте через Telegram");
+          }
           setLoading(false);
         }
         return true;
@@ -111,11 +120,14 @@ export function useTelegramAuth() {
       cancelled = true;
       clearInterval(interval);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (userData) {
-      try { sessionStorage.setItem("harf_user", JSON.stringify(userData)); } catch {}
+      try {
+        sessionStorage.setItem("harf_user", JSON.stringify(userData));
+      } catch {}
     }
   }, [userData]);
 
