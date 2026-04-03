@@ -216,9 +216,13 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
             logger.error("notify_paid: BOT_TOKEN not configured in environment")
             return {"status": "notified", "payment_id": payment_id, "warn": "BOT_TOKEN missing"}
 
-        if not settings.admin_ids_list:
-            logger.error("notify_paid: ADMIN_IDS not configured in environment")
-            return {"status": "notified", "payment_id": payment_id, "warn": "ADMIN_IDS missing"}
+        # Determine recipients: group chat takes priority over individual admin IDs
+        notify_chat_id = settings.payment_notify_chat_id.strip() if settings.payment_notify_chat_id else ""
+        recipient_ids: list = [int(notify_chat_id)] if notify_chat_id else list(settings.admin_ids_list)
+
+        if not recipient_ids:
+            logger.error("notify_paid: neither PAYMENT_NOTIFY_CHAT_ID nor ADMIN_IDS configured")
+            return {"status": "notified", "payment_id": payment_id, "warn": "no recipients configured"}
 
         bot_token = settings.bot_token.strip()
         tg_errors = []
@@ -233,13 +237,13 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
                 {"text": "✅ Подтвердить", "callback_data": f"manual_confirm:{payment_id}"},
                 {"text": "❌ Отклонить", "callback_data": f"manual_reject_menu:{payment_id}"},
             ]]})
-            for admin_id in settings.admin_ids_list:
+            for chat_id in recipient_ids:
                 try:
                     async with httpx.AsyncClient(timeout=10) as client:
                         resp = await client.post(
                             f"https://api.telegram.org/bot{bot_token}/sendMessage",
                             json={
-                                "chat_id": admin_id,
+                                "chat_id": chat_id,
                                 "text": (
                                     f"⚡ <b>НОВАЯ ОПЛАТА #{payment_id}</b>\n\n"
                                     f"👤 {full_name}\n"
@@ -254,11 +258,11 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
                             },
                         )
                         if not resp.is_success:
-                            err = f"admin {admin_id}: {resp.text}"
+                            err = f"chat {chat_id}: {resp.text}"
                             logger.error(f"Telegram API error — {err}")
                             tg_errors.append(err)
                 except Exception as e:
-                    err = f"admin {admin_id}: {e}"
+                    err = f"chat {chat_id}: {e}"
                     logger.error(f"Failed to notify — {err}")
                     tg_errors.append(err)
 

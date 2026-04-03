@@ -46,6 +46,7 @@ class Settings(BaseSettings):
 
     payment_provider: str = "manual"
     admin_ids: str = ""
+    payment_notify_chat_id: str = ""  # Group/channel chat_id for payment notifications
 
     card_number: str = ""
     card_owner: str = ""
