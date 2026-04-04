@@ -5,9 +5,24 @@ import { useTelegramAuth } from "@/hooks/useTelegramAuth";
 import { updateLanguage, type BackendUser } from "@/lib/api";
 import { normalizeLanguage, type MiniAppLanguage } from "@/lib/miniapp-i18n";
 
+function loadCachedLanguage(): MiniAppLanguage {
+  try {
+    const l = localStorage.getItem("miniapp_language");
+    if (l === "uz" || l === "ru") return l;
+    // Fall back to cached user's language_code
+    const raw = localStorage.getItem("harf_user");
+    if (raw) {
+      const u = JSON.parse(raw);
+      const lang = normalizeLanguage(u?.language_code ?? "ru");
+      return lang;
+    }
+  } catch {}
+  return "ru";
+}
+
 export function useMiniAppUser() {
   const { tgUser, userData, loading, error, refresh } = useTelegramAuth();
-  const [language, setLanguage] = useState<MiniAppLanguage>("ru");
+  const [language, setLanguage] = useState<MiniAppLanguage>(loadCachedLanguage);
 
   // Синхронизируем язык из backend
   useEffect(() => {

@@ -30,7 +30,8 @@ class UserService:
                 username=username,
                 first_name=first_name,
                 last_name=last_name,
-                language_code=language_code,
+                # Preserve user's chosen language (set via bot); only set if not yet chosen
+                language_code=language_code if not user.language_code else None,
             )
             self.balance_service.get_or_create_balance(user.id)
             return user

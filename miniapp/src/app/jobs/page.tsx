@@ -48,6 +48,16 @@ function formatDate(d?: string | null) {
   });
 }
 
+/** Open URL in Telegram's internal browser (keeps user inside TG) */
+function openResult(url: string) {
+  const tg = (window as any).Telegram?.WebApp;
+  if (tg?.openLink) {
+    tg.openLink(url);
+  } else {
+    window.open(url, "_blank");
+  }
+}
+
 export default function JobsPage() {
   const { tgUser, userData, loading } = useTelegramAuth();
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
@@ -97,8 +107,10 @@ export default function JobsPage() {
                 <div className="flex gap-3">
                   {/* Preview thumbnail (only for image providers) */}
                   {job.result_url && job.provider === "nano_banana" && (
-                    <a href={job.result_url} target="_blank" rel="noreferrer"
-                       className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5 block">
+                    <button
+                      onClick={() => openResult(job.result_url!)}
+                      className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5 block"
+                    >
                       <Image
                         src={job.result_url}
                         alt="Результат"
@@ -106,7 +118,7 @@ export default function JobsPage() {
                         className="object-cover"
                         unoptimized
                       />
-                    </a>
+                    </button>
                   )}
 
                   <div className="flex-1 min-w-0">
@@ -142,15 +154,13 @@ export default function JobsPage() {
 
                 {/* Open result button */}
                 {job.status === "completed" && job.result_url && (
-                  <a
-                    href={job.result_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center gap-2 py-2 rounded-xl bg-brand-primary/20 border border-brand-primary/30 text-brand-cyan text-sm font-semibold hover:bg-brand-primary/30 transition-colors"
+                  <button
+                    onClick={() => openResult(job.result_url!)}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-brand-primary/20 border border-brand-primary/30 text-brand-cyan text-sm font-semibold hover:bg-brand-primary/30 transition-colors"
                   >
                     <ExternalLink size={14} />
                     {job.provider === "nano_banana" ? "Открыть картинку" : "Открыть видео"}
-                  </a>
+                  </button>
                 )}
               </div>
             ))}
