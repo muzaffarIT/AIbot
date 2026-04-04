@@ -4,32 +4,65 @@ import Link from "next/link";
 import { useState, useRef, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
-import { Sparkles, Image as ImageIcon, Video, AlertCircle, ArrowRight, Loader2, Upload, X } from "lucide-react";
+import { Sparkles, Image as ImageIcon, Video, AlertCircle, ArrowRight, Loader2, Upload, X, ChevronRight } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { createJob, type GenerationProvider } from "@/lib/api";
-import { t } from "@/lib/miniapp-i18n";
-
-const PROVIDERS: { id: GenerationProvider; type: "image" | "video"; icon: React.ElementType; popular?: boolean; label: string }[] = [
-  { id: "nano_banana", type: "image", icon: ImageIcon, popular: true, label: "🍌 Nano Banana" },
-  { id: "veo", type: "video", icon: Video, label: "🎬 Veo 3" },
-  { id: "kling", type: "video", icon: Video, popular: true, label: "🎥 Kling" },
-];
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
 };
-
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 15 },
+  hidden: { opacity: 0, y: 14 },
   visible: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
 };
+
+type AIOption = {
+  id: GenerationProvider;
+  label: string;
+  description: string;
+  type: "image" | "video";
+};
+
+type ModeOption = {
+  key: string;         // quality_key sent to backend
+  label: string;       // e.g. "Стандарт 1K"
+  detail: string;      // e.g. "720p · 8 сек"
+  cost: number;
+};
+
+const AI_LIST: AIOption[] = [
+  { id: "nano_banana", label: "🍌 Nano Banana",  description: "Генерация картинок",   type: "image" },
+  { id: "veo",         label: "🎬 Veo 3",         description: "Видео от Google",       type: "video" },
+  { id: "kling",       label: "🎥 Kling 3.0",     description: "Видео Kling Motion",    type: "video" },
+];
+
+const MODES: Record<GenerationProvider, ModeOption[]> = {
+  nano_banana: [
+    { key: "nano:std", label: "Стандарт 1K",  detail: "1024×1024",    cost: 5  },
+    { key: "nano:hd",  label: "HD 2K",         detail: "1536×1536",    cost: 10 },
+    { key: "nano:4k",  label: "4K",            detail: "2048×2048",    cost: 20 },
+  ],
+  veo: [
+    { key: "veo:fast",    label: "Fast 720p 8 сек",    detail: "720p · 8 сек · быстро",   cost: 30 },
+    { key: "veo:quality", label: "Quality 1080p 8 сек", detail: "1080p · 8 сек · качество", cost: 80 },
+  ],
+  kling: [
+    { key: "kling:std5",  label: "Стандарт 5 сек", detail: "Стандарт · 5 сек",  cost: 40  },
+    { key: "kling:pro5",  label: "Pro 5 сек",       detail: "Pro · 5 сек",       cost: 70  },
+    { key: "kling:pro10", label: "Pro 10 сек",      detail: "Pro · 10 сек",      cost: 120 },
+  ],
+};
+
+type Step = "ai" | "mode" | "prompt";
 
 export default function GeneratePage() {
   const router = useRouter();
   const { backendUser, language, loading: userLoading } = useMiniAppUser();
 
+  const [step, setStep] = useState<Step>("ai");
   const [provider, setProvider] = useState<GenerationProvider>("nano_banana");
+  const [modeKey, setModeKey] = useState<string>("");
   const [prompt, setPrompt] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
@@ -40,6 +73,21 @@ export default function GeneratePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const telegramUserId = backendUser?.telegram_user_id ?? null;
+  const credits = backendUser?.credits_balance ?? 0;
+
+  const selectedAI = AI_LIST.find((a) => a.id === provider)!;
+  const selectedMode = MODES[provider].find((m) => m.key === modeKey);
+
+  const handleSelectAI = (ai: AIOption) => {
+    setProvider(ai.id);
+    setModeKey("");
+    setStep("mode");
+  };
+
+  const handleSelectMode = (mode: ModeOption) => {
+    setModeKey(mode.key);
+    setStep("prompt");
+  };
 
   const handleImageSelect = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,11 +120,15 @@ export default function GeneratePage() {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("medium");
 
     if (!telegramUserId) {
-      setError(t(language, "jobs.telegramUnavailable"));
+      setError("Откройте через Telegram");
       return;
     }
     if (prompt.trim().length < 3) {
       setError("Промпт должен быть не короче 3 символов");
+      return;
+    }
+    if (!modeKey) {
+      setError("Выберите режим");
       return;
     }
 
@@ -88,6 +140,7 @@ export default function GeneratePage() {
       await createJob({
         telegram_user_id: telegramUserId,
         provider,
+        quality_key: modeKey,
         prompt: prompt.trim(),
         source_image_url: uploadedUrl ?? undefined,
       });
@@ -95,7 +148,7 @@ export default function GeneratePage() {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
       setTimeout(() => router.push("/jobs"), 1500);
     } catch {
-      setError(t(language, "jobs.failedCreate"));
+      setError("Не удалось создать задачу. Проверь баланс.");
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
       setSubmitting(false);
     }
@@ -115,10 +168,39 @@ export default function GeneratePage() {
 
         {/* Header */}
         <motion.div variants={itemVariants} className="flex items-center gap-3">
-          <Link href="/" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
-            <ArrowRight className="text-white rotate-180" size={20} />
-          </Link>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Создание нейроарта</h1>
+          {step === "ai" ? (
+            <Link href="/" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
+              <ArrowRight className="text-white rotate-180" size={20} />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setStep(step === "prompt" ? "mode" : "ai")}
+              className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            >
+              <ArrowRight className="text-white rotate-180" size={20} />
+            </button>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Создание</h1>
+            <p className="text-xs text-white/40 mt-0.5">
+              {step === "ai" && "Выберите нейросеть"}
+              {step === "mode" && `${selectedAI.label} — выберите режим`}
+              {step === "prompt" && `${selectedAI.label} · ${selectedMode?.label}`}
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Step indicator */}
+        <motion.div variants={itemVariants} className="flex gap-2">
+          {(["ai", "mode", "prompt"] as Step[]).map((s, i) => (
+            <div
+              key={s}
+              className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                step === s ? "bg-brand-primary" : i < ["ai","mode","prompt"].indexOf(step) ? "bg-brand-primary/40" : "bg-white/10"
+              }`}
+            />
+          ))}
         </motion.div>
 
         {error && (
@@ -140,104 +222,162 @@ export default function GeneratePage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-green-400">Генерация запущена!</h3>
-                <p className="text-green-400/70 text-sm mt-1">Ожидайте результат (~2 мин)...</p>
+                <p className="text-green-400/70 text-sm mt-1">Переходим к работам...</p>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <motion.form variants={itemVariants} className="space-y-6" onSubmit={handleSubmit}>
+        {/* STEP 1: Select AI */}
+        <AnimatePresence mode="wait">
+          {step === "ai" && (
+            <motion.div
+              key="step-ai"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-3"
+            >
+              {AI_LIST.map((ai) => (
+                <button
+                  key={ai.id}
+                  type="button"
+                  onClick={() => handleSelectAI(ai)}
+                  className="w-full glass-card p-4 flex items-center justify-between hover:bg-white/8 active:scale-[0.98] transition-all duration-200"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-2xl">
+                      {ai.type === "image" ? <ImageIcon className="text-brand-cyan" size={22} /> : <Video className="text-brand-cyan" size={22} />}
+                    </div>
+                    <div className="text-left">
+                      <div className="font-semibold text-white text-base">{ai.label}</div>
+                      <div className="text-xs text-white/50 mt-0.5">{ai.description}</div>
+                    </div>
+                  </div>
+                  <ChevronRight className="text-white/30" size={18} />
+                </button>
+              ))}
+            </motion.div>
+          )}
 
-          {/* Model Selection */}
-          <div className="space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-white/50 px-1">Выберите нейросеть</label>
-            <div className="grid grid-cols-3 gap-2">
-              {PROVIDERS.map((p) => {
-                const Icon = p.icon;
-                const isSelected = provider === p.id;
+          {/* STEP 2: Select Mode */}
+          {step === "mode" && (
+            <motion.div
+              key="step-mode"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-3"
+            >
+              <p className="text-xs text-white/40 px-1">Баланс: <span className="text-white/70 font-semibold">{credits} кр.</span></p>
+              {MODES[provider].map((mode) => {
+                const canAfford = credits >= mode.cost;
                 return (
                   <button
-                    key={p.id}
+                    key={mode.key}
                     type="button"
-                    onClick={() => setProvider(p.id)}
-                    className={`relative overflow-hidden text-center p-3 rounded-2xl border transition-all duration-300 ${isSelected ? 'bg-brand-primary/20 border-brand-primary shadow-[0_0_15px_rgba(124,58,237,0.2)]' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                    onClick={() => canAfford && handleSelectMode(mode)}
+                    className={`w-full glass-card p-4 flex items-center justify-between transition-all duration-200 ${
+                      canAfford ? "hover:bg-white/8 active:scale-[0.98]" : "opacity-40 cursor-not-allowed"
+                    }`}
                   >
-                    <Icon className={`mx-auto mb-1 ${isSelected ? 'text-brand-primary' : 'text-white/40'}`} size={20} />
-                    <div className={`font-semibold text-xs ${isSelected ? 'text-white' : 'text-white/60'}`}>{p.label}</div>
-                    {p.popular && (
-                      <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)]" />
-                    )}
+                    <div className="text-left">
+                      <div className="font-semibold text-white text-sm">{mode.label}</div>
+                      <div className="text-xs text-white/40 mt-0.5">{mode.detail}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-brand-cyan font-bold text-sm">{mode.cost} кр.</span>
+                      <ChevronRight className="text-white/30" size={18} />
+                    </div>
                   </button>
                 );
               })}
-            </div>
-          </div>
+            </motion.div>
+          )}
 
-          {/* Prompt + Image Upload row */}
-          <div className="space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-white/50 px-1">Промпт</label>
-            <div className="flex gap-3">
-              {/* Image Upload */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className={`relative rounded-2xl border transition-all cursor-pointer flex-shrink-0 ${imagePreview ? 'border-brand-primary/40' : 'border-dashed border-white/20 hover:border-white/40'} bg-white/5 flex flex-col items-center justify-center overflow-hidden`}
-                style={{ width: "80px", minHeight: "120px" }}
+          {/* STEP 3: Prompt */}
+          {step === "prompt" && !success && (
+            <motion.form
+              key="step-prompt"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-4"
+              onSubmit={handleSubmit}
+            >
+              {/* Selected summary */}
+              <div className="glass-card p-3 flex items-center justify-between">
+                <span className="text-xs text-white/50">Режим</span>
+                <span className="text-xs font-semibold text-brand-cyan">{selectedMode?.label} · {selectedMode?.cost} кр.</span>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-white/50 px-1">Промпт</label>
+                <div className="flex gap-3">
+                  {/* Image Upload */}
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`relative rounded-2xl border transition-all cursor-pointer flex-shrink-0 ${
+                      imagePreview ? "border-brand-primary/40" : "border-dashed border-white/20 hover:border-white/40"
+                    } bg-white/5 flex flex-col items-center justify-center overflow-hidden`}
+                    style={{ width: "80px", minHeight: "120px" }}
+                  >
+                    {uploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
+                        <Loader2 className="animate-spin text-brand-primary" size={18} />
+                      </div>
+                    )}
+                    {imagePreview ? (
+                      <>
+                        <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); clearImage(); }}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center"
+                        >
+                          <X size={10} className="text-white" />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-white/40">
+                        <Upload size={18} />
+                        <span className="text-[10px] text-center leading-tight">Фото</span>
+                      </div>
+                    )}
+                  </div>
+                  <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
+
+                  <textarea
+                    className="input-premium resize-none flex-1"
+                    style={{ minHeight: "120px" }}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Например: a futuristic cat in neon city, 4k, cinematic..."
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || !telegramUserId || uploading}
+                className="btn-primary w-full"
               >
-                {uploading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
-                    <Loader2 className="animate-spin text-brand-primary" size={18} />
+                {submitting ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="animate-spin" size={20} />
+                    <span>Генерирую...</span>
                   </div>
-                )}
-                {imagePreview ? (
-                  <>
-                    <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); clearImage(); }}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center"
-                    >
-                      <X size={10} className="text-white" />
-                    </button>
-                  </>
                 ) : (
-                  <div className="flex flex-col items-center gap-1 text-white/40">
-                    <Upload size={18} />
-                    <span className="text-[10px] text-center leading-tight">Фото</span>
-                  </div>
+                  <>
+                    <Sparkles className="mr-2" size={18} />
+                    Сгенерировать · {selectedMode?.cost} кр.
+                  </>
                 )}
-              </div>
-              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
-
-              {/* Prompt textarea */}
-              <textarea
-                className="input-premium resize-none flex-1"
-                style={{ minHeight: "120px" }}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Например: a futuristic cat in neon city, 4k, cinematic..."
-                required
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting || success || !telegramUserId || uploading}
-            className="btn-primary w-full mt-2"
-          >
-            {submitting ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="animate-spin" size={20} />
-                <span>Генерирую... (~2 мин)</span>
-              </div>
-            ) : (
-              <>
-                <Sparkles className="mr-2" size={18} />
-                Сгенерировать
-              </>
-            )}
-          </button>
-        </motion.form>
+              </button>
+            </motion.form>
+          )}
+        </AnimatePresence>
 
       </motion.div>
     </main>

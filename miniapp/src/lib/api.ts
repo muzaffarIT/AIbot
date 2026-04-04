@@ -311,6 +311,7 @@ export async function getJob(jobId: number) {
 export async function createJob(payload: {
   telegram_user_id: number;
   provider: GenerationProvider;
+  quality_key: string;
   prompt: string;
   source_image_url?: string;
   process_now?: boolean;

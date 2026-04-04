@@ -8,9 +8,22 @@ from backend.services.generation_service import GenerationService
 router = APIRouter()
 
 
+QUALITY_PRESETS: dict[str, dict] = {
+    "nano:std":     {"cost": 5,   "payload": {"image_size": "1:1"}},
+    "nano:hd":      {"cost": 10,  "payload": {"image_size": "1536x1536"}},
+    "nano:4k":      {"cost": 20,  "payload": {"image_size": "2048x2048"}},
+    "veo:fast":     {"cost": 30,  "payload": {"model": "veo3_fast"}},
+    "veo:quality":  {"cost": 80,  "payload": {"model": "veo3_quality"}},
+    "kling:std5":   {"cost": 40,  "payload": {"mode": "std", "duration": "5"}},
+    "kling:pro5":   {"cost": 70,  "payload": {"mode": "pro", "duration": "5"}},
+    "kling:pro10":  {"cost": 120, "payload": {"mode": "pro", "duration": "10"}},
+}
+
+
 class CreateJobRequest(BaseModel):
     telegram_user_id: int
     provider: str
+    quality_key: str | None = None
     prompt: str
     source_image_url: str | None = None
     process_now: bool | None = None
@@ -70,11 +83,21 @@ def get_job(job_id: int, db: Session = Depends(get_db)) -> dict:
 def create_job(payload: CreateJobRequest, db: Session = Depends(get_db)) -> dict:
     try:
         service = GenerationService(db)
+
+        job_payload: dict | None = None
+        credits: int | None = None
+        if payload.quality_key and payload.quality_key in QUALITY_PRESETS:
+            preset = QUALITY_PRESETS[payload.quality_key]
+            job_payload = preset["payload"]
+            credits = preset["cost"]
+
         job = service.create_job_for_user(
             telegram_user_id=payload.telegram_user_id,
             provider=payload.provider,
             prompt=payload.prompt,
             source_image_url=payload.source_image_url,
+            job_payload=job_payload,
+            credits=credits,
             process_now=payload.process_now,
         )
         return serialize_job(job)
