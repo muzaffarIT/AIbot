@@ -279,6 +279,21 @@ class ManualPaymentService:
                 except Exception as e:
                     logger.error(f"Achievement check error after payment: {e}")
 
+            # Log to Google Sheets
+            if user and plan:
+                try:
+                    from bot.services.sheets import log_payment_confirmed
+                    log_payment_confirmed(
+                        payment_id=payment_id,
+                        user_full_name=user.first_name or "—",
+                        username=user.username,
+                        telegram_id=user.telegram_user_id,
+                        plan_name=plan.name,
+                        amount_uzs=int(payment.amount),
+                    )
+                except Exception as e:
+                    logger.error(f"Sheets log error (confirm): {e}")
+
             return {"payment_id": payment_id, "balance": balance}
 
         except Exception as e:
@@ -328,6 +343,27 @@ class ManualPaymentService:
                     )
                 except Exception as e:
                     logger.error(f"Failed to notify user on rejection: {e}")
+
+            # Log to Google Sheets
+            if user:
+                try:
+                    from bot.services.sheets import log_payment_rejected
+                    from backend.db.repositories.plans import PlanRepository
+                    plan_name = "—"
+                    if ord_:
+                        plan = PlanRepository(db).get_by_id(ord_.plan_id)
+                        plan_name = plan.name if plan else "—"
+                    log_payment_rejected(
+                        payment_id=payment_id,
+                        user_full_name=user.first_name or "—",
+                        username=user.username,
+                        telegram_id=user.telegram_user_id,
+                        plan_name=plan_name,
+                        amount_uzs=int(payment.amount),
+                        reason=reason,
+                    )
+                except Exception as e:
+                    logger.error(f"Sheets log error (reject): {e}")
 
         except Exception as e:
             db.rollback()

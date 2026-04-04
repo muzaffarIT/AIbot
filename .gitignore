@@ -13,6 +13,9 @@ env/
 # Env files
 .env
 .env.local
+
+# Service account credentials (never commit)
+service_account.json
 *.env.local
 miniapp/.env.local
 
