@@ -49,12 +49,12 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
                 f"У тебя <b>{credits}</b> кредитов.\n\n"
                 f"Выбери действие:"
             )
-        from bot.keyboards.main_menu import main_inline_keyboard
-        await callback.message.edit_text(text, reply_markup=None, parse_mode="HTML")
-        await callback.message.answer(
-            "👇 Выберите действие:" if lang == "ru" else "👇 Amalni tanlang:",
-            reply_markup=main_inline_keyboard(lang),
-        )
+        from bot.keyboards.reply_menu import main_reply_keyboard
+        try:
+            await callback.message.edit_text(text, reply_markup=None, parse_mode="HTML")
+        except Exception:
+            pass
+        await callback.message.answer(text, reply_markup=main_reply_keyboard(lang), parse_mode="HTML")
         await callback.answer()
     finally:
         db.close()
