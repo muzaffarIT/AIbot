@@ -31,13 +31,40 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
 
     state_data = await state.get_data()
     prompt = state_data.get("prompt")
+    provider_str = state_data.get("provider", "")
+    lang = state_data.get("lang", "ru")
+    cost = data["cost"]
+    payload = data["payload"]
+
+    # ── New flow: quality selected BEFORE prompt ──────────────────────────────
+    if not prompt:
+        # Save quality to state, then ask for prompt
+        await state.update_data(quality_cost=cost, quality_payload=payload)
+
+        state_map = {
+            "nano_banana": NanoBananaStates.waiting_for_prompt,
+            "veo":         VeoStates.waiting_for_prompt,
+            "kling":       KlingStates.waiting_for_prompt,
+        }
+        next_state = state_map.get(provider_str, NanoBananaStates.waiting_for_prompt)
+        await state.set_state(next_state)
+
+        prompt_key_map = {
+            "nano_banana": "gen.prompt.nano",
+            "veo":         "gen.prompt.veo",
+            "kling":       "gen.prompt.kling",
+        }
+        prompt_text = i18n.t(lang, prompt_key_map.get(provider_str, "gen.prompt.nano"))
+        try:
+            await callback.message.edit_text(prompt_text, parse_mode="HTML")
+        except Exception:
+            await callback.message.answer(prompt_text, parse_mode="HTML")
+        await callback.answer()
+        return
+    # ── Legacy / photo flow: prompt already in state → create job ─────────────
+
     original_prompt = state_data.get("original_prompt")
     source_image_url = state_data.get("source_image_url")
-    
-    if not prompt:
-        await callback.answer("Ошибка: промпт потерян. Попробуйте снова.", show_alert=True)
-        await state.clear()
-        return
 
     db = get_db_session()
     try:
@@ -45,19 +72,15 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
         user = user_service.get_user_by_telegram_id(callback.from_user.id)
         if not user:
             return
-        lang = user.language_code or "ru"
-        
+        lang = user.language_code or lang
+
         provider_map = {
             "nano": AIProvider.NANO_BANANA,
-            "veo": AIProvider.VEO,
+            "veo":  AIProvider.VEO,
             "kling": AIProvider.KLING,
         }
         provider = provider_map.get(provider_short)
-        
-        cost = data["cost"]
-        payload = data["payload"]
-        
-        # Check balance again (proactive)
+
         from backend.core.config import settings
         is_admin = user.telegram_user_id in settings.admin_ids_list
         if not is_admin:
@@ -67,7 +90,6 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
                 await callback.answer(i18n.t(lang, "errors.insufficient_funds"), show_alert=True)
                 return
 
-        # Create job
         gs = GenerationService(db)
         job = gs.create_job_for_user(
             telegram_user_id=user.telegram_user_id,
@@ -78,44 +100,31 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
             job_payload=payload,
             credits=cost,
         )
-        
-        # Show progress
+
         mode_text = {
             AIProvider.NANO_BANANA: "Nano Banana",
-            AIProvider.VEO: "Veo 3",
-            AIProvider.KLING: "Kling Motion",
-        }.get(provider)
-        
-        if is_admin:
-            status_text = (
-                "⚡ Задача принята.\n"
-                "👑 Режим администратора — кредиты не списываются."
-            )
-        else:
-            status_text = (
-                f"⏳ <b>{mode_text}</b> — задача #{job.id} принята.\n\n"
-                f"💰 Списано: {cost} кр.\n"
-                f"🔄 Готовим результат..."
-            )
-        
-        await callback.message.edit_text(
-            status_text,
-            parse_mode="HTML"
+            AIProvider.VEO:         "Veo 3",
+            AIProvider.KLING:       "Kling Motion",
+        }.get(provider, "AI")
+
+        status_text = (
+            "⚡ Задача принята.\n👑 Режим администратора — кредиты не списываются."
+            if is_admin else
+            f"⏳ <b>{mode_text}</b> — задача #{job.id} принята.\n\n"
+            f"💰 Списано: {cost} кр.\n🔄 Готовим результат..."
         )
-        
+        await callback.message.edit_text(status_text, parse_mode="HTML")
         asyncio.create_task(
             track_generation_progress(bot, callback.message.chat.id, callback.message.message_id, job.id)
         )
-        
         await callback.answer()
         await state.clear()
-        
+
     except Exception as e:
         logger.error(f"Error creating quality job: {e}")
         from bot.keyboards.reply_menu import main_reply_keyboard
         await callback.message.answer(
-            "❌ Произошла ошибка. Попробуй ещё раз.\n"
-            "Кредиты не списаны.",
+            "❌ Произошла ошибка. Попробуй ещё раз.\nКредиты не списаны.",
             reply_markup=main_reply_keyboard(lang)
         )
     finally:

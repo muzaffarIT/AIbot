@@ -96,15 +96,21 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
 
         if lang == "uz":
             text = (
-                f"👋 Qaytib keldingiz, <b>{name}</b>!\n\n"
-                f"💰 Balansingiz: <b>{credits}</b> kredit\n\n"
-                f"Nima qilamiz?"
+                f"Xush kelibsiz, <b>{name}</b> 👋\n\n"
+                f"<b>HARF AI</b> — sun'iy intellekt bilan rasm va video yarating.\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"💳 Balans: <b>{credits}</b> kredit\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"Quyidagi menyudan foydalaning 👇"
             )
         else:
             text = (
-                f"👋 С возвращением, <b>{name}</b>!\n\n"
-                f"💰 Баланс: <b>{credits}</b> кредитов\n\n"
-                f"Что делаем?"
+                f"Добро пожаловать, <b>{name}</b> 👋\n\n"
+                f"<b>HARF AI</b> — создавайте изображения и видео с помощью нейросетей.\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"💳 Баланс: <b>{credits}</b> кредитов\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"Используйте меню ниже 👇"
             )
 
         # Send reply keyboard as main navigation

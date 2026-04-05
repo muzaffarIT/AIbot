@@ -37,17 +37,21 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
 
         if lang == "uz":
             text = (
-                f"👋 Salom, <b>{name}</b>!\n"
-                f"<b>HARF AI</b> ga xush kelibsiz.\n"
-                f"Sizda <b>{credits}</b> kredit bor.\n\n"
-                f"Nima qilamiz?"
+                f"Xush kelibsiz, <b>{name}</b> 👋\n\n"
+                f"<b>HARF AI</b> — sun'iy intellekt bilan rasm va video yarating.\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"💳 Balans: <b>{credits}</b> kredit\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"Quyidagi menyudan foydalaning 👇"
             )
         else:
             text = (
-                f"👋 Привет, <b>{name}</b>!\n"
-                f"Добро пожаловать в <b>HARF AI</b>.\n"
-                f"У тебя <b>{credits}</b> кредитов.\n\n"
-                f"Выбери действие:"
+                f"Добро пожаловать, <b>{name}</b> 👋\n\n"
+                f"<b>HARF AI</b> — создавайте изображения и видео с помощью нейросетей.\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"💳 Баланс: <b>{credits}</b> кредитов\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"Используйте меню ниже 👇"
             )
         from bot.keyboards.reply_menu import main_reply_keyboard
         try:
@@ -92,20 +96,21 @@ async def process_gen_start(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.update_data(provider=provider, lang=lang)
 
-    if provider == "nano_banana":
-        await state.set_state(NanoBananaStates.waiting_for_prompt)
-        prompt_text = i18n.t(lang, "gen.prompt.nano")
-    elif provider == "veo":
-        await state.set_state(VeoStates.waiting_for_prompt)
-        prompt_text = i18n.t(lang, "gen.prompt.veo")
-    elif provider == "kling":
-        await state.set_state(KlingStates.waiting_for_prompt)
-        prompt_text = i18n.t(lang, "gen.prompt.kling")
-    else:
+    # Step 1: Show quality/mode selection FIRST (before prompt)
+    from bot.keyboards.quality_menu import get_quality_keyboard
+    state_map = {
+        "nano_banana": NanoBananaStates.waiting_for_quality,
+        "veo":         VeoStates.waiting_for_quality,
+        "kling":       KlingStates.waiting_for_quality,
+    }
+    quality_state = state_map.get(provider)
+    if not quality_state:
         await callback.answer("Неизвестный провайдер.")
         return
 
-    await callback.message.answer(prompt_text, parse_mode="HTML")
+    await state.set_state(quality_state)
+    select_text = i18n.t(lang, "quality.select")
+    await callback.message.answer(select_text, reply_markup=get_quality_keyboard(provider, lang))
     await callback.answer()
 
 

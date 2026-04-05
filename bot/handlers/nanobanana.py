@@ -10,6 +10,7 @@ from bot.states.nanobanana_states import NanoBananaStates
 from shared.enums.providers import AIProvider
 from shared.utils.i18n import I18n
 from bot.services.progress import track_generation_progress
+from bot.keyboards.quality_menu import get_quality_keyboard
 
 router = Router()
 i18n = I18n()
@@ -35,15 +36,44 @@ async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(message.from_user.id)
         lang = user.language_code or "ru"
-        
+
         from bot.services.translator import translate_prompt
         translated = translate_prompt(prompt)
-        await state.update_data(prompt=translated, original_prompt=prompt)
-        await state.set_state(NanoBananaStates.waiting_for_quality)
-        
-        await message.answer(
-            i18n.t(lang, "quality.select"),
-            reply_markup=get_quality_keyboard("nano_banana", lang)
+
+        state_data = await state.get_data()
+        cost    = state_data.get("quality_cost")
+        payload = state_data.get("quality_payload")
+
+        if cost is None:
+            # Fallback (photo flow): show quality keyboard
+            await state.update_data(prompt=translated, original_prompt=prompt)
+            await state.set_state(NanoBananaStates.waiting_for_quality)
+            await message.answer(
+                i18n.t(lang, "quality.select"),
+                reply_markup=get_quality_keyboard("nano_banana", lang)
+            )
+            return
+
+        # Quality already selected → create job immediately
+        job = GenerationService(db).create_job_for_user(
+            telegram_user_id=user.telegram_user_id,
+            provider=AIProvider.NANO_BANANA,
+            prompt=translated,
+            original_prompt=prompt,
+            source_image_url=state_data.get("source_image_url"),
+            job_payload=payload,
+            credits=cost,
         )
+        msg = await message.answer(
+            f"⏳ <b>Nano Banana</b> — задача #{job.id} принята.\n\n"
+            f"💰 Списано: {cost} кр.\n🔄 Готовим результат... (~1–2 мин)",
+            parse_mode="HTML",
+        )
+        asyncio.create_task(
+            track_generation_progress(message.bot, message.chat.id, msg.message_id, job.id)
+        )
+        await state.clear()
+    except ValueError as exc:
+        await message.answer(f"❌ {exc}")
     finally:
         db.close()

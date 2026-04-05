@@ -115,7 +115,8 @@ async def _show_provider_quality(message: Message, state: FSMContext, provider: 
         db.close()
 
 
-async def _create_veo_job(message: Message, state: FSMContext, prompt: str, source_image_url: str | None = None) -> None:
+async def _create_veo_job(message: Message, state: FSMContext, prompt: str, source_image_url: str | None = None,
+                          payload_override: dict | None = None, credits_override: int | None = None) -> None:
     db = get_db_session()
     try:
         state_data = await state.get_data()
@@ -132,8 +133,8 @@ async def _create_veo_job(message: Message, state: FSMContext, prompt: str, sour
             provider=AIProvider.VEO,
             prompt=prompt,
             source_image_url=img_url,
-            job_payload=state_data.get("payload_overrides"),
-            credits=state_data.get("cost"),
+            job_payload=payload_override or state_data.get("payload_overrides"),
+            credits=credits_override or state_data.get("cost"),
         )
         msg = await message.answer(
             f"⏳ <b>Veo 3</b> — задача #{job.id} в очереди.\n\n"
@@ -191,24 +192,33 @@ async def handle_veo_prompt_msg(message: Message, state: FSMContext) -> None:
     if len(prompt) < 3 or len(prompt) > 500:
         await message.answer("❌ Длина промпта: от 3 до 500 символов.")
         return
-    
+
     db = get_db_session()
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(message.from_user.id)
         lang = user.language_code or "ru"
-        
+
         from bot.services.translator import translate_prompt
         translated = translate_prompt(prompt)
-        await state.update_data(prompt=translated, original_prompt=prompt)
-        
-        await state.set_state(VeoStates.waiting_for_quality)
-        
-        from bot.keyboards.quality_menu import get_quality_keyboard
-        await message.answer(
-            i18n.t(lang, "quality.select"),
-            reply_markup=get_quality_keyboard("veo", lang)
-        )
+
+        state_data = await state.get_data()
+        cost    = state_data.get("quality_cost")
+        payload = state_data.get("quality_payload")
+
+        if cost is None:
+            # Fallback (photo flow): show quality keyboard
+            await state.update_data(prompt=translated, original_prompt=prompt)
+            await state.set_state(VeoStates.waiting_for_quality)
+            from bot.keyboards.quality_menu import get_quality_keyboard
+            await message.answer(
+                i18n.t(lang, "quality.select"),
+                reply_markup=get_quality_keyboard("veo", lang)
+            )
+            return
+
+        # Quality already selected → create job immediately
+        await _create_veo_job(message, state, translated, payload_override=payload, credits_override=cost)
     finally:
         db.close()
 
