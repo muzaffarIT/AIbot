@@ -259,8 +259,14 @@ async def process_menu_plans(callback: CallbackQuery) -> None:
     rows.append([InlineKeyboardButton(text="← Назад", callback_data="start_menu")])
 
     await callback.message.answer(
-        "💎 <b>Выберите пакет кредитов:</b>\n\n"
-        "Оплата по карте — реквизиты придут после выбора.",
+        "💎 <b>Тарифы HARF AI</b>\n\n"
+        "✅ Кредиты не сгорают — используй когда хочешь\n"
+        "✅ Оплата через Click, Payme, Humo\n"
+        "✅ На 9% дешевле аналогов\n\n"
+        "🍌 Картинка = 5–20 кр.\n"
+        "🎬 Видео Veo3 = 30–80 кр.\n"
+        "🎥 Видео Kling = 40–120 кр.\n\n"
+        "<i>Выбери пакет:</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )

@@ -20,59 +20,55 @@ const itemVariants: Variants = {
 const PLANS = [
   {
     id: "start",
-    emoji: "⚡",
-    nameRu: "Start",
-    nameUz: "Start",
-    descRu: "Для знакомства с нейросетями",
-    descUz: "Neyrosetlar bilan tanishish uchun",
-    credits: 100,
-    priceUzs: 59_000,
+    nameRu: "⚡ Light",
+    nameUz: "⚡ Light",
+    descRu: "Для знакомства",
+    descUz: "Tanishish uchun",
+    credits: 150,
+    priceUzs: 105_000,
+    syntxRu: "Syntx €9 ≈ 115 000 сум",
+    syntxUz: "Syntx €9 ≈ 115 000 so'm",
     popular: false,
     btnClass: "bg-white/10 text-white hover:bg-white/20",
-    featuresRu: ["✓ Базовый доступ", "✓ Стандартная очередь"],
-    featuresUz: ["✓ Asosiy ruxsat", "✓ Oddiy navbat"],
   },
   {
     id: "pro",
-    emoji: "💎",
-    nameRu: "Pro",
-    nameUz: "Pro",
-    descRu: "Для активного использования",
-    descUz: "Faol foydalanish uchun",
-    credits: 300,
-    priceUzs: 149_000,
+    nameRu: "💎 Standard",
+    nameUz: "💎 Standard",
+    descRu: "Самый популярный",
+    descUz: "Eng mashhur",
+    credits: 400,
+    priceUzs: 290_000,
+    syntxRu: "Syntx €25 ≈ 320 000 сум",
+    syntxUz: "Syntx €25 ≈ 320 000 so'm",
     popular: true,
-    btnClass: "bg-brand-primary text-white shadow-lg shadow-brand-primary/30",
-    featuresRu: ["✓ Все нейросети", "✓ Быстрая очередь"],
-    featuresUz: ["✓ Barcha neyrosetlar", "✓ Tezkor navbat"],
+    btnClass: "bg-green-500 text-white shadow-lg shadow-green-500/30",
   },
   {
     id: "creator",
-    emoji: "🚀",
-    nameRu: "Creator",
-    nameUz: "Creator",
-    descRu: "Для создателей контента",
+    nameRu: "🚀 Pro",
+    nameUz: "🚀 Pro",
+    descRu: "Для контент-мейкеров",
     descUz: "Kontent yaratuvchilar uchun",
-    credits: 600,
-    priceUzs: 269_000,
+    credits: 800,
+    priceUzs: 580_000,
+    syntxRu: "Syntx €50 ≈ 640 000 сум",
+    syntxUz: "Syntx €50 ≈ 640 000 so'm",
     popular: false,
     btnClass: "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30",
-    featuresRu: ["✓ Все нейросети", "✓ Без ограничений", "✓ Приоритет"],
-    featuresUz: ["✓ Barcha neyrosetlar", "✓ Cheklovsiz", "✓ Ustuvorlik"],
   },
   {
     id: "ultra",
-    emoji: "👑",
-    nameRu: "Ultra",
-    nameUz: "Ultra",
-    descRu: "Для профессионалов",
-    descUz: "Professionallar uchun",
-    credits: 1500,
-    priceUzs: 590_000,
+    nameRu: "👑 Ultra",
+    nameUz: "👑 Ultra",
+    descRu: "Максимум возможностей",
+    descUz: "Imkoniyatlar maksimumi",
+    credits: 2000,
+    priceUzs: 1_390_000,
+    syntxRu: "Syntx €119 ≈ 1 523 200 сум",
+    syntxUz: "Syntx €119 ≈ 1 523 200 so'm",
     popular: false,
     btnClass: "bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-500/30",
-    featuresRu: ["✓ Выделенный сервер", "✓ Все нейросети", "✓ Без очереди"],
-    featuresUz: ["✓ Maxsus server", "✓ Barcha neyrosetlar", "✓ Navbatsiz"],
   },
 ];
 
@@ -166,7 +162,7 @@ export default function PlansPage() {
               key={plan.id}
               className={`glass-card p-5 relative overflow-hidden transition-all ${
                 plan.popular
-                  ? "border-brand-primary/50 shadow-lg shadow-brand-primary/10"
+                  ? "border-green-500/60 shadow-lg shadow-green-500/15"
                   : "border-white/5"
               }`}
             >
@@ -176,40 +172,48 @@ export default function PlansPage() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
+                {/* Name + credits row */}
                 <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    <span className="text-3xl mt-1">{plan.emoji}</span>
-                    <div>
-                      <h2 className="font-bold text-white text-lg">
-                        {language === "uz" ? plan.nameUz : plan.nameRu}
-                      </h2>
-                      <p className="text-sm text-white/50 mb-1">
-                        {language === "uz" ? plan.descUz : plan.descRu}
-                      </p>
-                      <p className="text-sm font-semibold text-brand-cyan flex items-center gap-1">
-                        <Zap size={14} />
-                        {plan.credits} {language === "uz" ? "kredit" : "кредитов"}
-                      </p>
-                    </div>
+                  <div>
+                    <h2 className="font-bold text-white text-lg">
+                      {language === "uz" ? plan.nameUz : plan.nameRu}
+                    </h2>
+                    <p className="text-sm text-white/50">
+                      {language === "uz" ? plan.descUz : plan.descRu}
+                    </p>
                   </div>
+                  <p className="text-sm font-semibold text-brand-cyan flex items-center gap-1 shrink-0 ml-3 mt-1">
+                    <Zap size={14} />
+                    {plan.credits} {language === "uz" ? "kr." : "кр."}
+                  </p>
                 </div>
 
-                <div className="flex flex-col pl-11 gap-1">
-                  {(language === "uz" ? plan.featuresUz : plan.featuresRu).map((f, i) => (
-                    <span key={i} className="text-xs text-white/60">{f}</span>
-                  ))}
+                {/* Pricing comparison */}
+                <div className="flex flex-col gap-0.5">
+                  {/* Syntx comparison — strikethrough */}
+                  <p className="text-xs text-white/35 line-through">
+                    {language === "uz" ? plan.syntxUz : plan.syntxRu}
+                  </p>
+                  {/* Our price */}
+                  <p className="text-xl font-extrabold text-green-400">
+                    {fmtUzs(plan.priceUzs)}
+                  </p>
+                  {/* Credits never expire badge */}
+                  <p className="text-xs text-white/50 mt-0.5">
+                    {language === "uz" ? "Kreditlar muddatsiz ✅" : "Кредиты не сгорают ✅"}
+                  </p>
                 </div>
 
                 <button
                   onClick={() => handleBuy(plan.id)}
                   disabled={loadingPlan !== null}
-                  className={`mt-2 flex items-center justify-center gap-2 font-bold px-4 py-3 rounded-xl transition-all active:scale-95 w-full disabled:opacity-60 ${plan.btnClass}`}
+                  className={`flex items-center justify-center gap-2 font-bold px-4 py-3 rounded-xl transition-all active:scale-95 w-full disabled:opacity-60 ${plan.btnClass}`}
                 >
                   <CreditCard size={16} />
                   {loadingPlan === plan.id
                     ? (language === "uz" ? "Yuklanmoqda..." : "Загрузка...")
-                    : fmtUzs(plan.priceUzs)}
+                    : (language === "uz" ? "Sotib olish" : "Купить")}
                 </button>
               </div>
             </div>

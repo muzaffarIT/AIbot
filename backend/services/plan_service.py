@@ -18,38 +18,38 @@ class PlanService:
         default_plans = [
             {
                 "code": "start",
-                "name": "⚡ Start",
-                "description": "100 кредитов для старта",
-                "price": 59000,
+                "name": "⚡ Light",
+                "description": "150 кредитов для старта",
+                "price": 105000,
                 "currency": "UZS",
-                "credits_amount": 100,
+                "credits_amount": 150,
                 "duration_days": None,
             },
             {
                 "code": "pro",
-                "name": "💎 Pro",
-                "description": "300 кредитов для активного использования",
-                "price": 149000,
+                "name": "💎 Standard",
+                "description": "400 кредитов. Самый популярный",
+                "price": 290000,
                 "currency": "UZS",
-                "credits_amount": 300,
+                "credits_amount": 400,
                 "duration_days": None,
             },
             {
                 "code": "creator",
-                "name": "🚀 Creator",
-                "description": "600 кредитов для создателей контента",
-                "price": 269000,
+                "name": "🚀 Pro",
+                "description": "800 кредитов для контент-мейкеров",
+                "price": 580000,
                 "currency": "UZS",
-                "credits_amount": 600,
+                "credits_amount": 800,
                 "duration_days": None,
             },
             {
                 "code": "ultra",
                 "name": "👑 Ultra",
-                "description": "1500 кредитов для профессионалов",
-                "price": 590000,
+                "description": "2000 кредитов. Максимум возможностей",
+                "price": 1390000,
                 "currency": "UZS",
-                "credits_amount": 1500,
+                "credits_amount": 2000,
                 "duration_days": None,
             },
         ]
@@ -57,11 +57,13 @@ class PlanService:
         for item in default_plans:
             existing = self.repo.get_by_code(item["code"])
             if existing:
-                # Update price/currency if changed
-                if existing.price != item["price"] or existing.currency != item["currency"]:
-                    existing.price = item["price"]
-                    existing.currency = item["currency"]
-                    self.repo.db.commit()
+                # Update price, credits and name if changed
+                existing.price = item["price"]
+                existing.currency = item["currency"]
+                existing.credits_amount = item["credits_amount"]
+                existing.name = item["name"]
+                existing.description = item["description"]
+                self.repo.db.commit()
                 continue
 
             self.repo.create_plan(
