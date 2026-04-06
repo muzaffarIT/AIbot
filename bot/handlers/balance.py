@@ -10,7 +10,6 @@ router = Router()
 i18n = I18n()
 
 BALANCE_TRIGGERS = {
-    "/balance",
     i18n.t("ru", "menu.balance"),
     i18n.t("uz", "menu.balance"),
 }

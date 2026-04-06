@@ -4,8 +4,6 @@ Bilingual /help handler.
 import logging
 from aiogram import F, Router
 from aiogram.types import Message, CallbackQuery
-from aiogram.filters import Command
-
 from bot.services.db_session import get_db_session
 from backend.services.user_service import UserService
 from shared.utils.i18n import I18n
@@ -26,15 +24,6 @@ def _get_lang(telegram_id: int) -> str:
         db.close()
     return lang
 
-
-
-@router.message(Command("help"))
-async def show_help_cmd(message: Message) -> None:
-    lang = _get_lang(message.from_user.id)
-    await message.answer(
-        i18n.t(lang, "help.text"),
-        parse_mode="HTML",
-    )
 
 
 @router.callback_query(F.data == "menu_help")

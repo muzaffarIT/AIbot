@@ -3,8 +3,6 @@ Achievements handler — /achievements command.
 """
 from aiogram import F, Router
 from aiogram.types import Message
-from aiogram.filters import Command
-
 from bot.services.db_session import get_db_session
 from bot.services.achievements import ACHIEVEMENTS, ACHIEVEMENT_MAP
 from backend.services.user_service import UserService
@@ -12,11 +10,6 @@ from shared.utils.i18n import I18n
 
 router = Router()
 i18n = I18n()
-
-
-@router.message(Command("achievements"))
-async def show_achievements_cmd(message: Message) -> None:
-    await _show_achievements(message.from_user.id, message)
 
 
 async def _show_achievements(telegram_id: int, message: Message) -> None:

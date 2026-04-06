@@ -279,14 +279,17 @@ class ManualPaymentService:
                 except Exception as e:
                     logger.error(f"Achievement check error after payment: {e}")
 
-            # 10% referral commission
+            # 10% referral commission — earnings tracked in UZS, credits given proportionally
             if user and plan and user.referred_by_telegram_id:
                 try:
                     referrer = user_service.get_user_by_telegram_id(user.referred_by_telegram_id)
                     if referrer:
-                        commission = max(1, int(plan.credits_amount * 0.10))
-                        balance_service.add_credits(referrer.id, commission, "referral_commission")
-                        referrer.referral_earnings = (referrer.referral_earnings or 0) + commission
+                        # Credits to add: 10% of plan credits
+                        credits_commission = max(1, int(plan.credits_amount * 0.10))
+                        # UZS earnings to track (shown in referral stats)
+                        uzs_commission = int(float(plan.price) * 0.10)
+                        balance_service.add_credits(referrer.id, credits_commission, "referral_commission")
+                        referrer.referral_earnings = (referrer.referral_earnings or 0) + uzs_commission
                         db.commit()
                         ref_lang = referrer.language_code or "ru"
                         try:
@@ -294,13 +297,15 @@ class ManualPaymentService:
                                 ref_text = (
                                     f"💰 <b>Referal komissiyasi!</b>\n\n"
                                     f"Referalingiz balansini to'ldirdi.\n"
-                                    f"Sizga: <b>+{commission}</b> kredit qo'shildi 🎁"
+                                    f"Sizga: <b>+{credits_commission}</b> kredit qo'shildi 🎁\n"
+                                    f"Jami daromad: <b>{referrer.referral_earnings:,} so'm</b>".replace(",", " ")
                                 )
                             else:
                                 ref_text = (
                                     f"💰 <b>Реферальная комиссия!</b>\n\n"
                                     f"Ваш реферал пополнил баланс.\n"
-                                    f"Начислено: <b>+{commission}</b> кредитов 🎁"
+                                    f"Начислено: <b>+{credits_commission}</b> кредитов 🎁\n"
+                                    f"Всего заработано: <b>{referrer.referral_earnings:,} сум</b>".replace(",", " ")
                                 )
                             await bot.send_message(referrer.telegram_user_id, ref_text, parse_mode="HTML")
                         except Exception:

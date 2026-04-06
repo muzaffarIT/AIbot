@@ -4,8 +4,6 @@ Bilingual /referral handler and referral notification utility.
 import logging
 from aiogram import F, Router, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import Command
-
 from bot.services.db_session import get_db_session
 from backend.services.user_service import UserService
 from backend.services.balance_service import BalanceService
@@ -15,11 +13,6 @@ from shared.utils.i18n import I18n
 router = Router()
 i18n = I18n()
 logger = logging.getLogger(__name__)
-
-
-@router.message(Command("referral"))
-async def referral_cmd(message: Message, bot: Bot) -> None:
-    await _send_referral_info(message.from_user.id, message, bot)
 
 
 @router.callback_query(F.data == "menu_referral")

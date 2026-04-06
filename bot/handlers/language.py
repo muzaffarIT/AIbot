@@ -4,7 +4,7 @@ User picks ru/uz → saved to DB → miniapp picks it up on next sync automatica
 """
 import logging
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BotCommandScopeChat, BotCommand
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BotCommandScopeChat
 
 from bot.services.db_session import get_db_session
 from backend.services.user_service import UserService
@@ -54,36 +54,21 @@ async def set_language(callback: CallbackQuery) -> None:
 
     chat_id = callback.from_user.id
 
-    if lang == "uz":
-        # Hide bot command menu for Uzbek — only reply keyboard buttons shown
-        try:
-            await callback.bot.set_my_commands(
-                [],
-                scope=BotCommandScopeChat(chat_id=chat_id),
-            )
-        except Exception as e:
-            logger.warning(f"set_my_commands(uz) failed: {e}")
+    # Clear all slash commands for all users — everything via miniapp/reply keyboard
+    try:
+        await callback.bot.set_my_commands(
+            [],
+            scope=BotCommandScopeChat(chat_id=chat_id),
+        )
+    except Exception as e:
+        logger.warning(f"set_my_commands failed: {e}")
 
+    if lang == "uz":
         text = (
             "✅ <b>Til o'zgartirildi: O'zbek 🇺🇿</b>\n\n"
             "Mini App ham keyingi ochilganda avtomatik o'zbek tiliga o'tadi."
         )
     else:
-        # Restore default commands for Russian
-        try:
-            ru_commands = [
-                BotCommand(command="start", description="Главное меню"),
-                BotCommand(command="help", description="Помощь"),
-                BotCommand(command="balance", description="Баланс"),
-                BotCommand(command="referral", description="Реферальная программа"),
-            ]
-            await callback.bot.set_my_commands(
-                ru_commands,
-                scope=BotCommandScopeChat(chat_id=chat_id),
-            )
-        except Exception as e:
-            logger.warning(f"set_my_commands(ru) failed: {e}")
-
         text = (
             "✅ <b>Язык изменён: Русский 🇷🇺</b>\n\n"
             "МиниЭп тоже автоматически переключится при следующем открытии."

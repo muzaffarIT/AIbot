@@ -167,9 +167,11 @@ export default function ReferralPage() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-white/40 mb-1">
               {language === "uz" ? "Komissiya" : "Заработано"}
             </p>
-            <p className="text-4xl font-extrabold text-green-400">{stats.earned}</p>
+            <p className="text-3xl font-extrabold text-green-400 leading-tight">
+              {stats.earned.toLocaleString("ru-RU")}
+            </p>
             <p className="text-xs text-white/30 mt-1">
-              {language === "uz" ? "kredit" : "кредитов"}
+              {language === "uz" ? "so'm" : "сум"}
             </p>
           </div>
         </motion.div>

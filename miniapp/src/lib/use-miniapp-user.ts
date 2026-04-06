@@ -7,15 +7,18 @@ import { normalizeLanguage, type MiniAppLanguage } from "@/lib/miniapp-i18n";
 
 function loadCachedLanguage(): MiniAppLanguage {
   try {
-    const l = localStorage.getItem("miniapp_language");
-    if (l === "uz" || l === "ru") return l;
-    // Fall back to cached user's language_code
+    // Prioritize the cached backend user's language_code (set by bot)
+    // over the standalone miniapp_language key (which may be stale)
     const raw = localStorage.getItem("harf_user");
     if (raw) {
       const u = JSON.parse(raw);
-      const lang = normalizeLanguage(u?.language_code ?? "ru");
-      return lang;
+      if (u?.language_code === "uz" || u?.language_code === "ru") {
+        return u.language_code as MiniAppLanguage;
+      }
     }
+    // Fallback: standalone key
+    const l = localStorage.getItem("miniapp_language");
+    if (l === "uz" || l === "ru") return l;
   } catch {}
   return "ru";
 }

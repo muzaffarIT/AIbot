@@ -12,11 +12,7 @@ from shared.enums.job_status import JobStatus
 router = Router()
 i18n = I18n()
 
-@router.message(F.text == "/history")
-async def cmd_history(message: Message) -> None:
-    await send_history(message)
-
-# Also handle the inline button from welcome menu
+# Inline button from welcome menu
 @router.callback_query(F.data == "history_cmd")
 async def callback_history(callback: CallbackQuery) -> None:
     await send_history(callback.message, callback.from_user.id)

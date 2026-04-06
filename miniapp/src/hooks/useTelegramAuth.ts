@@ -63,7 +63,8 @@ export function useTelegramAuth() {
           username: user.username,
           first_name: user.first_name,
           last_name: user.last_name,
-          language_code: user.language_code,
+          // Don't send Telegram app language — it would overwrite user's bot-chosen language in DB
+          language_code: null,
         });
         if (!cancelled) {
           setUserData(synced);
@@ -139,7 +140,7 @@ export function useTelegramAuth() {
         username: tgUser.username,
         first_name: tgUser.first_name,
         last_name: tgUser.last_name,
-        language_code: tgUser.language_code,
+        language_code: null,
       });
       setUserData(synced);
     } catch {}
