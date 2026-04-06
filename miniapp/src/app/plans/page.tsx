@@ -22,8 +22,8 @@ const PLANS = [
     id: "start",
     nameRu: "⚡ Light",
     nameUz: "⚡ Light",
-    descRu: "Для знакомства",
-    descUz: "Tanishish uchun",
+    descRu: "Для старта",
+    descUz: "Boshlash uchun",
     credits: 150,
     priceUzs: 105_000,
     syntxRu: "Syntx €9 ≈ 115 000 сум",
@@ -61,8 +61,8 @@ const PLANS = [
     id: "ultra",
     nameRu: "👑 Ultra",
     nameUz: "👑 Ultra",
-    descRu: "Максимум возможностей",
-    descUz: "Imkoniyatlar maksimumi",
+    descRu: "Без ограничений",
+    descUz: "Cheksiz imkoniyatlar",
     credits: 2000,
     priceUzs: 1_390_000,
     syntxRu: "Syntx €119 ≈ 1 523 200 сум",
@@ -78,8 +78,8 @@ const GEN_PRICES = [
   { icon: "🎥", nameRu: "Kling",       nameUz: "Kling",       fromRu: "от 40 кр.", fromUz: "40 kr.dan" },
 ];
 
-function fmtUzs(n: number) {
-  return n.toLocaleString("ru-RU") + " сум";
+function fmtUzs(n: number, lang: string) {
+  return n.toLocaleString("ru-RU") + (lang === "uz" ? " so'm" : " сум");
 }
 
 export default function PlansPage() {
@@ -197,7 +197,7 @@ export default function PlansPage() {
                   </p>
                   {/* Our price */}
                   <p className="text-xl font-extrabold text-green-400">
-                    {fmtUzs(plan.priceUzs)}
+                    {fmtUzs(plan.priceUzs, language)}
                   </p>
                   {/* Credits never expire badge */}
                   <p className="text-xs text-white/50 mt-0.5">

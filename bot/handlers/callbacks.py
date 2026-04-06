@@ -99,7 +99,7 @@ async def process_gen_start(callback: CallbackQuery, state: FSMContext) -> None:
     }
     quality_state = state_map.get(provider)
     if not quality_state:
-        await callback.answer("Неизвестный провайдер.")
+        await callback.answer("Провайдер недоступен." if lang != "uz" else "Provayder mavjud emas.")
         return
 
     await state.set_state(quality_state)
@@ -159,7 +159,15 @@ async def use_suggested_prompt(callback: CallbackQuery, state: FSMContext) -> No
     provider = data.get("provider", "nano_banana")
 
     # Artificial message with the prompt to reuse existing handlers
-    await callback.message.answer(f"✅ Запускаю: <i>{prompt[:100]}</i>", parse_mode="HTML")
+    db = get_db_session()
+    try:
+        _us = UserService(db)
+        _u = _us.get_user_by_telegram_id(callback.from_user.id)
+        _lang = (_u.language_code if _u else None) or "ru"
+    finally:
+        db.close()
+    _launch_msg = f"✅ Ishga tushiryapman: <i>{prompt[:100]}</i>" if _lang == "uz" else f"✅ Запускаю: <i>{prompt[:100]}</i>"
+    await callback.message.answer(_launch_msg, parse_mode="HTML")
 
     class _FakeMessage:
         text = prompt
@@ -218,17 +226,28 @@ async def process_menu_balance(callback: CallbackQuery) -> None:
         user_service = UserService(db)
         balance_service = BalanceService(db)
         user = user_service.get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
         if user:
             credits = balance_service.get_balance_value(user.id)
-            await callback.message.answer(
-                f"💰 <b>Ваш баланс:</b> <b>{credits}</b> кредитов\n\n"
-                f"Стоимость генераций:\n"
-                f"🍌 Nano Banana — 5 кр.\n"
-                f"🎬 Veo 3 (fast) — 30 кр.\n"
-                f"🎥 Kling Motion (std) — 40 кр.",
-                parse_mode="HTML",
-                reply_markup=None,
-            )
+            if lang == "uz":
+                text = (
+                    f"💰 <b>Balansingiz:</b> <b>{credits}</b> kredit\n\n"
+                    f"Generatsiya narxlari:\n"
+                    f"🍌 Nano Banana — 5 kr.dan\n"
+                    f"🎬 Veo 3 — 30 kr.dan\n"
+                    f"🎥 Kling Motion — 40 kr.dan\n\n"
+                    f"Kreditlarni to'ldirish uchun <b>💎 Tariflar</b> tugmasini bosing."
+                )
+            else:
+                text = (
+                    f"💰 <b>Ваш баланс:</b> <b>{credits}</b> кредитов\n\n"
+                    f"Стоимость генераций:\n"
+                    f"🍌 Nano Banana — от 5 кр.\n"
+                    f"🎬 Veo 3 — от 30 кр.\n"
+                    f"🎥 Kling Motion — от 40 кр.\n\n"
+                    f"Для пополнения нажмите <b>💎 Тарифы</b>."
+                )
+            await callback.message.answer(text, parse_mode="HTML", reply_markup=None)
         await callback.answer()
     finally:
         db.close()
@@ -239,28 +258,48 @@ async def process_menu_plans(callback: CallbackQuery) -> None:
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     from bot.services.payment_service import PACKAGES
 
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
+
     def _fmt(n: int) -> str:
         return f"{n:,}".replace(",", " ")
 
     rows = []
     for pkg_id, pkg in PACKAGES.items():
-        rows.append([
-            InlineKeyboardButton(
-                text=f"{pkg['name']} — {_fmt(pkg['price_uzs'])} сум ({pkg['credits']} кр.)",
-                callback_data=f"buy_pkg:{pkg_id}"
-            )
-        ])
-    rows.append([InlineKeyboardButton(text="← Назад", callback_data="start_menu")])
+        label = f"{pkg['name']} — {_fmt(pkg['price_uzs'])} {'so\'m' if lang == 'uz' else 'сум'} ({pkg['credits']} {'kr.' if lang == 'uz' else 'кр.'})"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"buy_pkg:{pkg_id}")])
+    rows.append([InlineKeyboardButton(text="← " + ("Orqaga" if lang == "uz" else "Назад"), callback_data="start_menu")])
+
+    if lang == "uz":
+        text = (
+            "💎 <b>HARF AI tariflari</b>\n\n"
+            "✅ Kreditlar muddatsiz — xohlaganingizda foydalaning\n"
+            "✅ To'lov: Click, Payme, Humo, Visa\n"
+            "✅ Analoglardan 9% arzon\n\n"
+            "🍌 Rasm = 5–20 kr.\n"
+            "🎬 Video Veo3 = 30–80 kr.\n"
+            "🎥 Video Kling = 40–120 kr.\n\n"
+            "<i>Paketni tanlang:</i>"
+        )
+    else:
+        text = (
+            "💎 <b>Тарифы HARF AI</b>\n\n"
+            "✅ Кредиты бессрочные — используйте когда угодно\n"
+            "✅ Оплата: Click, Payme, Humo, Visa\n"
+            "✅ На 9% выгоднее аналогов\n\n"
+            "🍌 Картинка = 5–20 кр.\n"
+            "🎬 Видео Veo3 = 30–80 кр.\n"
+            "🎥 Видео Kling = 40–120 кр.\n\n"
+            "<i>Выберите пакет:</i>"
+        )
 
     await callback.message.answer(
-        "💎 <b>Тарифы HARF AI</b>\n\n"
-        "✅ Кредиты не сгорают — используй когда хочешь\n"
-        "✅ Оплата через Click, Payme, Humo\n"
-        "✅ На 9% дешевле аналогов\n\n"
-        "🍌 Картинка = 5–20 кр.\n"
-        "🎬 Видео Veo3 = 30–80 кр.\n"
-        "🎥 Видео Kling = 40–120 кр.\n\n"
-        "<i>Выбери пакет:</i>",
+        text,
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -271,6 +310,15 @@ async def process_menu_plans(callback: CallbackQuery) -> None:
 async def process_buy_package(callback: CallbackQuery, bot: Bot) -> None:
     from bot.services.payment_service import ManualPaymentService
     package_id = callback.data.split(":")[1]
+
+    db = get_db_session()
+    try:
+        _us = UserService(db)
+        _u = _us.get_user_by_telegram_id(callback.from_user.id)
+        _lang = (_u.language_code if _u else None) or "ru"
+    finally:
+        db.close()
+
     try:
         await ManualPaymentService.send_invoice(
             bot=bot,
@@ -280,7 +328,8 @@ async def process_buy_package(callback: CallbackQuery, bot: Bot) -> None:
         )
         await callback.answer()
     except Exception as e:
-        await callback.answer(f"Ошибка: {e}", show_alert=True)
+        err = f"Xatolik: {e}" if _lang == "uz" else f"Ошибка: {e}"
+        await callback.answer(err, show_alert=True)
 
 
 @router.callback_query(F.data == "buy_credits")

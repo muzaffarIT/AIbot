@@ -43,21 +43,25 @@ async def start_onboarding(message: types.Message, state: FSMContext, lang: str)
 @router.callback_query(F.data == "onboarding_next", OnboardingStates.step_3)
 async def onboarding_step_4(callback: types.CallbackQuery, state: FSMContext):
     db = get_db_session()
-    user_service = UserService(db)
-    lang = callback.from_user.language_code or "ru"
-    
-    await state.set_state(OnboardingStates.step_4)
-    await callback.message.edit_text(i18n.t(lang, "onboarding_step_4"))
-    
-    # Finalize onboarding
-    user = user_service.get_user_by_telegram_id(callback.from_user.id)
-    if user:
-        user.onboarding_completed = True
-        db.commit()
-    
-    await state.clear()
-    await callback.message.answer(
-        i18n.t(lang, "onboarding_finished"),
-        reply_markup=main_reply_keyboard(lang)
-    )
-    await callback.answer()
+    try:
+        user_service = UserService(db)
+        # Always use DB language (set by user in bot), not Telegram's app language
+        user = user_service.get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+
+        await state.set_state(OnboardingStates.step_4)
+        await callback.message.edit_text(i18n.t(lang, "onboarding_step_4"), parse_mode="HTML")
+
+        # Finalize onboarding
+        if user:
+            user.onboarding_completed = True
+            db.commit()
+
+        await state.clear()
+        await callback.message.answer(
+            i18n.t(lang, "onboarding_finished"),
+            reply_markup=main_reply_keyboard(lang)
+        )
+        await callback.answer()
+    finally:
+        db.close()

@@ -57,10 +57,20 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
                 # Notify referrer
                 try:
                     ref_lang = referrer.language_code or "ru"
+                    ref_notify = (
+                        f"👥 <b>Yangi referal!</b>\n\n"
+                        f"Havolangiz orqali yangi foydalanuvchi ro'yxatdan o'tdi.\n"
+                        f"Hisobingizga <b>+5</b> kredit qo'shildi 🎁\n\n"
+                        f"Hamkorlik dasturi: har bir to'ldirishdan 10% komissiya olasiz!"
+                        if ref_lang == "uz" else
+                        f"👥 <b>Новый реферал!</b>\n\n"
+                        f"По вашей ссылке зарегистрировался новый пользователь.\n"
+                        f"На ваш счёт зачислено <b>+5</b> кредитов 🎁\n\n"
+                        f"Партнёрская программа: получайте 10% с каждого пополнения друга!"
+                    )
                     await bot.send_message(
                         referrer.telegram_user_id,
-                        f"👥 <b>Новый реферал!</b>\n\nПо твоей ссылке зарегистрировался новый пользователь.\nНачислено: <b>+5</b> кредитов 🎁" if ref_lang == "ru" else
-                        f"👥 <b>Yangi referal!</b>\n\nSizning havolangiz orqali yangi foydalanuvchi ro'yxatdan o'tdi.\nHisobingizga: <b>+5</b> kredit qo'shildi 🎁",
+                        ref_notify,
                         parse_mode="HTML"
                     )
                 except:

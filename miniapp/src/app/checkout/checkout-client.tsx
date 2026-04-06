@@ -85,7 +85,7 @@ export default function CheckoutClient({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error((data as any)?.detail || "Ошибка");
+        throw new Error((data as any)?.detail || (isRu ? "Ошибка запроса" : "So'rov xatosi"));
       }
       setNotified(true);
     } catch (e: any) {
@@ -214,12 +214,12 @@ export default function CheckoutClient({
           <div className="glass-card p-5 text-center space-y-2">
             <div className="text-3xl">⏳</div>
             <p className="font-bold text-white">
-              {isRu ? "Заявка отправлена!" : "Ariza yuborildi!"}
+              {isRu ? "Заявка на проверке!" : "Ariza ko'rib chiqilmoqda!"}
             </p>
             <p className="text-sm text-white/60">
               {isRu
-                ? "Обычно подтверждаем в течение 1 часа. Кредиты зачислятся автоматически."
-                : "Odatda 1 soat ichida tasdiqlanadi. Kreditlar avtomatik qo'shiladi."}
+                ? "Ваша заявка принята. Обычно подтверждение занимает до 1 часа — кредиты зачислятся автоматически."
+                : "Arizangiz qabul qilindi. Odatda 1 soat ichida tasdiqlanadi — kreditlar avtomatik qo'shiladi."}
             </p>
           </div>
         ) : (
@@ -230,7 +230,7 @@ export default function CheckoutClient({
           >
             {loading
               ? (isRu ? "Отправка..." : "Yuborilmoqda...")
-              : (isRu ? "✅ Я оплатил" : "✅ To'ladim")}
+              : (isRu ? "✅ Я перевёл — подтвердить оплату" : "✅ To'lovni tasdiqlash")}
           </button>
         )}
 

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, Copy, Share2, Check, Users, Zap, TrendingUp } from "lucide-react";
-import { useTelegramAuth } from "@/hooks/useTelegramAuth";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api } from "@/lib/api";
 
@@ -18,8 +17,7 @@ const itemVariants: Variants = {
 };
 
 export default function ReferralPage() {
-  const { tgUser, userData } = useTelegramAuth();
-  const { language } = useMiniAppUser();
+  const { telegramUser: tgUser, backendUser: userData, language } = useMiniAppUser();
   const [refLink, setRefLink] = useState("");
   const [stats, setStats] = useState({ count: 0, earned: 0 });
   const [loading, setLoading] = useState(true);
@@ -58,8 +56,8 @@ export default function ReferralPage() {
     if (!refLink) return;
     const text = encodeURIComponent(
       language === "uz"
-        ? "🤖 HARF AI — telefoningizda sun'iy intellekt!\nRasm va videolarni sekundlar ichida yarating.\nRo'yxatdan o'ting va 5 kredit oling:"
-        : "🤖 HARF AI — нейросети в твоём телефоне!\nСоздавай картинки и видео за секунды.\nРегистрируйся и получи 5 бесплатных кредитов:"
+        ? "🤖 HARF AI — telefonda sun'iy intellekt bilan kontent yarating!\nRasm, video, animatsiya — sekundlar ichida.\nRo'yxatdan o'ting va 5 ta bepul kredit oling 🎁"
+        : "🤖 HARF AI — создавай контент с помощью ИИ прямо в телефоне!\nКартинки, видео, анимация — за секунды.\nРегистрируйся и получи 5 бесплатных кредитов 🎁"
     );
     const tg = (window as any).Telegram?.WebApp;
     if (tg?.openTelegramLink) {
@@ -71,14 +69,14 @@ export default function ReferralPage() {
 
   const steps = language === "uz"
     ? [
-        { icon: "🔗", title: "Havolani ulashing", desc: "Do'stingizga referal havolangizni yuboring" },
-        { icon: "👤", title: "Do'stingiz ro'yxatdan o'tadi", desc: "U HARF AI ga qo'shiladi va kredit oladi" },
-        { icon: "💰", title: "10% komissiya olasiz", desc: "Uning har bir to'lovidan 10% kredit sizga tushadi" },
+        { icon: "🔗", title: "Havolani ulashing", desc: "Referal havolangizni do'stlaringizga yuboring — messenjer yoki ijtimoiy tarmoqda" },
+        { icon: "👤", title: "Do'stingiz ro'yxatdan o'tadi", desc: "U HARF AI ga qo'shiladi va darhol 5 ta bepul kredit oladi" },
+        { icon: "💰", title: "Siz 10% komissiya olasiz", desc: "Do'stingizning har bir to'ldirishidan 10% avtomatik hisobingizga tushadi" },
       ]
     : [
-        { icon: "🔗", title: "Поделитесь ссылкой", desc: "Отправьте реферальную ссылку другу" },
-        { icon: "👤", title: "Друг регистрируется", desc: "Он присоединяется к HARF AI и получает кредиты" },
-        { icon: "💰", title: "Вы получаете 10%", desc: "С каждого его пополнения вам начисляется 10% кредитов" },
+        { icon: "🔗", title: "Поделитесь ссылкой", desc: "Отправьте реферальную ссылку друзьям — в мессенджере или соцсетях" },
+        { icon: "👤", title: "Друг регистрируется", desc: "Он присоединяется к HARF AI и сразу получает 5 бесплатных кредитов" },
+        { icon: "💰", title: "Вы получаете 10%", desc: "С каждого пополнения друга 10% автоматически зачисляется на ваш счёт" },
       ];
 
   if (loading) {
@@ -252,8 +250,8 @@ export default function ReferralPage() {
             <Zap className="text-brand-cyan shrink-0" size={18} />
             <p className="text-xs text-white/60">
               {language === "uz"
-                ? "Har bir yangi do'stingiz ham +5 kredit oladi. Hamkorlikda ikkalangiz yutasiz!"
-                : "Ваш друг также получает +5 кредитов при регистрации. Выгода для обоих!"}
+                ? "Har bir do'stingiz ro'yxatdan o'tganda +5 kredit oladi. Ikki tomon ham yutadi!"
+                : "При регистрации друг получает +5 кредитов в подарок. Выигрывают оба!"}
             </p>
           </div>
         </motion.div>
