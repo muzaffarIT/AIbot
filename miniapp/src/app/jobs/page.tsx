@@ -225,7 +225,7 @@ export default function JobsPage() {
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={job.result_url}
+                          src={job.result_url ?? undefined}
                           alt={uz ? "Natija" : "Результат"}
                           className="w-full h-full object-cover"
                         />
