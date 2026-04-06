@@ -279,6 +279,35 @@ class ManualPaymentService:
                 except Exception as e:
                     logger.error(f"Achievement check error after payment: {e}")
 
+            # 10% referral commission
+            if user and plan and user.referred_by_telegram_id:
+                try:
+                    referrer = user_service.get_user_by_telegram_id(user.referred_by_telegram_id)
+                    if referrer:
+                        commission = max(1, int(plan.credits_amount * 0.10))
+                        balance_service.add_credits(referrer.id, commission, "referral_commission")
+                        referrer.referral_earnings = (referrer.referral_earnings or 0) + commission
+                        db.commit()
+                        ref_lang = referrer.language_code or "ru"
+                        try:
+                            if ref_lang == "uz":
+                                ref_text = (
+                                    f"💰 <b>Referal komissiyasi!</b>\n\n"
+                                    f"Referalingiz balansini to'ldirdi.\n"
+                                    f"Sizga: <b>+{commission}</b> kredit qo'shildi 🎁"
+                                )
+                            else:
+                                ref_text = (
+                                    f"💰 <b>Реферальная комиссия!</b>\n\n"
+                                    f"Ваш реферал пополнил баланс.\n"
+                                    f"Начислено: <b>+{commission}</b> кредитов 🎁"
+                                )
+                            await bot.send_message(referrer.telegram_user_id, ref_text, parse_mode="HTML")
+                        except Exception:
+                            pass
+                except Exception as ref_err:
+                    logger.error(f"Referral commission error: {ref_err}")
+
             # Log to Google Sheets
             if user and plan:
                 try:

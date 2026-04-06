@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import {
-  Sparkles, Users, Coins, ChevronRight, Activity, Zap, AlertCircle,
+  Sparkles, Users, Coins, ChevronRight, Activity, Zap, AlertCircle, Wallet,
 } from "lucide-react";
 import { useTelegramAuth } from "@/hooks/useTelegramAuth";
 import { api, type GenerationJob } from "@/lib/api";
@@ -120,48 +120,61 @@ export default function HomePage() {
           </motion.div>
         )}
 
-        {/* Quick Actions */}
-        <motion.section variants={itemVariants} className="grid grid-cols-2 gap-4">
-          <Link
-            href="/referral"
-            className="glass-card p-5 group hover:bg-white/5 transition-colors relative overflow-hidden"
-          >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-cyan to-blue-500 flex items-center justify-center mb-4 shadow-lg shadow-brand-cyan/20">
-              <Users className="text-white" size={20} />
+        {/* Balance + Quick Actions */}
+        <motion.section variants={itemVariants} className="space-y-3">
+          {/* Balance card */}
+          <Link href="/wallet" className="block glass-card p-5 relative overflow-hidden group hover:bg-white/5 transition-colors">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 blur-2xl rounded-full pointer-events-none" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-white/40 mb-1">
+                  Баланс кредитов
+                </p>
+                <p className="text-4xl font-extrabold text-white tracking-tight">{credits}</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-primary to-brand-cyan flex items-center justify-center shadow-lg shadow-brand-primary/30">
+                <Wallet className="text-white" size={22} />
+              </div>
             </div>
-            <h3 className="font-semibold text-white mb-1">Рефералы</h3>
-            <p className="text-xs text-white/50">Пригласить друзей</p>
-            <ChevronRight
-              className="absolute bottom-4 right-4 text-white/30 group-hover:text-white/70 transition-colors"
-              size={18}
-            />
+            <div className="mt-4 flex items-center gap-2 text-xs text-brand-cyan font-semibold">
+              <Zap size={12} className="fill-brand-cyan/40" />
+              Нажмите чтобы пополнить
+              <ChevronRight size={14} className="ml-auto text-white/30 group-hover:text-white/70 transition-colors" />
+            </div>
           </Link>
 
-          <Link
-            href="/plans"
-            className="glass-card p-5 group hover:bg-white/5 transition-colors relative overflow-hidden"
-          >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-primary to-purple-600 flex items-center justify-center mb-4 shadow-lg shadow-brand-primary/20">
-              <Coins className="text-white" size={20} />
-            </div>
-            <h3 className="font-semibold text-white mb-1">Тарифы</h3>
-            <p className="text-xs text-white/50">Пополнить баланс</p>
-            <ChevronRight
-              className="absolute bottom-4 right-4 text-white/30 group-hover:text-white/70 transition-colors"
-              size={18}
-            />
-          </Link>
+          {/* Quick action buttons */}
+          <div className="grid grid-cols-2 gap-3">
+            <Link href="/referral" className="glass-card p-4 group hover:bg-white/5 transition-colors relative overflow-hidden">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-3 shadow-lg shadow-green-500/20">
+                <Users className="text-white" size={18} />
+              </div>
+              <h3 className="font-semibold text-white text-sm mb-0.5">Партнёрство</h3>
+              <p className="text-xs text-white/40">+10% с рефералов</p>
+              <ChevronRight className="absolute bottom-3 right-3 text-white/20 group-hover:text-white/60 transition-colors" size={16} />
+            </Link>
+
+            <Link href="/plans" className="glass-card p-4 group hover:bg-white/5 transition-colors relative overflow-hidden">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-primary to-purple-600 flex items-center justify-center mb-3 shadow-lg shadow-brand-primary/20">
+                <Coins className="text-white" size={18} />
+              </div>
+              <h3 className="font-semibold text-white text-sm mb-0.5">Тарифы</h3>
+              <p className="text-xs text-white/40">Пополнить баланс</p>
+              <ChevronRight className="absolute bottom-3 right-3 text-white/20 group-hover:text-white/60 transition-colors" size={16} />
+            </Link>
+          </div>
         </motion.section>
 
-        {/* Stats */}
-        <motion.section variants={itemVariants} className="flex gap-4">
-          <div className="flex-1 glass-panel p-4 flex flex-col items-center justify-center text-center">
-            <span className="text-white/50 text-[10px] font-bold uppercase tracking-wider mb-1">Кредиты</span>
-            <span className="text-2xl font-bold text-white tracking-tight">{credits}</span>
-          </div>
-          <div className="flex-1 glass-panel p-4 flex flex-col items-center justify-center text-center">
-            <span className="text-white/50 text-[10px] font-bold uppercase tracking-wider mb-1">Активные</span>
-            <span className="text-2xl font-bold text-white tracking-tight">{activeCount}</span>
+        {/* Active jobs stat */}
+        <motion.section variants={itemVariants}>
+          <div className="glass-panel p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity size={16} className="text-brand-primary" />
+              <span className="text-white/50 text-xs font-bold uppercase tracking-wider">
+                Активные генерации
+              </span>
+            </div>
+            <span className="text-xl font-bold text-white tracking-tight">{activeCount}</span>
           </div>
         </motion.section>
 

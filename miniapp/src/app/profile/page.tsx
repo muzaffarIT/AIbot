@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion, type Variants } from "framer-motion";
 import {
-  ArrowLeft, Flame, Trophy, Lock, Calendar,
+  ArrowLeft, Trophy, Lock, Calendar,
   Globe, Check, Zap, Users, CreditCard, Gift,
 } from "lucide-react";
 import { useTelegramAuth } from "@/hooks/useTelegramAuth";
@@ -50,7 +50,6 @@ export default function ProfilePage() {
     userData?.first_name ||
     "Пользователь";
 
-  const streak = userData?.daily_streak ?? 0;
   const credits = userData?.credits_balance ?? 0;
   const referralCount = userData?.referral_count ?? 0;
   const registeredAt = userData?.created_at ?? null;
@@ -138,12 +137,7 @@ export default function ProfilePage() {
         </motion.div>
 
         {/* Stats row */}
-        <motion.section variants={itemVariants} className="grid grid-cols-3 gap-3">
-          <div className="glass-panel p-4 flex flex-col items-center text-center">
-            <Flame size={20} className={`mb-1 ${streak > 0 ? "text-orange-400" : "text-white/20"}`} />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Streak</span>
-            <span className="text-xl font-bold text-white">{streak}</span>
-          </div>
+        <motion.section variants={itemVariants} className="grid grid-cols-2 gap-3">
           <div className="glass-panel p-4 flex flex-col items-center text-center">
             <Zap size={20} className="mb-1 text-brand-cyan" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">
