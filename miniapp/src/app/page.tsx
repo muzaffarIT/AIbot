@@ -6,7 +6,7 @@ import { motion, type Variants } from "framer-motion";
 import {
   Sparkles, Users, Coins, ChevronRight, Activity, Zap, AlertCircle, Wallet,
 } from "lucide-react";
-import { useTelegramAuth } from "@/hooks/useTelegramAuth";
+import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api, type GenerationJob } from "@/lib/api";
 
 const containerVariants: Variants = {
@@ -29,11 +29,12 @@ function providerLabel(provider: string) {
   return provider;
 }
 
-function statusLabel(status: string) {
-  if (status === "completed") return "Готово";
-  if (status === "pending") return "В очереди";
-  if (status === "processing") return "Обработка";
-  if (status === "failed") return "Ошибка";
+function statusLabel(status: string, lang: string) {
+  const uz = lang === "uz";
+  if (status === "completed") return uz ? "Tayyor" : "Готово";
+  if (status === "pending")   return uz ? "Navbatda" : "В очереди";
+  if (status === "processing") return uz ? "Ishlanmoqda" : "Обработка";
+  if (status === "failed")    return uz ? "Xato" : "Ошибка";
   return status;
 }
 
@@ -45,9 +46,11 @@ function formatDate(d?: string | null) {
 }
 
 export default function HomePage() {
-  const { tgUser, userData, loading, error } = useTelegramAuth();
+  const { telegramUser: tgUser, backendUser: userData, loading, error, language } = useMiniAppUser();
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
+
+  const uz = language === "uz";
 
   useEffect(() => {
     if (!userData?.telegram_user_id) return;
@@ -65,7 +68,7 @@ export default function HomePage() {
     );
   }
 
-  const displayName = tgUser?.first_name || userData?.username || "Creator";
+  const displayName = tgUser?.first_name || userData?.username || (uz ? "Ijodkor" : "Творец");
   const credits = userData?.credits_balance ?? 0;
   const activeCount = jobs.filter((j) => isActiveJob(j.status)).length;
 
@@ -88,7 +91,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-primary/20 text-brand-accent text-xs font-bold uppercase tracking-wider mb-4 border border-brand-primary/30"
             >
               <Zap size={14} className="text-brand-accent fill-brand-accent/50" />
-              AI Генератор
+              {uz ? "AI Generatsiya" : "AI Генератор"}
             </div>
             <div style={{
               background: "linear-gradient(135deg, #7C3AED, #3B82F6)",
@@ -101,10 +104,11 @@ export default function HomePage() {
               HARF AI
             </div>
             <p style={{ color: "#888", marginTop: 8 }}>
-              ✨ {displayName}, создавай контент за секунды
+              ✨ {displayName},{" "}
+              {uz ? "soniyalar ichida kontent yarating" : "создавай контент за секунды"}
             </p>
             <p style={{ color: "#888", fontSize: 13, marginTop: 4 }}>
-              Картинки • Видео • Анимация
+              {uz ? "Rasmlar • Videolar • Animatsiya" : "Картинки • Видео • Анимация"}
             </p>
           </div>
         </motion.section>
@@ -128,7 +132,7 @@ export default function HomePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-white/40 mb-1">
-                  Баланс кредитов
+                  {uz ? "Kredit balansi" : "Баланс кредитов"}
                 </p>
                 <p className="text-4xl font-extrabold text-white tracking-tight">{credits}</p>
               </div>
@@ -138,7 +142,7 @@ export default function HomePage() {
             </div>
             <div className="mt-4 flex items-center gap-2 text-xs text-brand-cyan font-semibold">
               <Zap size={12} className="fill-brand-cyan/40" />
-              Нажмите чтобы пополнить
+              {uz ? "To'ldirish uchun bosing" : "Нажмите, чтобы пополнить"}
               <ChevronRight size={14} className="ml-auto text-white/30 group-hover:text-white/70 transition-colors" />
             </div>
           </Link>
@@ -149,8 +153,12 @@ export default function HomePage() {
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-3 shadow-lg shadow-green-500/20">
                 <Users className="text-white" size={18} />
               </div>
-              <h3 className="font-semibold text-white text-sm mb-0.5">Партнёрство</h3>
-              <p className="text-xs text-white/40">+10% с рефералов</p>
+              <h3 className="font-semibold text-white text-sm mb-0.5">
+                {uz ? "Hamkorlik" : "Партнёрство"}
+              </h3>
+              <p className="text-xs text-white/40">
+                {uz ? "Har to'ldirishdan +10%" : "+10% с каждого пополнения"}
+              </p>
               <ChevronRight className="absolute bottom-3 right-3 text-white/20 group-hover:text-white/60 transition-colors" size={16} />
             </Link>
 
@@ -158,8 +166,12 @@ export default function HomePage() {
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-primary to-purple-600 flex items-center justify-center mb-3 shadow-lg shadow-brand-primary/20">
                 <Coins className="text-white" size={18} />
               </div>
-              <h3 className="font-semibold text-white text-sm mb-0.5">Тарифы</h3>
-              <p className="text-xs text-white/40">Пополнить баланс</p>
+              <h3 className="font-semibold text-white text-sm mb-0.5">
+                {uz ? "Tariflar" : "Тарифы"}
+              </h3>
+              <p className="text-xs text-white/40">
+                {uz ? "Balansni to'ldirish" : "Пополнить баланс"}
+              </p>
               <ChevronRight className="absolute bottom-3 right-3 text-white/20 group-hover:text-white/60 transition-colors" size={16} />
             </Link>
           </div>
@@ -171,7 +183,7 @@ export default function HomePage() {
             <div className="flex items-center gap-2">
               <Activity size={16} className="text-brand-primary" />
               <span className="text-white/50 text-xs font-bold uppercase tracking-wider">
-                Активные генерации
+                {uz ? "Faol generatsiyalar" : "Активные генерации"}
               </span>
             </div>
             <span className="text-xl font-bold text-white tracking-tight">{activeCount}</span>
@@ -182,13 +194,14 @@ export default function HomePage() {
         <motion.section variants={itemVariants} className="space-y-4">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Activity size={18} className="text-brand-primary" /> Активность
+              <Activity size={18} className="text-brand-primary" />
+              {uz ? "Faoliyat" : "Активность"}
             </h2>
             <Link
               href="/jobs"
               className="text-xs font-semibold text-brand-cyan hover:text-brand-cyan/80 transition-colors uppercase tracking-wider"
             >
-              Все
+              {uz ? "Hammasi" : "Все"}
             </Link>
           </div>
 
@@ -223,7 +236,7 @@ export default function HomePage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xs font-medium text-white/70">{statusLabel(job.status)}</div>
+                      <div className="text-xs font-medium text-white/70">{statusLabel(job.status, language)}</div>
                       <div className="text-[10px] text-white/40 font-mono mt-0.5">#{job.id}</div>
                     </div>
                   </Link>
@@ -231,7 +244,9 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="p-8 text-center text-sm text-white/40 italic">
-                Нет генераций. Создай первую через бота!
+                {uz
+                  ? "Hali generatsiyalar yo'q. Botda birinchisini yarating!"
+                  : "Генераций пока нет. Создайте первую через бота!"}
               </div>
             )}
           </div>

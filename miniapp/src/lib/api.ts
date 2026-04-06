@@ -9,6 +9,7 @@ export type BackendUser = {
   language_code: string;
   credits_balance?: number;
   referral_count?: number;
+  referral_earnings?: number;
   daily_streak?: number;
   created_at?: string | null;
 };

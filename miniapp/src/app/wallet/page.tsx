@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, RefreshCw } from "lucide-react";
-import { useTelegramAuth } from "@/hooks/useTelegramAuth";
+import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, RefreshCw, Coins, Banknote } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api, type BalanceHistoryResponse } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -24,7 +23,7 @@ function humanizeComment(comment: string | null | undefined, lang: "ru" | "uz"):
   if (c === "welcome_bonus") return lang === "uz" ? "Xush kelibsiz bonusi 🎁" : "Приветственный бонус 🎁";
   if (c === "referral_welcome") return lang === "uz" ? "Referal bonusi 🎁" : "Реферальный бонус 🎁";
   if (c === "referral_registration_bonus") return lang === "uz" ? "Yangi referal 👥" : "Новый реферал 👥";
-  if (c === "referral_commission") return lang === "uz" ? "Referal komissiyasi 👥" : "Комиссия реферала 👥";
+  if (c === "referral_commission") return lang === "uz" ? "Referal komissiyasi 👥" : "Комиссия с реферала 👥";
   if (c.startsWith("achievement_")) return lang === "uz" ? "Yutuq mukofoti 🏆" : "Достижение 🏆";
   if (c === "daily_bonus") return lang === "uz" ? "Kunlik bonus ☀️" : "Ежедневный бонус ☀️";
   if (c.includes("refund") || c.includes("qaytarildi")) return lang === "uz" ? "Qaytarildi ↩️" : "Возврат ↩️";
@@ -33,18 +32,22 @@ function humanizeComment(comment: string | null | undefined, lang: "ru" | "uz"):
   return comment;
 }
 
-function txIcon(amount: number, comment: string | null | undefined) {
-  const c = (comment ?? "").toLowerCase();
+function txIcon(amount: number) {
   if (amount > 0) return <ArrowUpRight size={18} />;
   return <ArrowDownRight size={18} />;
 }
 
+function fmtUzs(n: number) {
+  if (n === 0) return "0 so'm";
+  return n.toLocaleString("uz-UZ") + " so'm";
+}
+
 export default function WalletPage() {
-  const { tgUser, userData, loading } = useTelegramAuth();
-  const { language } = useMiniAppUser();
+  const { backendUser: userData, telegramUser: tgUser, loading, language } = useMiniAppUser();
   const [history, setHistory] = useState<BalanceHistoryResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const uz = language === "uz";
 
   const loadHistory = async (id: number) => {
     setHistoryLoading(true);
@@ -70,6 +73,7 @@ export default function WalletPage() {
   };
 
   const credits = history?.credits_balance ?? userData?.credits_balance ?? 0;
+  const uzsBalance = userData?.referral_earnings ?? 0;
 
   if (loading && historyLoading) {
     return (
@@ -101,7 +105,7 @@ export default function WalletPage() {
               <ArrowLeft className="text-white" size={20} />
             </Link>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              {language === "uz" ? "Balans" : "Баланс"}
+              {uz ? "Balans" : "Баланс"}
             </h1>
           </div>
           <button
@@ -112,7 +116,7 @@ export default function WalletPage() {
           </button>
         </motion.div>
 
-        {/* Balance card */}
+        {/* Credits balance card */}
         <motion.div variants={itemVariants}>
           <div className="relative rounded-3xl overflow-hidden p-6 border border-white/10"
             style={{
@@ -120,17 +124,19 @@ export default function WalletPage() {
               boxShadow: "0 0 60px rgba(124,58,237,0.2), inset 0 0 0 1px rgba(255,255,255,0.06)",
             }}
           >
-            {/* Decorative ring */}
             <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full border border-brand-primary/20 pointer-events-none" />
             <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full border border-brand-cyan/15 pointer-events-none" />
 
-            <p className="text-xs font-bold uppercase tracking-[0.15em] text-white/40 mb-2">
-              {language === "uz" ? "Mavjud kreditlar" : "Доступно кредитов"}
-            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <Coins size={16} className="text-brand-cyan" />
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
+                {uz ? "Kredit balansi" : "Баланс кредитов"}
+              </p>
+            </div>
             <div className="flex items-end gap-3 mb-6">
               <span className="text-6xl font-black tracking-tighter text-white leading-none">{credits}</span>
               <span className="text-lg text-white/40 font-medium pb-1">
-                {language === "uz" ? "kr." : "кр."}
+                {uz ? "kr." : "кр."}
               </span>
             </div>
 
@@ -143,8 +149,35 @@ export default function WalletPage() {
               }}
             >
               <Plus size={18} />
-              {language === "uz" ? "Kredit sotib olish" : "Купить кредиты"}
+              {uz ? "Kredit sotib olish" : "Купить кредиты"}
             </Link>
+          </div>
+        </motion.div>
+
+        {/* UZS balance card */}
+        <motion.div variants={itemVariants}>
+          <div className="relative rounded-3xl overflow-hidden p-5 border border-white/10"
+            style={{
+              background: "linear-gradient(135deg, rgba(16,185,129,0.20) 0%, rgba(16,16,32,0.95) 70%, rgba(16,185,129,0.08) 100%)",
+              boxShadow: "0 0 40px rgba(16,185,129,0.12), inset 0 0 0 1px rgba(255,255,255,0.05)",
+            }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Banknote size={16} className="text-green-400" />
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
+                {uz ? "So'm balansi" : "Баланс в сумах"}
+              </p>
+            </div>
+            <div className="flex items-end gap-3 mb-2">
+              <span className="text-3xl font-black tracking-tighter text-green-400 leading-none">
+                {fmtUzs(uzsBalance)}
+              </span>
+            </div>
+            <p className="text-xs text-white/35 mt-1">
+              {uz
+                ? "Referal komissiyalari va to'ldirishlar shu yerga tushadi"
+                : "Комиссии с рефералов и пополнения накапливаются здесь"}
+            </p>
           </div>
         </motion.div>
 
@@ -152,7 +185,7 @@ export default function WalletPage() {
         <motion.div variants={itemVariants} className="grid grid-cols-2 gap-3">
           <div className="glass-card p-4 text-center">
             <p className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-1">
-              {language === "uz" ? "Jami to'ldirilgan" : "Всего пополнено"}
+              {uz ? "Jami to'ldirilgan" : "Всего пополнено"}
             </p>
             <p className="text-2xl font-extrabold text-green-400">
               +{(history?.transactions ?? [])
@@ -162,7 +195,7 @@ export default function WalletPage() {
           </div>
           <div className="glass-card p-4 text-center">
             <p className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-1">
-              {language === "uz" ? "Generatsiyalarga sarflangan" : "Потрачено на генерации"}
+              {uz ? "Generatsiyalarga sarflangan" : "Потрачено на генерации"}
             </p>
             <p className="text-2xl font-extrabold text-red-400">
               {(history?.transactions ?? [])
@@ -175,7 +208,7 @@ export default function WalletPage() {
         {/* Transaction history */}
         <motion.div variants={itemVariants} className="space-y-3">
           <h2 className="text-sm font-bold uppercase tracking-wider text-white/40 px-1">
-            {language === "uz" ? "Operatsiyalar tarixi" : "История операций"}
+            {uz ? "Operatsiyalar tarixi" : "История операций"}
           </h2>
 
           <div className="glass-card overflow-hidden">
@@ -186,7 +219,7 @@ export default function WalletPage() {
             ) : (history?.transactions ?? []).length === 0 ? (
               <div className="p-10 text-center">
                 <p className="text-white/30 text-sm italic">
-                  {language === "uz" ? "Hali operatsiyalar yo'q" : "Операций пока нет"}
+                  {uz ? "Hali operatsiyalar yo'q" : "Операций пока нет"}
                 </p>
               </div>
             ) : (
@@ -204,7 +237,7 @@ export default function WalletPage() {
                             ? "bg-green-500/15 text-green-400"
                             : "bg-red-500/15 text-red-400"
                         }`}>
-                          {txIcon(tx.amount, tx.comment)}
+                          {txIcon(tx.amount)}
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-white/90 leading-tight">
@@ -220,7 +253,7 @@ export default function WalletPage() {
                           {isPositive ? "+" : ""}{tx.amount}
                         </p>
                         <p className="text-[10px] text-white/30 mt-0.5">
-                          {language === "uz" ? "qoldiq:" : "остаток:"} {tx.balance_after}
+                          {uz ? "qoldiq:" : "остаток:"} {tx.balance_after}
                         </p>
                       </div>
                     </div>

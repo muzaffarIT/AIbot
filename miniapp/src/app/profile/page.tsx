@@ -7,7 +7,6 @@ import {
   ArrowLeft, Trophy, Lock, Calendar,
   Globe, Check, Zap, Users, CreditCard, Gift,
 } from "lucide-react";
-import { useTelegramAuth } from "@/hooks/useTelegramAuth";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api, type AchievementItem } from "@/lib/api";
 
@@ -26,8 +25,7 @@ const LANG_OPTIONS = [
 ];
 
 export default function ProfilePage() {
-  const { tgUser, userData, loading } = useTelegramAuth();
-  const { language, changeLanguage } = useMiniAppUser();
+  const { telegramUser: tgUser, backendUser: userData, loading, language, changeLanguage } = useMiniAppUser();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
 
@@ -46,9 +44,9 @@ export default function ProfilePage() {
 
   const displayName =
     tgUser?.first_name ||
-    userData?.username ||
     userData?.first_name ||
-    "Пользователь";
+    userData?.username ||
+    (language === "uz" ? "Foydalanuvchi" : "Пользователь");
 
   const credits = userData?.credits_balance ?? 0;
   const referralCount = userData?.referral_count ?? 0;
@@ -188,10 +186,10 @@ export default function ProfilePage() {
                   <span className="text-2xl">{a.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <p className={`text-xs font-semibold leading-tight ${a.earned ? "text-white" : "text-white/50"}`}>
-                      {a.name}
+                      {language === "uz" ? ((a as any).name_uz || a.name) : ((a as any).name_ru || a.name)}
                     </p>
                     {a.bonus > 0 && (
-                      <p className="text-[10px] text-brand-accent font-bold mt-0.5">+{a.bonus} кр.</p>
+                      <p className="text-[10px] text-brand-accent font-bold mt-0.5">+{a.bonus} {language === "uz" ? "kr." : "кр."}</p>
                     )}
                   </div>
                   {a.earned ? (

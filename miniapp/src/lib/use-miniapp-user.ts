@@ -44,11 +44,22 @@ export function useMiniAppUser() {
   }, [language]);
 
   const changeLanguage = async (newLang: string) => {
-    setLanguage(newLang as MiniAppLanguage);
-    try { localStorage.setItem("miniapp_language", newLang); } catch {}
+    const lang = newLang as MiniAppLanguage;
+    setLanguage(lang);
+    // Persist to both keys so loadCachedLanguage reads the new value on next open
+    try {
+      localStorage.setItem("miniapp_language", lang);
+      // Also update harf_user.language_code in cache so it wins on next load
+      const raw = localStorage.getItem("harf_user");
+      if (raw) {
+        const u = JSON.parse(raw);
+        u.language_code = lang;
+        localStorage.setItem("harf_user", JSON.stringify(u));
+      }
+    } catch {}
     if (userData?.telegram_user_id) {
       try {
-        await updateLanguage(userData.telegram_user_id, newLang);
+        await updateLanguage(userData.telegram_user_id, lang);
       } catch {}
     }
   };

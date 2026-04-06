@@ -20,37 +20,58 @@ const itemVariants: Variants = {
 type AIOption = {
   id: GenerationProvider;
   label: string;
-  description: string;
+  descriptionRu: string;
+  descriptionUz: string;
   type: "image" | "video";
 };
 
 type ModeOption = {
-  key: string;         // quality_key sent to backend
-  label: string;       // e.g. "Стандарт 1K"
-  detail: string;      // e.g. "720p · 8 сек"
+  key: string;
+  labelRu: string;
+  labelUz: string;
+  detailRu: string;
+  detailUz: string;
   cost: number;
 };
 
 const AI_LIST: AIOption[] = [
-  { id: "nano_banana", label: "🍌 Nano Banana",  description: "Генерация картинок",   type: "image" },
-  { id: "veo",         label: "🎬 Veo 3",         description: "Видео от Google",       type: "video" },
-  { id: "kling",       label: "🎥 Kling 3.0",     description: "Видео Kling Motion",    type: "video" },
+  {
+    id: "nano_banana",
+    label: "🍌 Nano Banana",
+    descriptionRu: "Генерация изображений высокого качества",
+    descriptionUz: "Yuqori sifatli rasm generatsiyasi",
+    type: "image",
+  },
+  {
+    id: "veo",
+    label: "🎬 Veo 3",
+    descriptionRu: "Видео от Google — плавное и реалистичное",
+    descriptionUz: "Google'dan silliq va real video",
+    type: "video",
+  },
+  {
+    id: "kling",
+    label: "🎥 Kling 3.0",
+    descriptionRu: "Профессиональное видео — кинематографичность",
+    descriptionUz: "Professional kinematografik video",
+    type: "video",
+  },
 ];
 
 const MODES: Record<GenerationProvider, ModeOption[]> = {
   nano_banana: [
-    { key: "nano:std", label: "Стандарт 1K",  detail: "1024×1024",    cost: 5  },
-    { key: "nano:hd",  label: "HD 2K",         detail: "1536×1536",    cost: 10 },
-    { key: "nano:4k",  label: "4K",            detail: "2048×2048",    cost: 20 },
+    { key: "nano:std", labelRu: "Стандарт 1K",  labelUz: "Standart 1K",  detailRu: "1024×1024 · быстро",    detailUz: "1024×1024 · tez",       cost: 5  },
+    { key: "nano:hd",  labelRu: "HD 2K",         labelUz: "HD 2K",        detailRu: "1536×1536 · высокое",   detailUz: "1536×1536 · yuqori",    cost: 10 },
+    { key: "nano:4k",  labelRu: "4K Ultra",       labelUz: "4K Ultra",     detailRu: "2048×2048 · максимум",  detailUz: "2048×2048 · maksimal",  cost: 20 },
   ],
   veo: [
-    { key: "veo:fast",    label: "Fast 720p 8 сек",    detail: "720p · 8 сек · быстро",   cost: 30 },
-    { key: "veo:quality", label: "Quality 1080p 8 сек", detail: "1080p · 8 сек · качество", cost: 80 },
+    { key: "veo:fast",    labelRu: "Fast 720p",    labelUz: "Fast 720p",    detailRu: "720p · 8 сек · быстро",     detailUz: "720p · 8 son · tez",       cost: 30 },
+    { key: "veo:quality", labelRu: "Quality 1080p", labelUz: "Quality 1080p", detailRu: "1080p · 8 сек · качество", detailUz: "1080p · 8 son · sifatli",  cost: 80 },
   ],
   kling: [
-    { key: "kling:std5",  label: "Стандарт 5 сек", detail: "Стандарт · 5 сек",  cost: 40  },
-    { key: "kling:pro5",  label: "Pro 5 сек",       detail: "Pro · 5 сек",       cost: 70  },
-    { key: "kling:pro10", label: "Pro 10 сек",      detail: "Pro · 10 сек",      cost: 120 },
+    { key: "kling:std5",  labelRu: "Стандарт 5 сек", labelUz: "Standart 5 son", detailRu: "Стандарт · 5 секунд",  detailUz: "Standart · 5 soniya",  cost: 40  },
+    { key: "kling:pro5",  labelRu: "Pro 5 сек",       labelUz: "Pro 5 son",      detailRu: "Pro · 5 секунд",       detailUz: "Pro · 5 soniya",       cost: 70  },
+    { key: "kling:pro10", labelRu: "Pro 10 сек",      labelUz: "Pro 10 son",     detailRu: "Pro · 10 секунд",      detailUz: "Pro · 10 soniya",      cost: 120 },
   ],
 };
 
@@ -59,6 +80,7 @@ type Step = "ai" | "mode" | "prompt";
 export default function GeneratePage() {
   const router = useRouter();
   const { backendUser, language, loading: userLoading } = useMiniAppUser();
+  const uz = language === "uz";
 
   const [step, setStep] = useState<Step>("ai");
   const [provider, setProvider] = useState<GenerationProvider>("nano_banana");
@@ -102,7 +124,7 @@ export default function GeneratePage() {
       const json = await res.json() as { url?: string };
       if (json.url) setUploadedUrl(json.url);
     } catch {
-      setError("Не удалось загрузить изображение.");
+      setError(uz ? "Rasmni yuklashda xato yuz berdi." : "Не удалось загрузить изображение.");
       setImagePreview(null);
     } finally {
       setUploading(false);
@@ -120,15 +142,15 @@ export default function GeneratePage() {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("medium");
 
     if (!telegramUserId) {
-      setError("Откройте через Telegram");
+      setError(uz ? "Telegram orqali oching" : "Откройте через Telegram");
       return;
     }
     if (prompt.trim().length < 3) {
-      setError("Промпт должен быть не короче 3 символов");
+      setError(uz ? "Prompt kamida 3 ta belgidan iborat bo'lishi kerak" : "Промпт должен быть не короче 3 символов");
       return;
     }
     if (!modeKey) {
-      setError("Выберите режим");
+      setError(uz ? "Rejimni tanlang" : "Выберите режим");
       return;
     }
 
@@ -148,7 +170,9 @@ export default function GeneratePage() {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
       setTimeout(() => router.push("/jobs"), 1500);
     } catch {
-      setError("Не удалось создать задачу. Проверь баланс.");
+      setError(uz
+        ? "Vazifani yaratib bo'lmadi. Balansni tekshiring."
+        : "Не удалось создать задачу. Проверьте баланс.");
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
       setSubmitting(false);
     }
@@ -182,11 +206,13 @@ export default function GeneratePage() {
             </button>
           )}
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Создание</h1>
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              {uz ? "Yaratish" : "Создание"}
+            </h1>
             <p className="text-xs text-white/40 mt-0.5">
-              {step === "ai" && "Выберите нейросеть"}
-              {step === "mode" && `${selectedAI.label} — выберите режим`}
-              {step === "prompt" && `${selectedAI.label} · ${selectedMode?.label}`}
+              {step === "ai" && (uz ? "Neyrosetni tanlang" : "Выберите нейросеть")}
+              {step === "mode" && `${selectedAI.label} — ${uz ? "rejimni tanlang" : "выберите режим"}`}
+              {step === "prompt" && `${selectedAI.label} · ${uz ? selectedMode?.labelUz : selectedMode?.labelRu}`}
             </p>
           </div>
         </motion.div>
@@ -221,8 +247,12 @@ export default function GeneratePage() {
                 <Sparkles className="text-green-400" size={24} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-green-400">Генерация запущена!</h3>
-                <p className="text-green-400/70 text-sm mt-1">Переходим к работам...</p>
+                <h3 className="text-lg font-bold text-green-400">
+                  {uz ? "Generatsiya boshlandi!" : "Генерация запущена!"}
+                </h3>
+                <p className="text-green-400/70 text-sm mt-1">
+                  {uz ? "Ishlarga o'tmoqdamiz..." : "Переходим к работам..."}
+                </p>
               </div>
             </motion.div>
           )}
@@ -251,7 +281,9 @@ export default function GeneratePage() {
                     </div>
                     <div className="text-left">
                       <div className="font-semibold text-white text-base">{ai.label}</div>
-                      <div className="text-xs text-white/50 mt-0.5">{ai.description}</div>
+                      <div className="text-xs text-white/50 mt-0.5">
+                        {uz ? ai.descriptionUz : ai.descriptionRu}
+                      </div>
                     </div>
                   </div>
                   <ChevronRight className="text-white/30" size={18} />
@@ -269,7 +301,12 @@ export default function GeneratePage() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-3"
             >
-              <p className="text-xs text-white/40 px-1">Баланс: <span className="text-white/70 font-semibold">{credits} кр.</span></p>
+              <p className="text-xs text-white/40 px-1">
+                {uz ? "Balans:" : "Баланс:"}{" "}
+                <span className="text-white/70 font-semibold">
+                  {credits} {uz ? "kr." : "кр."}
+                </span>
+              </p>
               {MODES[provider].map((mode) => {
                 const canAfford = credits >= mode.cost;
                 return (
@@ -282,11 +319,17 @@ export default function GeneratePage() {
                     }`}
                   >
                     <div className="text-left">
-                      <div className="font-semibold text-white text-sm">{mode.label}</div>
-                      <div className="text-xs text-white/40 mt-0.5">{mode.detail}</div>
+                      <div className="font-semibold text-white text-sm">
+                        {uz ? mode.labelUz : mode.labelRu}
+                      </div>
+                      <div className="text-xs text-white/40 mt-0.5">
+                        {uz ? mode.detailUz : mode.detailRu}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-brand-cyan font-bold text-sm">{mode.cost} кр.</span>
+                      <span className="text-brand-cyan font-bold text-sm">
+                        {mode.cost} {uz ? "kr." : "кр."}
+                      </span>
                       <ChevronRight className="text-white/30" size={18} />
                     </div>
                   </button>
@@ -307,12 +350,18 @@ export default function GeneratePage() {
             >
               {/* Selected summary */}
               <div className="glass-card p-3 flex items-center justify-between">
-                <span className="text-xs text-white/50">Режим</span>
-                <span className="text-xs font-semibold text-brand-cyan">{selectedMode?.label} · {selectedMode?.cost} кр.</span>
+                <span className="text-xs text-white/50">
+                  {uz ? "Rejim" : "Режим"}
+                </span>
+                <span className="text-xs font-semibold text-brand-cyan">
+                  {uz ? selectedMode?.labelUz : selectedMode?.labelRu} · {selectedMode?.cost} {uz ? "kr." : "кр."}
+                </span>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-white/50 px-1">Промпт</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-white/50 px-1">
+                  {uz ? "Prompt" : "Промпт"}
+                </label>
                 <div className="flex gap-3">
                   {/* Image Upload */}
                   <div
@@ -329,7 +378,7 @@ export default function GeneratePage() {
                     )}
                     {imagePreview ? (
                       <>
-                        <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
+                        <img src={imagePreview} alt={uz ? "Ko'rinish" : "Превью"} className="w-full h-full object-cover" />
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); clearImage(); }}
@@ -341,7 +390,9 @@ export default function GeneratePage() {
                     ) : (
                       <div className="flex flex-col items-center gap-1 text-white/40">
                         <Upload size={18} />
-                        <span className="text-[10px] text-center leading-tight">Фото</span>
+                        <span className="text-[10px] text-center leading-tight">
+                          {uz ? "Rasm" : "Фото"}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -352,7 +403,11 @@ export default function GeneratePage() {
                     style={{ minHeight: "120px" }}
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="Например: a futuristic cat in neon city, 4k, cinematic..."
+                    placeholder={
+                      uz
+                        ? "Masalan: neon shahar kechasi, sinematografik 4K..."
+                        : "Например: неоновый город ночью, кинематографично 4K..."
+                    }
                     required
                   />
                 </div>
@@ -366,12 +421,14 @@ export default function GeneratePage() {
                 {submitting ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="animate-spin" size={20} />
-                    <span>Генерирую...</span>
+                    <span>{uz ? "Generatsiya..." : "Генерирую..."}</span>
                   </div>
                 ) : (
                   <>
                     <Sparkles className="mr-2" size={18} />
-                    Сгенерировать · {selectedMode?.cost} кр.
+                    {uz
+                      ? `Yaratish · ${selectedMode?.cost} kr.`
+                      : `Сгенерировать · ${selectedMode?.cost} кр.`}
                   </>
                 )}
               </button>

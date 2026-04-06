@@ -44,6 +44,7 @@ def serialize_user(user, credits_balance: int, referral_count: int = 0) -> dict:
         "language_code": user.language_code,
         "credits_balance": credits_balance,
         "referral_count": referral_count,
+        "referral_earnings": getattr(user, "referral_earnings", 0) or 0,
         "daily_streak": getattr(user, "daily_streak", 0) or 0,
         "created_at": user.created_at.isoformat() if getattr(user, "created_at", None) else None,
     }
@@ -150,22 +151,64 @@ async def get_achievements(telegram_id: int, db: Session = Depends(get_db)):
         user = user_service.get_user_by_telegram_id(telegram_id)
         if not user:
             return []
+
+        # Proactively check and award any newly earned achievements
+        try:
+            from bot.services.achievements import check_and_award_achievements
+            newly = check_and_award_achievements(
+                db=db,
+                user_id=user.id,
+                telegram_id=user.telegram_user_id,
+                lang=user.language_code or "ru",
+            )
+            if newly:
+                db.commit()
+        except Exception:
+            pass
+
+        lang = getattr(user, "language_code", "ru") or "ru"
         ALL = [
-            {"code":"first_gen","name":"Первая генерация","emoji":"🌱","bonus":2},
-            {"code":"artist_10","name":"10 картинок","emoji":"🎨","bonus":5},
-            {"code":"director","name":"Первое видео","emoji":"🎬","bonus":5},
-            {"code":"buyer","name":"Первая покупка","emoji":"💎","bonus":10},
-            {"code":"streak_7","name":"Стрик 7 дней","emoji":"🔥","bonus":15},
-            {"code":"referrer","name":"5 рефералов","emoji":"👥","bonus":25},
-            {"code":"centurion","name":"100 генераций","emoji":"💯","bonus":30},
-            {"code":"legend","name":"500 генераций","emoji":"👑","bonus":100},
+            {"code":"first_gen", "name_ru":"Первый шаг",    "name_uz":"Birinchi qadam", "emoji":"🌱","bonus":2},
+            {"code":"artist_10", "name_ru":"Художник",       "name_uz":"Rassom",         "emoji":"🎨","bonus":5},
+            {"code":"director",  "name_ru":"Режиссёр",       "name_uz":"Rejissyor",      "emoji":"🎬","bonus":5},
+            {"code":"buyer",     "name_ru":"Меценат",        "name_uz":"Homiy",          "emoji":"💎","bonus":10},
+            {"code":"streak_7",  "name_ru":"Огонь",          "name_uz":"Olov",           "emoji":"🔥","bonus":15},
+            {"code":"referrer",  "name_ru":"Амбассадор",     "name_uz":"Ambassador",     "emoji":"👥","bonus":25},
+            {"code":"centurion", "name_ru":"Сотня",          "name_uz":"Yuz",            "emoji":"💯","bonus":30},
+            {"code":"legend",    "name_ru":"Легенда",        "name_uz":"Afsona",         "emoji":"👑","bonus":100},
         ]
         try:
-            earned = {a.code for a in db.query(Achievement).filter(
-                Achievement.user_id == user.id).all()}
+            earned_rows = db.query(Achievement).filter(Achievement.user_id == user.id).all()
+            earned = {a.achievement_code for a in earned_rows}
         except Exception:
             earned = set()
-        return [{**a, "earned": a["code"] in earned} for a in ALL]
+        result = []
+        for a in ALL:
+            name = a["name_uz"] if lang == "uz" else a["name_ru"]
+            result.append({
+                "code": a["code"],
+                "name": name,
+                "name_ru": a["name_ru"],
+                "name_uz": a["name_uz"],
+                "emoji": a["emoji"],
+                "bonus": a["bonus"],
+                "earned": a["code"] in earned,
+            })
+        return result
+    finally:
+        db.close()
+
+
+@router.patch("/language")
+def update_language(payload: LanguageUpdateRequest, db: Session = Depends(get_db)) -> dict:
+    """Update user's language preference."""
+    try:
+        user_service = UserService(db)
+        lang = payload.language if payload.language in ("ru", "uz") else "ru"
+        user_service.set_user_language(payload.telegram_user_id, lang)
+        return {"success": True, "language": lang}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
     finally:
         db.close()
 
