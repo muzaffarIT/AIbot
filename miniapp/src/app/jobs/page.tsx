@@ -86,7 +86,7 @@ function MediaViewer({ job, lang, onClose }: MediaViewerProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/90 flex flex-col"
+        className="fixed inset-0 z-[200] bg-black/90 flex flex-col"
         onClick={onClose}
       >
         {/* Top bar */}
@@ -132,7 +132,8 @@ function MediaViewer({ job, lang, onClose }: MediaViewerProps) {
 
         {/* Bottom bar — download */}
         <div
-          className="px-4 pb-8 pt-3 shrink-0"
+          className="px-4 pt-3 shrink-0"
+          style={{ paddingBottom: "max(40px, calc(env(safe-area-inset-bottom, 0px) + 32px))" }}
           onClick={(e) => e.stopPropagation()}
         >
           <button

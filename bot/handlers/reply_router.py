@@ -60,17 +60,28 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
             await _send_history(message)
 
         elif action == "menu_balance":
-            name = user.first_name or message.from_user.username or "друг"
+            uzs_balance = getattr(user, "referral_earnings", 0) or 0
+            uzs_fmt = f"{uzs_balance:,}".replace(",", " ")
             if lang == "uz":
                 text = (
-                    f"💰 Balansingiz: {credits} kredit\n\n"
-                    f"1 kredit = $0.075"
+                    f"💳 <b>Balansingiz</b>\n\n"
+                    f"⚡ Kreditlar: <b>{credits} kr.</b>\n"
+                    f"💵 So'm balansi: <b>{uzs_fmt} so'm</b>\n\n"
+                    f"Generatsiya narxlari:\n"
+                    f"🍌 Nano Banana — 5–20 kr.\n"
+                    f"🎬 Veo 3 — 30–80 kr.\n"
+                    f"🎥 Kling — 40–120 kr."
                 )
                 btn_text = "💎 Kredit sotib olish"
             else:
                 text = (
-                    f"💰 Ваш баланс: {credits} кредитов\n\n"
-                    f"1 кредит = $0.075"
+                    f"💳 <b>Ваш баланс</b>\n\n"
+                    f"⚡ Кредиты: <b>{credits} кр.</b>\n"
+                    f"💵 Денежный баланс: <b>{uzs_fmt} сум</b>\n\n"
+                    f"Стоимость генераций:\n"
+                    f"🍌 Nano Banana — 5–20 кр.\n"
+                    f"🎬 Veo 3 — 30–80 кр.\n"
+                    f"🎥 Kling — 40–120 кр."
                 )
                 btn_text = "💎 Купить кредиты"
 
@@ -82,7 +93,7 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
                     )
                 )
             ]])
-            await message.answer(text, reply_markup=keyboard)
+            await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
         elif action == "menu_referral":
             from bot.handlers.referral import _send_referral_info

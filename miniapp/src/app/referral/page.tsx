@@ -71,12 +71,12 @@ export default function ReferralPage() {
     ? [
         { icon: "🔗", title: "Havolani ulashing", desc: "Referal havolangizni do'stlaringizga yuboring — messenjer yoki ijtimoiy tarmoqda" },
         { icon: "👤", title: "Do'stingiz ro'yxatdan o'tadi", desc: "U HARF AI ga qo'shiladi va darhol 5 ta bepul kredit oladi" },
-        { icon: "💰", title: "Siz 10% komissiya olasiz", desc: "Do'stingizning har bir to'ldirishidan 10% avtomatik hisobingizga tushadi" },
+        { icon: "💰", title: "Siz 10% so'm olasiz", desc: "Do'stingizning har bir to'ldirishidan 10% so'm balansingizga avtomatik tushadi" },
       ]
     : [
         { icon: "🔗", title: "Поделитесь ссылкой", desc: "Отправьте реферальную ссылку друзьям — в мессенджере или соцсетях" },
         { icon: "👤", title: "Друг регистрируется", desc: "Он присоединяется к HARF AI и сразу получает 5 бесплатных кредитов" },
-        { icon: "💰", title: "Вы получаете 10%", desc: "С каждого пополнения друга 10% автоматически зачисляется на ваш счёт" },
+        { icon: "💰", title: "Вы получаете 10% в сумах", desc: "С каждого пополнения друга 10% суммы зачисляется на ваш денежный баланс" },
       ];
 
   if (loading) {
@@ -131,13 +131,13 @@ export default function ReferralPage() {
               <div>
                 <p className="text-lg font-extrabold text-white leading-tight">
                   {language === "uz"
-                    ? "Har bir to'lovdan\n10% kredit oling"
-                    : "Получайте 10% кредитов\nс каждого пополнения"}
+                    ? "Har bir to'lovdan\n10% so'm oling"
+                    : "Получайте 10% в сумах\nс каждого пополнения друга"}
                 </p>
                 <p className="text-sm text-white/50 mt-1">
                   {language === "uz"
-                    ? "Do'stingiz 400 kr. to'lasa → siz +40 kr. olasiz"
-                    : "Друг купил 400 кр. → вам +40 кр. автоматически"}
+                    ? "Do'stingiz 100 000 so'm to'lasa → siz +10 000 so'm olasiz"
+                    : "Друг внёс 100 000 сум → вам +10 000 сум на баланс"}
                 </p>
               </div>
             </div>
@@ -169,7 +169,7 @@ export default function ReferralPage() {
               {stats.earned.toLocaleString("ru-RU")}
             </p>
             <p className="text-xs text-white/30 mt-1">
-              {language === "uz" ? "so'm" : "сум"}
+              {language === "uz" ? "so'm (naqd)" : "сум (наличными)"}
             </p>
           </div>
         </motion.div>
