@@ -79,7 +79,6 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
             await start_onboarding(message, state, lang)
             return
 
-        credits = balance_service.get_balance_value(user.id)
         name = user.first_name or message.from_user.username or "друг"
 
         # Remove any lingering old reply keyboards
@@ -99,16 +98,12 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
                 f"Xush kelibsiz, <b>{name}</b> 👋\n\n"
                 f"<b>HARF AI</b> — sun'iy intellekt bilan rasm va video yarating.\n"
                 f"━━━━━━━━━━━━━━\n"
-                f"💳 Balans: <b>{credits}</b> kredit\n"
-                f"━━━━━━━━━━━━━━\n"
                 f"Quyidagi menyudan foydalaning 👇"
             )
         else:
             text = (
                 f"Добро пожаловать, <b>{name}</b> 👋\n\n"
                 f"<b>HARF AI</b> — создавайте изображения и видео с помощью нейросетей.\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"💳 Баланс: <b>{credits}</b> кредитов\n"
                 f"━━━━━━━━━━━━━━\n"
                 f"Используйте меню ниже 👇"
             )

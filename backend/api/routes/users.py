@@ -73,6 +73,7 @@ def sync_user(payload: SyncUserRequest, token_user: dict = Depends(verify_tma_au
             # Award any earned-but-unclaimed achievements silently on sync
             try:
                 from bot.services.achievements import check_and_award_achievements
+                import logging as _logging
                 check_and_award_achievements(
                     db=db,
                     user_id=user.id,
@@ -80,18 +81,19 @@ def sync_user(payload: SyncUserRequest, token_user: dict = Depends(verify_tma_au
                     lang=user.language_code or "ru",
                 )
                 db.commit()
-            except Exception:
-                pass  # Never crash sync due to achievement errors
+            except Exception as _ach_err:
+                _logging.getLogger(__name__).warning(f"Achievement check failed on sync: {_ach_err}")
 
             credits_balance = balance_service.get_balance_value(user.id)
             referral_count = get_referral_count(db, user.telegram_user_id)
             return serialize_user(user, credits_balance, referral_count)
         except Exception as e:
             # Fallback for sync to never crash frontend
+            # NOTE: do NOT return language_code here — it would overwrite user's chosen language
             return {
                 "telegram_user_id": payload.telegram_id,
                 "credits_balance": 0,
-                "language_code": payload.language_code or "ru",
+                "language_code": None,
                 "id": 0,
                 "username": payload.username,
                 "first_name": payload.first_name,
@@ -154,7 +156,7 @@ async def get_achievements(telegram_id: int, db: Session = Depends(get_db)):
             {"code":"director","name":"Первое видео","emoji":"🎬","bonus":5},
             {"code":"buyer","name":"Первая покупка","emoji":"💎","bonus":10},
             {"code":"streak_7","name":"Стрик 7 дней","emoji":"🔥","bonus":15},
-            {"code":"referrer_5","name":"5 рефералов","emoji":"👥","bonus":25},
+            {"code":"referrer","name":"5 рефералов","emoji":"👥","bonus":25},
             {"code":"centurion","name":"100 генераций","emoji":"💯","bonus":30},
             {"code":"legend","name":"500 генераций","emoji":"👑","bonus":100},
         ]

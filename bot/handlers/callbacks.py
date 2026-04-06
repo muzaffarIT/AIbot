@@ -24,7 +24,6 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
     db = get_db_session()
     try:
         user_service = UserService(db)
-        balance_service = BalanceService(db)
         user = user_service.get_or_create_user(
             telegram_user_id=callback.from_user.id,
             username=callback.from_user.username,
@@ -32,7 +31,6 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
             last_name=callback.from_user.last_name,
         )
         lang = (user.language_code if user else None) or "ru"
-        credits = balance_service.get_balance_value(user.id)
         name = user.first_name or callback.from_user.username or ("do'st" if lang == "uz" else "друг")
 
         if lang == "uz":
@@ -40,16 +38,12 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
                 f"Xush kelibsiz, <b>{name}</b> 👋\n\n"
                 f"<b>HARF AI</b> — sun'iy intellekt bilan rasm va video yarating.\n"
                 f"━━━━━━━━━━━━━━\n"
-                f"💳 Balans: <b>{credits}</b> kredit\n"
-                f"━━━━━━━━━━━━━━\n"
                 f"Quyidagi menyudan foydalaning 👇"
             )
         else:
             text = (
                 f"Добро пожаловать, <b>{name}</b> 👋\n\n"
                 f"<b>HARF AI</b> — создавайте изображения и видео с помощью нейросетей.\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"💳 Баланс: <b>{credits}</b> кредитов\n"
                 f"━━━━━━━━━━━━━━\n"
                 f"Используйте меню ниже 👇"
             )

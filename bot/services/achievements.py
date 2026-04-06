@@ -45,49 +45,56 @@ def check_and_award_achievements(
     Returns list of (achievement, bonus_credits) for newly awarded.
     Must be called inside a DB session — does NOT commit, caller should commit.
     """
-    from sqlalchemy import select, func as sqlfunc
     from backend.models.achievement import Achievement
     from backend.models.generation_job import GenerationJob
     from shared.enums.job_status import JobStatus
     from shared.enums.providers import AIProvider
 
     # Already earned codes
-    earned_rows = db.execute(
-        select(Achievement.achievement_code).where(Achievement.user_id == user_id)
-    ).scalars().all()
-    earned_codes = set(earned_rows)
+    earned_codes = {
+        a.achievement_code
+        for a in db.query(Achievement).filter(Achievement.user_id == user_id).all()
+    }
 
-    # Stats for user
-    completed_jobs = db.execute(
-        select(sqlfunc.count()).where(
+    # Stats for user — use legacy db.query() style for reliable count
+    completed_jobs = (
+        db.query(GenerationJob)
+        .filter(
             GenerationJob.user_id == user_id,
             GenerationJob.status == JobStatus.COMPLETED,
         )
-    ).scalar() or 0
+        .count()
+    )
 
-    image_jobs = db.execute(
-        select(sqlfunc.count()).where(
+    image_jobs = (
+        db.query(GenerationJob)
+        .filter(
             GenerationJob.user_id == user_id,
             GenerationJob.status == JobStatus.COMPLETED,
             GenerationJob.provider == AIProvider.NANO_BANANA,
         )
-    ).scalar() or 0
+        .count()
+    )
 
-    video_jobs = db.execute(
-        select(sqlfunc.count()).where(
+    video_jobs = (
+        db.query(GenerationJob)
+        .filter(
             GenerationJob.user_id == user_id,
             GenerationJob.status == JobStatus.COMPLETED,
             GenerationJob.provider.in_([AIProvider.VEO, AIProvider.KLING]),
         )
-    ).scalar() or 0
+        .count()
+    )
 
     from backend.models.credit_transaction import CreditTransaction
-    purchase_count = db.execute(
-        select(sqlfunc.count()).where(
+    purchase_count = (
+        db.query(CreditTransaction)
+        .filter(
             CreditTransaction.user_id == user_id,
             CreditTransaction.reference_type == "payment",
         )
-    ).scalar() or 0
+        .count()
+    )
 
     from backend.models.user import User
     user = db.get(User, user_id)
