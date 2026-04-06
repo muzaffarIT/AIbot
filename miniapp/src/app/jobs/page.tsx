@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { Clock, CheckCircle2, XCircle, RefreshCcw, AlertCircle, Image as ImageIcon,
-  Download, X, Play, ExternalLink } from "lucide-react";
+  Download, X, Play } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api, type GenerationJob } from "@/lib/api";
 
@@ -291,18 +291,6 @@ export default function JobsPage() {
                     </button>
                   )}
 
-                  {/* External link fallback for non-standard providers */}
-                  {job.status === "completed" && job.result_url && false && (
-                    <a
-                      href={job.result_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 text-xs font-medium"
-                    >
-                      <ExternalLink size={12} />
-                      {uz ? "Brauzerda ochish" : "Открыть в браузере"}
-                    </a>
-                  )}
                 </div>
               ))}
             </motion.div>
