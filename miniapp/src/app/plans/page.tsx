@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowLeft, Zap, CreditCard } from "lucide-react";
+import { ArrowLeft, Zap, CreditCard, Banknote, CheckCircle2 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api } from "@/lib/api";
 
@@ -87,10 +87,14 @@ export default function PlansPage() {
   const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [buyError, setBuyError] = useState("");
+  const [successPlan, setSuccessPlan] = useState<{ name: string; credits: number } | null>(null);
+
+  const uz = language === "uz";
+  const uzsBalance = userData?.uzs_balance ?? 0;
 
   const handleBuy = async (planId: string) => {
     if (!userData?.telegram_user_id) {
-      setBuyError(language === "uz" ? "Foydalanuvchi topilmadi" : "Пользователь не найден");
+      setBuyError(uz ? "Foydalanuvchi topilmadi" : "Пользователь не найден");
       return;
     }
     try {
@@ -109,7 +113,22 @@ export default function PlansPage() {
         `&alreadyPending=${result.already_pending ? "1" : "0"}`
       );
     } catch {
-      setBuyError(language === "uz" ? "Xatolik yuz berdi. Qayta urinib ko'ring." : "Ошибка при создании заявки. Попробуйте снова.");
+      setBuyError(uz ? "Xatolik yuz berdi. Qayta urinib ko'ring." : "Ошибка при создании заявки. Попробуйте снова.");
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const handlePayFromBalance = async (planId: string, planPrice: number) => {
+    if (!userData?.telegram_user_id) return;
+    if (uzsBalance < planPrice) return;
+    try {
+      setLoadingPlan(`balance_${planId}`);
+      setBuyError("");
+      const result = await api.payFromBalance(userData.telegram_user_id, planId);
+      setSuccessPlan({ name: result.plan_name, credits: result.credits_added });
+    } catch (e: any) {
+      setBuyError(e?.message ?? (uz ? "Xatolik yuz berdi" : "Ошибка оплаты с баланса"));
     } finally {
       setLoadingPlan(null);
     }
@@ -136,18 +155,57 @@ export default function PlansPage() {
           </h1>
         </motion.div>
 
+        {/* Success screen */}
+        {successPlan && (
+          <motion.div variants={itemVariants} className="glass-card p-6 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
+              <CheckCircle2 size={36} className="text-green-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white">{uz ? "Muvaffaqiyatli!" : "Успешно!"}</h2>
+              <p className="text-white/60 text-sm mt-1">
+                {uz
+                  ? `${successPlan.name} — ${successPlan.credits} kredit hisobingizga qo'shildi`
+                  : `${successPlan.name} — ${successPlan.credits} кредитов начислено`}
+              </p>
+            </div>
+            <Link href="/"
+              className="block py-3 px-6 rounded-2xl font-bold text-white text-sm"
+              style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+            >
+              {uz ? "Bosh sahifaga" : "На главную"}
+            </Link>
+          </motion.div>
+        )}
+
+        {/* UZS balance notice */}
+        {uzsBalance > 0 && !successPlan && (
+          <motion.div variants={itemVariants}
+            className="flex items-center gap-3 p-4 rounded-2xl bg-green-500/10 border border-green-500/20"
+          >
+            <Banknote className="text-green-400 shrink-0" size={20} />
+            <p className="text-sm text-green-300">
+              {uz
+                ? `So'm balansida: ${fmtUzs(uzsBalance, "uz")} — tarif uchun to'g'ridan-to'g'ri foydalanishingiz mumkin`
+                : `На балансе: ${fmtUzs(uzsBalance, "ru")} — можно оплатить тариф напрямую`}
+            </p>
+          </motion.div>
+        )}
+
         {/* Payment notice */}
+        {!successPlan && (
         <motion.div
           variants={itemVariants}
           className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10"
         >
           <CreditCard className="text-brand-cyan shrink-0" size={22} />
           <p className="text-sm text-white/70">
-            {language === "uz"
+            {uz
               ? "To'lov karta orqali. Tanlangandan so'ng karta raqami ko'rsatiladi."
               : "Оплата по карте. После выбора появятся реквизиты для оплаты."}
           </p>
         </motion.div>
+        )}
 
         {buyError && (
           <motion.div variants={itemVariants} className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
@@ -156,7 +214,7 @@ export default function PlansPage() {
         )}
 
         {/* Packages */}
-        <motion.div variants={itemVariants} className="space-y-4">
+        {!successPlan && <motion.div variants={itemVariants} className="space-y-4">
           {PLANS.map((plan) => (
             <div
               key={plan.id}
@@ -205,6 +263,21 @@ export default function PlansPage() {
                   </p>
                 </div>
 
+                {/* Pay from UZS balance if sufficient */}
+                {uzsBalance >= plan.priceUzs && (
+                  <button
+                    onClick={() => handlePayFromBalance(plan.id, plan.priceUzs)}
+                    disabled={loadingPlan !== null}
+                    className="flex items-center justify-center gap-2 font-bold px-4 py-3 rounded-xl transition-all active:scale-95 w-full disabled:opacity-60 text-white"
+                    style={{ background: "linear-gradient(135deg, #10b981, #059669)", boxShadow: "0 4px 16px rgba(16,185,129,0.3)" }}
+                  >
+                    <Banknote size={16} />
+                    {loadingPlan === `balance_${plan.id}`
+                      ? (uz ? "Yuklanmoqda..." : "Обработка...")
+                      : (uz ? "💵 Balansdan to'lash" : "💵 Оплатить с баланса")}
+                  </button>
+                )}
+
                 <button
                   onClick={() => handleBuy(plan.id)}
                   disabled={loadingPlan !== null}
@@ -212,13 +285,13 @@ export default function PlansPage() {
                 >
                   <CreditCard size={16} />
                   {loadingPlan === plan.id
-                    ? (language === "uz" ? "Yuklanmoqda..." : "Загрузка...")
-                    : (language === "uz" ? "Sotib olish" : "Купить")}
+                    ? (uz ? "Yuklanmoqda..." : "Загрузка...")
+                    : (uz ? "Sotib olish" : "Купить по карте")}
                 </button>
               </div>
             </div>
           ))}
-        </motion.div>
+        </motion.div>}
 
         {/* Generation prices */}
         <motion.div variants={itemVariants} className="space-y-3">

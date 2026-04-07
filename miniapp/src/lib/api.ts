@@ -259,6 +259,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ telegram_user_id, amount }),
     }),
+
+  payFromBalance: (telegram_user_id: number, plan_code: string) =>
+    request<{
+      success: boolean;
+      plan_name: string;
+      plan_code: string;
+      credits_added: number;
+      new_credits_balance: number;
+      new_uzs_balance: number;
+    }>("/api/payments/pay-from-balance", {
+      method: "POST",
+      body: JSON.stringify({ telegram_user_id, plan_code }),
+    }),
 };
 
 // ─── Legacy named exports (used by existing pages) ────────────────────────────

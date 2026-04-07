@@ -118,20 +118,23 @@ def create_manual_payment(payload: CreateManualPaymentRequest, db: Session = Dep
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Auto-cancel pending payments older than 24h
+        # Auto-cancel stale or non-submitted pending payments
         from datetime import datetime, timezone, timedelta
         from shared.enums.order_status import OrderStatus as _OS
+        from backend.db.repositories.orders import OrderRepository as _OR2
         stale = pay_repo.get_pending_manual_payment(user.id)
         if stale:
             age = datetime.now(timezone.utc) - stale.created_at.replace(tzinfo=timezone.utc)
-            if age > timedelta(hours=24):
-                from backend.db.repositories.orders import OrderRepository as _OR2
+            stale_order = _OR2(db).get_by_id(stale.order_id)
+            if age > timedelta(hours=24) or stale.status == PaymentStatus.CREATED:
+                # Cancel: either too old, or user never submitted payment (CREATED state = not yet claimed paid)
                 pay_repo.update_status(stale, PaymentStatus.CANCELLED)
-                _OR2(db).update_status(_OR2(db).get_by_id(stale.order_id), _OS.CANCELLED)
+                if stale_order:
+                    _OR2(db).update_status(stale_order, _OS.CANCELLED)
                 db.commit()
                 stale = None
 
-        # Return existing pending payment instead of creating duplicate
+        # Only block on PROCESSING payments (user claimed they paid, awaiting admin review)
         existing = stale
         if existing:
             from backend.db.repositories.orders import OrderRepository
@@ -365,6 +368,83 @@ async def uzs_topup_notify(payload: UzsTopupNotifyRequest, db: Session = Depends
     if tg_errors:
         result["warnings"] = tg_errors
     return result
+
+
+class PayFromBalanceRequest(BaseModel):
+    telegram_user_id: int
+    plan_code: str
+
+
+@router.post("/pay-from-balance")
+def pay_from_balance(payload: PayFromBalanceRequest, db: Session = Depends(get_db)) -> dict:
+    """Pay for a plan directly from UZS wallet balance."""
+    try:
+        from backend.db.repositories.plans import PlanRepository
+        from backend.services.order_service import OrderService
+        from shared.enums.order_status import OrderStatus
+
+        user_service = UserService(db)
+        balance_service = PaymentService(db).balance_service
+        order_service = OrderService(db)
+        payment_service = PaymentService(db)
+        plan_repo = PlanRepository(db)
+
+        user = user_service.get_user_by_telegram_id(payload.telegram_user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        plan = plan_repo.get_by_code(payload.plan_code)
+        if not plan or not plan.is_active:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        plan_price = int(plan.price)
+        uzs_balance = getattr(user, "uzs_balance", 0) or 0
+        if uzs_balance < plan_price:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Недостаточно средств: {uzs_balance} < {plan_price}"
+            )
+
+        # Deduct from UZS wallet
+        user.uzs_balance = uzs_balance - plan_price
+        db.flush()
+
+        # Create order + payment and immediately confirm
+        order = order_service.create_order_for_plan(
+            user_id=user.id,
+            plan_code=payload.plan_code,
+            payment_method="uzs_balance",
+        )
+        payment = payment_service.create_payment_for_order(
+            order_id=order.id,
+            provider="uzs_balance",
+            method="balance",
+        )
+        confirmed = payment_service.confirm_payment(payment.id)
+        db.flush()
+
+        from backend.services.balance_service import BalanceService
+        new_credits = BalanceService(db).get_balance_value(user.id)
+        db.commit()
+
+        return {
+            "success": True,
+            "plan_name": plan.name,
+            "plan_code": plan.code,
+            "credits_added": plan.credits_amount,
+            "new_credits_balance": new_credits,
+            "new_uzs_balance": user.uzs_balance,
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"pay_from_balance error: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка оплаты с баланса")
+    finally:
+        db.close()
 
 
 @router.post("/{payment_id}/cancel")

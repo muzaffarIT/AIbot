@@ -113,5 +113,18 @@ class BalanceService:
         )
         return after
 
+    def subtract_uzs(self, user_id: int, amount: int) -> int:
+        """Deduct sums from user's UZS wallet. Returns new balance. Raises ValueError if insufficient."""
+        from backend.models.user import User
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("User not found")
+        current = getattr(user, "uzs_balance", 0) or 0
+        if current < amount:
+            raise ValueError(f"Insufficient UZS balance: {current} < {amount}")
+        user.uzs_balance = current - amount
+        self.db.flush()
+        return user.uzs_balance
+
     def get_last_transactions(self, user_id: int, limit: int = 10):
         return self.tx_repo.get_last_transactions(user_id=user_id, limit=limit)

@@ -27,6 +27,8 @@ def _run_migrations(db) -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_paid BOOLEAN DEFAULT FALSE NOT NULL",
         # UZS money wallet — real money balance, separate from credits and referral stats
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS uzs_balance INTEGER DEFAULT 0 NOT NULL",
+        # Migrate existing referral_earnings to uzs_balance (before the fix, direct top-ups used referral_earnings)
+        "UPDATE users SET uzs_balance = referral_earnings WHERE uzs_balance = 0 AND referral_earnings > 0",
         # Generation Jobs
         "ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS job_payload JSON",
         "ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS original_prompt TEXT",
