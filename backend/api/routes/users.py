@@ -45,6 +45,7 @@ def serialize_user(user, credits_balance: int, referral_count: int = 0) -> dict:
         "credits_balance": credits_balance,
         "referral_count": referral_count,
         "referral_earnings": getattr(user, "referral_earnings", 0) or 0,
+        "uzs_balance": getattr(user, "uzs_balance", 0) or 0,
         "daily_streak": getattr(user, "daily_streak", 0) or 0,
         "created_at": user.created_at.isoformat() if getattr(user, "created_at", None) else None,
     }

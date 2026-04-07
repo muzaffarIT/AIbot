@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, RefreshCw, Coins, Banknote, PlusCircle } from "lucide-react";
@@ -43,6 +44,7 @@ function fmtUzs(n: number) {
 }
 
 export default function WalletPage() {
+  const router = useRouter();
   const { backendUser: userData, telegramUser: tgUser, loading, language } = useMiniAppUser();
   const [history, setHistory] = useState<BalanceHistoryResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -73,7 +75,7 @@ export default function WalletPage() {
   };
 
   const credits = history?.credits_balance ?? userData?.credits_balance ?? 0;
-  const uzsBalance = userData?.referral_earnings ?? 0;
+  const uzsBalance = userData?.uzs_balance ?? 0;
 
   if (loading && historyLoading) {
     return (
@@ -174,15 +176,7 @@ export default function WalletPage() {
               </span>
             </div>
             <button
-              onClick={() => {
-                const tg = (window as any).Telegram?.WebApp;
-                const url = "https://t.me/harfai_bot?start=uzs_topup";
-                if (tg?.openTelegramLink) {
-                  tg.openTelegramLink(url);
-                } else {
-                  window.open(url, "_blank");
-                }
-              }}
+              onClick={() => router.push("/topup")}
               className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-2xl font-bold text-sm transition-all active:scale-95"
               style={{
                 background: "linear-gradient(135deg, #10b981, #059669)",

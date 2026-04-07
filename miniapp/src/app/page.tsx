@@ -70,7 +70,7 @@ export default function HomePage() {
 
   const displayName = tgUser?.first_name || userData?.username || (uz ? "Ijodkor" : "Творец");
   const credits = userData?.credits_balance ?? 0;
-  const uzsBalance = userData?.referral_earnings ?? 0;
+  const uzsBalance = userData?.uzs_balance ?? 0;
   const activeCount = jobs.filter((j) => isActiveJob(j.status)).length;
 
   function fmtUzs(n: number) {

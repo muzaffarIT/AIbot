@@ -229,7 +229,7 @@ async def process_menu_balance(callback: CallbackQuery) -> None:
         lang = (user.language_code if user else None) or "ru"
         if user:
             credits = balance_service.get_balance_value(user.id)
-            uzs_balance = getattr(user, "referral_earnings", 0) or 0
+            uzs_balance = getattr(user, "uzs_balance", 0) or 0
             uzs_fmt = f"{uzs_balance:,}".replace(",", " ")
             if lang == "uz":
                 text = (
@@ -577,9 +577,9 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
         if not user:
             await callback.answer("Пользователь не найден", show_alert=True)
             return
-        user.referral_earnings = (user.referral_earnings or 0) + amount
+        user.uzs_balance = (getattr(user, "uzs_balance", 0) or 0) + amount
         db.commit()
-        new_total = user.referral_earnings
+        new_total = user.uzs_balance
         lang = user.language_code or "ru"
     finally:
         db.close()

@@ -25,6 +25,8 @@ def _run_migrations(db) -> None:
         # Onboarding
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE NOT NULL",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_paid BOOLEAN DEFAULT FALSE NOT NULL",
+        # UZS money wallet — real money balance, separate from credits and referral stats
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS uzs_balance INTEGER DEFAULT 0 NOT NULL",
         # Generation Jobs
         "ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS job_payload JSON",
         "ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS original_prompt TEXT",

@@ -286,7 +286,8 @@ class ManualPaymentService:
                     if referrer:
                         # 10% of actual payment amount in UZS
                         uzs_commission = max(100, int(float(payment.amount) * 0.10))
-                        referrer.referral_earnings = (referrer.referral_earnings or 0) + uzs_commission
+                        referrer.referral_earnings = (referrer.referral_earnings or 0) + uzs_commission  # stats tracker
+                        referrer.uzs_balance = (getattr(referrer, "uzs_balance", 0) or 0) + uzs_commission  # spendable wallet
                         db.commit()
                         ref_lang = referrer.language_code or "ru"
                         total_fmt = f"{referrer.referral_earnings:,}".replace(",", " ")

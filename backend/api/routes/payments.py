@@ -293,6 +293,80 @@ async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
         db.close()
 
 
+@router.get("/card-details")
+def get_card_details() -> dict:
+    """Return card details for manual UZS top-up (shown in miniapp)."""
+    return {
+        "card_number": settings.card_number or "",
+        "card_owner": settings.card_owner or "",
+        "visa_card_number": settings.visa_card_number or "",
+        "visa_card_owner": settings.visa_card_owner or "",
+    }
+
+
+class UzsTopupNotifyRequest(BaseModel):
+    telegram_user_id: int
+    amount: int  # in sums
+
+
+@router.post("/uzs-topup-notify")
+async def uzs_topup_notify(payload: UzsTopupNotifyRequest, db: Session = Depends(get_db)) -> dict:
+    """User claims they paid for UZS balance top-up. Notify admins via bot."""
+    import json as _json
+
+    user_service = UserService(db)
+    user = user_service.get_user_by_telegram_id(payload.telegram_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    full_name = user.first_name or "—"
+    uname = f"@{user.username}" if user.username else "—"
+    amount_fmt = f"{payload.amount:,}".replace(",", " ")
+    tg_id = payload.telegram_user_id
+
+    confirm_kb = _json.dumps({"inline_keyboard": [[
+        {"text": "✅ Подтвердить", "callback_data": f"uzs_ok:{tg_id}:{payload.amount}"},
+        {"text": "❌ Отклонить",   "callback_data": f"uzs_no:{tg_id}"},
+    ]]})
+
+    notify_chat = (settings.payment_notify_chat_id or "").strip()
+    recipients = [int(notify_chat)] if notify_chat else list(settings.admin_ids_list)
+    bot_token = (settings.bot_token or "").strip()
+
+    tg_errors = []
+    if bot_token and recipients:
+        for chat_id in recipients:
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.post(
+                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                        json={
+                            "chat_id": chat_id,
+                            "text": (
+                                f"💵 <b>ПОПОЛНЕНИЕ БАЛАНСА (СУМ)</b>\n\n"
+                                f"👤 {full_name}\n"
+                                f"🔗 {uname}\n"
+                                f"🆔 <code>{tg_id}</code>\n\n"
+                                f"💰 Сумма: <b>{amount_fmt} сум</b>\n\n"
+                                f"Проверь карту и нажми кнопку:"
+                            ),
+                            "parse_mode": "HTML",
+                            "reply_markup": confirm_kb,
+                        },
+                    )
+                    if not resp.is_success:
+                        tg_errors.append(f"chat {chat_id}: {resp.text}")
+            except Exception as e:
+                tg_errors.append(str(e))
+    else:
+        logger.warning("uzs_topup_notify: no bot_token or admin recipients configured")
+
+    result: dict = {"ok": True, "amount": payload.amount}
+    if tg_errors:
+        result["warnings"] = tg_errors
+    return result
+
+
 @router.post("/{payment_id}/cancel")
 def cancel_payment(payment_id: int, db: Session = Depends(get_db)) -> dict:
     """User cancels their own pending payment."""

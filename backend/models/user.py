@@ -26,8 +26,11 @@ class User(Base):
         String(16), unique=True, index=True, nullable=False, default=_gen_ref_code
     )
     referred_by_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    referral_earnings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    referral_earnings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # stats: total earned from referrals
     referral_bonus_paid: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+    # Money wallet (UZS balance) — separate from credits
+    uzs_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Daily streak
     last_daily_claim: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -10,6 +10,7 @@ export type BackendUser = {
   credits_balance?: number;
   referral_count?: number;
   referral_earnings?: number;
+  uzs_balance?: number;
   daily_streak?: number;
   created_at?: string | null;
 };
@@ -246,6 +247,17 @@ export const api = {
   cancelPayment: (paymentId: number) =>
     request<{ status: string; payment_id: number }>(`/api/payments/${paymentId}/cancel`, {
       method: "POST",
+    }),
+
+  getCardDetails: () =>
+    request<{ card_number: string; card_owner: string; visa_card_number: string; visa_card_owner: string }>(
+      "/api/payments/card-details"
+    ),
+
+  uzsTopupNotify: (telegram_user_id: number, amount: number) =>
+    request<{ ok: boolean; amount: number }>("/api/payments/uzs-topup-notify", {
+      method: "POST",
+      body: JSON.stringify({ telegram_user_id, amount }),
     }),
 };
 
