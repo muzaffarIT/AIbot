@@ -58,20 +58,32 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
                 balance_service.add_credits(referrer.id, 5, "referral_registration_bonus")
                 db.commit()
                 
-                # Notify referrer
+                # Notify referrer — show who joined
                 try:
                     ref_lang = referrer.language_code or "ru"
-                    ref_notify = (
-                        f"👥 <b>Yangi referal!</b>\n\n"
-                        f"Havolangiz orqali yangi foydalanuvchi ro'yxatdan o'tdi.\n"
-                        f"Hisobingizga <b>+5</b> kredit qo'shildi 🎁\n\n"
-                        f"Hamkorlik dasturi: har bir to'ldirishdan 10% komissiya olasiz!"
-                        if ref_lang == "uz" else
-                        f"👥 <b>Новый реферал!</b>\n\n"
-                        f"По вашей ссылке зарегистрировался новый пользователь.\n"
-                        f"На ваш счёт зачислено <b>+5</b> кредитов 🎁\n\n"
-                        f"Партнёрская программа: получайте 10% с каждого пополнения друга!"
-                    )
+                    new_name = user.first_name or "—"
+                    new_uname = f"@{user.username}" if user.username else "—"
+                    new_tg_id = user.telegram_user_id
+                    if ref_lang == "uz":
+                        ref_notify = (
+                            f"👥 <b>Yangi referal!</b>\n\n"
+                            f"👤 {new_name}\n"
+                            f"🔗 {new_uname}\n"
+                            f"🆔 <code>{new_tg_id}</code>\n\n"
+                            f"Havolangiz orqali ro'yxatdan o'tdi.\n"
+                            f"Hisobingizga <b>+5</b> kredit qo'shildi 🎁\n\n"
+                            f"Ular balansni to'ldirganda siz <b>10% komissiya</b> olasiz!"
+                        )
+                    else:
+                        ref_notify = (
+                            f"👥 <b>Новый реферал!</b>\n\n"
+                            f"👤 {new_name}\n"
+                            f"🔗 {new_uname}\n"
+                            f"🆔 <code>{new_tg_id}</code>\n\n"
+                            f"Зарегистрировался по вашей ссылке.\n"
+                            f"На ваш счёт зачислено <b>+5</b> кредитов 🎁\n\n"
+                            f"Когда они пополнят баланс — вы получите <b>10% комиссию</b>!"
+                        )
                     await bot.send_message(
                         referrer.telegram_user_id,
                         ref_notify,

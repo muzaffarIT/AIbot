@@ -95,10 +95,11 @@ class ManualPaymentService:
             pay_repo = PaymentRepository(db)
             existing = pay_repo.get_pending_manual_payment(user.id)
 
-            # Auto-cancel payments older than 24 hours
+            # Auto-cancel stale or unsubmitted payments
             if existing:
                 age = datetime.now(timezone.utc) - existing.created_at.replace(tzinfo=timezone.utc)
-                if age > timedelta(hours=24):
+                # Cancel if: older than 24h OR still in CREATED state (user never clicked "я оплатил")
+                if age > timedelta(hours=24) or existing.status == PaymentStatus.CREATED:
                     pay_repo.update_status(existing, PaymentStatus.CANCELLED)
                     order_repo2 = _OrderRepo(db)
                     order2 = order_repo2.get_by_id(existing.order_id)
@@ -107,6 +108,7 @@ class ManualPaymentService:
                     db.commit()
                     existing = None
 
+            # Only block on PROCESSING (user claimed paid, awaiting admin)
             if existing:
                 await bot.send_message(
                     chat_id,
