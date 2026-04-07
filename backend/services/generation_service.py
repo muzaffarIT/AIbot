@@ -126,6 +126,18 @@ class GenerationService:
                 reference_id=str(job.id),
                 comment=f"Credits reserved for {provider} generation job",
             )
+            try:
+                from bot.services.sheets import log_generation
+                log_generation(
+                    user_full_name=user.first_name or "—",
+                    username=user.username,
+                    telegram_id=user.telegram_user_id,
+                    provider=provider,
+                    credits_used=cost,
+                    job_id=job.id,
+                )
+            except Exception as _se:
+                logger.warning(f"[SHEETS] generation log failed: {_se}")
         else:
             logger.info(f"[ADMIN] No credit deduction for {user.telegram_user_id}")
 

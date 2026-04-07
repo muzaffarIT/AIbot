@@ -427,6 +427,19 @@ def pay_from_balance(payload: PayFromBalanceRequest, db: Session = Depends(get_d
         new_credits = BalanceService(db).get_balance_value(user.id)
         db.commit()
 
+        try:
+            from bot.services.sheets import log_balance_payment
+            log_balance_payment(
+                user_full_name=user.first_name or "—",
+                username=user.username,
+                telegram_id=user.telegram_user_id,
+                plan_name=plan.name,
+                amount_uzs=plan_price,
+                credits=plan.credits_amount,
+            )
+        except Exception as _se:
+            logger.warning(f"[SHEETS] balance payment log failed: {_se}")
+
         return {
             "success": True,
             "plan_name": plan.name,

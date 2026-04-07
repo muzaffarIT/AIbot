@@ -1,5 +1,8 @@
 import asyncio
+import logging
 from aiogram import F, Router, Bot
+
+logger = logging.getLogger(__name__)
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
@@ -581,8 +584,21 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
         db.commit()
         new_total = user.uzs_balance
         lang = user.language_code or "ru"
+        _user_name = user.first_name or "—"
+        _user_uname = user.username
     finally:
         db.close()
+
+    try:
+        from bot.services.sheets import log_uzs_topup_confirmed
+        log_uzs_topup_confirmed(
+            user_full_name=_user_name,
+            username=_user_uname,
+            telegram_id=tg_id,
+            amount_uzs=amount,
+        )
+    except Exception as _se:
+        logger.warning(f"[SHEETS] uzs topup log failed: {_se}")
 
     admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
     try:
@@ -626,8 +642,22 @@ async def process_uzs_reject(callback: CallbackQuery, bot: Bot) -> None:
     try:
         user = UserService(db).get_user_by_telegram_id(tg_id)
         lang = (user.language_code if user else None) or "ru"
+        _user_name = (user.first_name if user else None) or "—"
+        _user_uname = user.username if user else None
     finally:
         db.close()
+
+    # Log rejected top-up to sheets (amount unknown at rejection time — log 0)
+    try:
+        from bot.services.sheets import log_uzs_topup_rejected
+        log_uzs_topup_rejected(
+            user_full_name=_user_name,
+            username=_user_uname,
+            telegram_id=tg_id,
+            amount_uzs=0,
+        )
+    except Exception as _se:
+        logger.warning(f"[SHEETS] uzs topup reject log failed: {_se}")
 
     admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
     try:

@@ -289,6 +289,17 @@ class ManualPaymentService:
                         referrer.referral_earnings = (referrer.referral_earnings or 0) + uzs_commission  # stats tracker
                         referrer.uzs_balance = (getattr(referrer, "uzs_balance", 0) or 0) + uzs_commission  # spendable wallet
                         db.commit()
+                        try:
+                            from bot.services.sheets import log_referral_commission
+                            log_referral_commission(
+                                referrer_full_name=referrer.first_name or "—",
+                                referrer_username=referrer.username,
+                                referrer_telegram_id=referrer.telegram_user_id,
+                                referred_full_name=user.first_name or "—",
+                                commission_uzs=uzs_commission,
+                            )
+                        except Exception as _se:
+                            logger.warning(f"[SHEETS] referral commission log failed: {_se}")
                         ref_lang = referrer.language_code or "ru"
                         total_fmt = f"{referrer.referral_earnings:,}".replace(",", " ")
                         commission_fmt = f"{uzs_commission:,}".replace(",", " ")
@@ -324,6 +335,7 @@ class ManualPaymentService:
                         telegram_id=user.telegram_user_id,
                         plan_name=plan.name,
                         amount_uzs=int(payment.amount),
+                        credits=plan.credits_amount,
                     )
                 except Exception as e:
                     logger.error(f"Sheets log error (confirm): {e}")
