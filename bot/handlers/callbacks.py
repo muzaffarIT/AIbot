@@ -229,25 +229,37 @@ async def process_menu_balance(callback: CallbackQuery) -> None:
         lang = (user.language_code if user else None) or "ru"
         if user:
             credits = balance_service.get_balance_value(user.id)
+            uzs_balance = getattr(user, "referral_earnings", 0) or 0
+            uzs_fmt = f"{uzs_balance:,}".replace(",", " ")
             if lang == "uz":
                 text = (
-                    f"💰 <b>Balansingiz:</b> <b>{credits}</b> kredit\n\n"
+                    f"💳 <b>Balansingiz</b>\n\n"
+                    f"⚡ Kreditlar: <b>{credits} kr.</b>\n"
+                    f"💵 So'm balansi: <b>{uzs_fmt} so'm</b>\n\n"
                     f"Generatsiya narxlari:\n"
-                    f"🍌 Nano Banana — 5 kr.dan\n"
-                    f"🎬 Veo 3 — 30 kr.dan\n"
-                    f"🎥 Kling Motion — 40 kr.dan\n\n"
-                    f"Kreditlarni to'ldirish uchun <b>💎 Tariflar</b> tugmasini bosing."
+                    f"🍌 Nano Banana — 5–20 kr.\n"
+                    f"🎬 Veo 3 — 30–80 kr.\n"
+                    f"🎥 Kling — 40–120 kr."
                 )
+                btn_credits = "💎 Kredit sotib olish"
+                btn_uzs = "💵 So'm balansi to'ldirish"
             else:
                 text = (
-                    f"💰 <b>Ваш баланс:</b> <b>{credits}</b> кредитов\n\n"
+                    f"💳 <b>Ваш баланс</b>\n\n"
+                    f"⚡ Кредиты: <b>{credits} кр.</b>\n"
+                    f"💵 Денежный баланс: <b>{uzs_fmt} сум</b>\n\n"
                     f"Стоимость генераций:\n"
-                    f"🍌 Nano Banana — от 5 кр.\n"
-                    f"🎬 Veo 3 — от 30 кр.\n"
-                    f"🎥 Kling Motion — от 40 кр.\n\n"
-                    f"Для пополнения нажмите <b>💎 Тарифы</b>."
+                    f"🍌 Nano Banana — 5–20 кр.\n"
+                    f"🎬 Veo 3 — 30–80 кр.\n"
+                    f"🎥 Kling — 40–120 кр."
                 )
-            await callback.message.answer(text, parse_mode="HTML", reply_markup=None)
+                btn_credits = "💎 Купить кредиты"
+                btn_uzs = "💵 Пополнить баланс в сумах"
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=btn_credits, callback_data="menu_plans")],
+                [InlineKeyboardButton(text=btn_uzs, callback_data="uzs_topup_menu")],
+            ])
+            await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
         await callback.answer()
     finally:
         db.close()
@@ -337,3 +349,309 @@ async def process_buy_credits_callback(callback: CallbackQuery) -> None:
     # Redirect to plans menu
     fake_callback = callback.model_copy(update={"data": "menu_plans"})
     await process_menu_plans(fake_callback)
+
+
+# ── UZS Balance Top-up ─────────────────────────────────────────────────────
+
+UZS_TOPUP_AMOUNTS = [
+    (50_000,    "50 000"),
+    (100_000,   "100 000"),
+    (200_000,   "200 000"),
+    (500_000,   "500 000"),
+    (1_000_000, "1 000 000"),
+]
+
+
+async def send_uzs_topup_menu(send_fn, lang: str) -> None:
+    """Shared helper — send the UZS top-up amount picker. send_fn is message.answer."""
+    rows = [
+        [InlineKeyboardButton(
+            text=f"💵 {label} {'so\'m' if lang == 'uz' else 'сум'}",
+            callback_data=f"uzs_topup:{amount}",
+        )]
+        for amount, label in UZS_TOPUP_AMOUNTS
+    ]
+    rows.append([InlineKeyboardButton(
+        text="← " + ("Orqaga" if lang == "uz" else "Назад"),
+        callback_data="menu_balance",
+    )])
+
+    if lang == "uz":
+        text = (
+            "💵 <b>So'm balansini to'ldirish</b>\n\n"
+            "Summani tanlang:\n\n"
+            "✅ Referal komissiyalari va boshqa to'lovlar\n"
+            "ushbu balansga tushadi."
+        )
+    else:
+        text = (
+            "💵 <b>Пополнение денежного баланса</b>\n\n"
+            "Выберите сумму:\n\n"
+            "✅ Реферальные комиссии и пополнения\n"
+            "накапливаются на этом балансе."
+        )
+
+    await send_fn(text, parse_mode="HTML",
+                  reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@router.callback_query(F.data == "uzs_topup_menu")
+async def process_uzs_topup_menu(callback: CallbackQuery) -> None:
+    db = get_db_session()
+    try:
+        user = UserService(db).get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
+
+    await send_uzs_topup_menu(callback.message.answer, lang)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("uzs_topup:"))
+async def process_uzs_topup_amount(callback: CallbackQuery, bot: Bot) -> None:
+    from backend.core.config import settings as _s
+
+    amount = int(callback.data.split(":")[1])
+    amount_fmt = f"{amount:,}".replace(",", " ")
+    tg_id = callback.from_user.id
+
+    db = get_db_session()
+    try:
+        user = UserService(db).get_user_by_telegram_id(tg_id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
+
+    card = _s.card_number or "—"
+    owner = _s.card_owner or "—"
+    visa_card = _s.visa_card_number or ""
+    visa_owner = _s.visa_card_owner or ""
+
+    cards_text = ""
+    if card and card != "—":
+        cards_text += f"\n💳 <b>Humo / Uzcard</b>\n<code>{card}</code>\nPol.: <b>{owner}</b>"
+    if visa_card:
+        cards_text += f"\n\n💳 <b>Visa</b>\n<code>{visa_card}</code>\nPol.: <b>{visa_owner}</b>"
+    if not cards_text:
+        cards_text = "\n⚠️ " + ("Rekvizitlar sozlanmagan." if lang == "uz" else "Реквизиты не настроены.")
+
+    if lang == "uz":
+        text = (
+            f"💵 <b>So'm balansini to'ldirish</b>\n\n"
+            f"💰 Summa: <b>{amount_fmt} so'm</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"Quyidagi kartaga o'tkazing:{cards_text}\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"<i>O'tkazgandan so'ng tugmani bosing 👇</i>"
+        )
+        btn_paid = "✅ O'tkazdim — tasdiqlash"
+        btn_cancel = "❌ Bekor qilish"
+    else:
+        text = (
+            f"💵 <b>Пополнение денежного баланса</b>\n\n"
+            f"💰 Сумма: <b>{amount_fmt} сум</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"Переведите на карту:{cards_text}\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"<i>После перевода нажмите кнопку 👇</i>"
+        )
+        btn_paid = "✅ Перевёл — подтвердить"
+        btn_cancel = "❌ Отмена"
+
+    await callback.message.answer(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=btn_paid, callback_data=f"uzs_paid:{tg_id}:{amount}")],
+            [InlineKeyboardButton(text=btn_cancel, callback_data="uzs_topup_menu")],
+        ]),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("uzs_paid:"))
+async def process_uzs_paid(callback: CallbackQuery, bot: Bot) -> None:
+    from backend.core.config import settings as _s
+    import json as _json
+
+    parts = callback.data.split(":")
+    tg_id = int(parts[1])
+    amount = int(parts[2])
+    amount_fmt = f"{amount:,}".replace(",", " ")
+
+    db = get_db_session()
+    try:
+        user = UserService(db).get_user_by_telegram_id(tg_id)
+        lang = (user.language_code if user else None) or "ru"
+        full_name = user.first_name or "—" if user else "—"
+        username = user.username if user else None
+    finally:
+        db.close()
+
+    # Confirm to user
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    if lang == "uz":
+        await callback.message.answer(
+            "⏳ <b>Ariza tekshiruvga yuborildi</b>\n\n"
+            "Odatda 1 soat ichida tasdiqlaymiz.\n"
+            "Tasdiqlangach, so'm balansingizga avtomatik tushadi.",
+            parse_mode="HTML",
+        )
+    else:
+        await callback.message.answer(
+            "⏳ <b>Заявка отправлена на проверку</b>\n\n"
+            "Обычно подтверждаем в течение 1 часа.\n"
+            "После проверки сумма зачислится на ваш баланс автоматически.",
+            parse_mode="HTML",
+        )
+
+    # Notify admins
+    uname = f"@{username}" if username else "—"
+    confirm_kb = _json.dumps({"inline_keyboard": [[
+        {"text": "✅ Подтвердить", "callback_data": f"uzs_ok:{tg_id}:{amount}"},
+        {"text": "❌ Отклонить",   "callback_data": f"uzs_no:{tg_id}"},
+    ]]})
+
+    notify_chat = (_s.payment_notify_chat_id or "").strip()
+    recipients = [int(notify_chat)] if notify_chat else list(_s.admin_ids_list)
+
+    for chat_id in recipients:
+        try:
+            await bot.send_message(
+                chat_id,
+                f"💵 <b>ПОПОЛНЕНИЕ БАЛАНСА (СУМ)</b>\n\n"
+                f"👤 {full_name}\n"
+                f"🔗 {uname}\n"
+                f"🆔 <code>{tg_id}</code>\n\n"
+                f"💰 Сумма: <b>{amount_fmt} сум</b>\n\n"
+                f"Проверь карту и нажми кнопку:",
+                parse_mode="HTML",
+                reply_markup=_json.loads(confirm_kb) if isinstance(confirm_kb, str) else None,
+            )
+        except Exception:
+            # Send with raw reply_markup string via Bot API
+            import httpx as _httpx
+            try:
+                async with _httpx.AsyncClient(timeout=10) as _c:
+                    await _c.post(
+                        f"https://api.telegram.org/bot{_s.bot_token}/sendMessage",
+                        json={
+                            "chat_id": chat_id,
+                            "text": (
+                                f"💵 <b>ПОПОЛНЕНИЕ БАЛАНСА (СУМ)</b>\n\n"
+                                f"👤 {full_name}\n🔗 {uname}\n"
+                                f"🆔 <code>{tg_id}</code>\n\n"
+                                f"💰 Сумма: <b>{amount_fmt} сум</b>\n\nПроверь карту:"
+                            ),
+                            "parse_mode": "HTML",
+                            "reply_markup": confirm_kb,
+                        },
+                    )
+            except Exception:
+                pass
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("uzs_ok:"))
+async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
+    from backend.core.config import settings as _s
+    if callback.from_user.id not in _s.admin_ids_list:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    parts = callback.data.split(":")
+    tg_id = int(parts[1])
+    amount = int(parts[2])
+    amount_fmt = f"{amount:,}".replace(",", " ")
+
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(tg_id)
+        if not user:
+            await callback.answer("Пользователь не найден", show_alert=True)
+            return
+        user.referral_earnings = (user.referral_earnings or 0) + amount
+        db.commit()
+        new_total = user.referral_earnings
+        lang = user.language_code or "ru"
+    finally:
+        db.close()
+
+    admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
+    try:
+        await callback.message.edit_text(
+            callback.message.text + f"\n\n✅ Подтверждено @{admin_name}"
+        )
+    except Exception:
+        pass
+
+    total_fmt = f"{new_total:,}".replace(",", " ")
+    if lang == "uz":
+        user_text = (
+            f"✅ <b>To'ldirish tasdiqlandi!</b>\n\n"
+            f"💵 +{amount_fmt} so'm balansingizga qo'shildi\n"
+            f"📊 Jami so'm balansi: <b>{total_fmt} so'm</b>"
+        )
+    else:
+        user_text = (
+            f"✅ <b>Пополнение подтверждено!</b>\n\n"
+            f"💵 +{amount_fmt} сум зачислено на ваш баланс\n"
+            f"📊 Итого денежный баланс: <b>{total_fmt} сум</b>"
+        )
+    try:
+        await bot.send_message(tg_id, user_text, parse_mode="HTML")
+    except Exception:
+        pass
+
+    await callback.answer(f"✅ Зачислено {amount_fmt} сум!")
+
+
+@router.callback_query(F.data.startswith("uzs_no:"))
+async def process_uzs_reject(callback: CallbackQuery, bot: Bot) -> None:
+    from backend.core.config import settings as _s
+    if callback.from_user.id not in _s.admin_ids_list:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    tg_id = int(callback.data.split(":")[1])
+
+    db = get_db_session()
+    try:
+        user = UserService(db).get_user_by_telegram_id(tg_id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
+
+    admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
+    try:
+        await callback.message.edit_text(
+            callback.message.text + f"\n\n❌ Отклонено @{admin_name}"
+        )
+    except Exception:
+        pass
+
+    if lang == "uz":
+        user_text = (
+            f"❌ <b>To'ldirish rad etildi</b>\n\n"
+            f"Karta raqami yoki summa to'g'ri emas.\n"
+            f"Muammo bo'lsa: @{_s.support_username}"
+        )
+    else:
+        user_text = (
+            f"❌ <b>Пополнение отклонено</b>\n\n"
+            f"Перевод не найден или указана неверная сумма.\n"
+            f"Обратитесь в поддержку: @{_s.support_username}"
+        )
+    try:
+        await bot.send_message(tg_id, user_text, parse_mode="HTML")
+    except Exception:
+        pass
+
+    await callback.answer("❌ Отклонено")

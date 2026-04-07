@@ -72,7 +72,8 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
                     f"🎬 Veo 3 — 30–80 kr.\n"
                     f"🎥 Kling — 40–120 kr."
                 )
-                btn_text = "💎 Kredit sotib olish"
+                btn_credits = "💎 Kredit sotib olish"
+                btn_uzs = "💵 So'm balansi to'ldirish"
             else:
                 text = (
                     f"💳 <b>Ваш баланс</b>\n\n"
@@ -83,16 +84,13 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
                     f"🎬 Veo 3 — 30–80 кр.\n"
                     f"🎥 Kling — 40–120 кр."
                 )
-                btn_text = "💎 Купить кредиты"
+                btn_credits = "💎 Купить кредиты"
+                btn_uzs = "💵 Пополнить баланс в сумах"
 
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(
-                    text=btn_text,
-                    web_app=WebAppInfo(
-                        url=f"{(settings.miniapp_url or '').rstrip('/')}/plans"
-                    )
-                )
-            ]])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=btn_credits, callback_data="menu_plans")],
+                [InlineKeyboardButton(text=btn_uzs, callback_data="uzs_topup_menu")],
+            ])
             await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
         elif action == "menu_referral":

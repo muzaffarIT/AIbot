@@ -24,11 +24,15 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
         user_service = UserService(db)
         balance_service = BalanceService(db)
 
-        # Check referral deep link: /start ref_XXXXXXXX
+        # Check deep link param
         ref_code: str | None = None
         args = message.text.split(" ", 1) if message.text else [""]
-        if len(args) > 1 and args[1].startswith("ref_"):
-            ref_code = args[1][4:]  # strip "ref_"
+        deep_link_arg = args[1] if len(args) > 1 else ""
+
+        if deep_link_arg.startswith("ref_"):
+            ref_code = deep_link_arg[4:]  # strip "ref_"
+        elif deep_link_arg == "uzs_topup":
+            pass  # handled after user setup below
 
         # Detect if user is new
         existing = user_service.get_user_by_telegram_id(message.from_user.id)
@@ -127,6 +131,14 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
             )
         except TelegramForbiddenError:
             return
+
+        # Deep link: open UZS top-up menu directly
+        if deep_link_arg == "uzs_topup":
+            from bot.handlers.callbacks import send_uzs_topup_menu
+            try:
+                await send_uzs_topup_menu(message.answer, lang)
+            except Exception:
+                pass
 
     finally:
         db.close()

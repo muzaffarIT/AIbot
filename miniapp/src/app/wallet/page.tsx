@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, RefreshCw, Coins, Banknote } from "lucide-react";
+import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, RefreshCw, Coins, Banknote, PlusCircle } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api, type BalanceHistoryResponse } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -168,12 +168,31 @@ export default function WalletPage() {
                 {uz ? "So'm balansi" : "Баланс в сумах"}
               </p>
             </div>
-            <div className="flex items-end gap-3 mb-2">
+            <div className="flex items-end gap-3 mb-4">
               <span className="text-3xl font-black tracking-tighter text-green-400 leading-none">
                 {fmtUzs(uzsBalance)}
               </span>
             </div>
-            <p className="text-xs text-white/35 mt-1">
+            <button
+              onClick={() => {
+                const tg = (window as any).Telegram?.WebApp;
+                const url = "https://t.me/harfai_bot?start=uzs_topup";
+                if (tg?.openTelegramLink) {
+                  tg.openTelegramLink(url);
+                } else {
+                  window.open(url, "_blank");
+                }
+              }}
+              className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-2xl font-bold text-sm transition-all active:scale-95"
+              style={{
+                background: "linear-gradient(135deg, #10b981, #059669)",
+                boxShadow: "0 4px 16px rgba(16,185,129,0.35)",
+              }}
+            >
+              <PlusCircle size={16} />
+              {uz ? "So'm balansini to'ldirish" : "Пополнить баланс в сумах"}
+            </button>
+            <p className="text-xs text-white/35 mt-3">
               {uz
                 ? "Referal komissiyalari va to'ldirishlar shu yerga tushadi"
                 : "Комиссии с рефералов и пополнения накапливаются здесь"}
