@@ -15,7 +15,7 @@ from typing import Optional, Union
 logger = logging.getLogger(__name__)
 
 SPREADSHEET_ID = "1bXXHSV6NOg8PfIFabML5_kc_oivQjq-JH9drsacOe6Q"
-SHEET_NAME = "Sheet1"
+SHEET_NAME = "Лист1"   # actual tab name — use get_worksheet(0) as fallback
 SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "service_account.json")
 
 # Approximate API costs per generation (USD) — for transparency reporting
@@ -66,26 +66,35 @@ HEADERS = [
 ]
 
 
+def _get_worksheet():
+    """Open the spreadsheet and return the first worksheet (robust to tab renames)."""
+    gc = _get_client()
+    sh = gc.open_by_key(SPREADSHEET_ID)
+    # Try configured name first, fall back to first sheet if not found
+    try:
+        return sh.worksheet(SHEET_NAME)
+    except Exception:
+        return sh.get_worksheet(0)
+
+
 def ensure_headers() -> None:
     """Write header row if row 1 is empty. Safe to call multiple times."""
     try:
-        gc = _get_client()
-        ws = gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        ws = _get_worksheet()
         first = ws.row_values(1)
         if not first or first[0] != "Дата":
             ws.insert_row(HEADERS, index=1)
-            logger.info("[SHEETS] Headers written to Sheet1")
+            logger.info(f"[SHEETS] Headers written to '{ws.title}'")
         else:
-            logger.info("[SHEETS] Headers already present — OK")
+            logger.info(f"[SHEETS] Headers OK on '{ws.title}'")
     except Exception as e:
         logger.error(f"[SHEETS] ensure_headers failed: {e}\n{traceback.format_exc()}")
 
 
 def _append(row: list) -> None:
-    """Append one row to Sheet1. Logs full traceback on failure."""
+    """Append one row. Logs full traceback on failure."""
     try:
-        gc = _get_client()
-        ws = gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        ws = _get_worksheet()
         ws.append_row(row, value_input_option="USER_ENTERED")
     except Exception as e:
         logger.error(f"[SHEETS] append failed: {e}\n{traceback.format_exc()}")
@@ -94,10 +103,9 @@ def _append(row: list) -> None:
 def sheets_test() -> dict:
     """Connectivity test — call from /api/debug/sheets-test to verify setup."""
     try:
-        gc = _get_client()
-        ws = gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        ws = _get_worksheet()
         first = ws.row_values(1)
-        return {"ok": True, "headers": first}
+        return {"ok": True, "tab": ws.title, "headers": first}
     except Exception as e:
         return {"ok": False, "error": str(e), "traceback": traceback.format_exc()}
 

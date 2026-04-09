@@ -8,7 +8,7 @@ from backend.models.generation_job import GenerationJob
 from backend.models.user import User
 from backend.services.balance_service import BalanceService
 
-router = APIRouter(prefix="/api/debug", tags=["debug"])
+router = APIRouter(prefix="/debug", tags=["debug"])
 
 
 @router.get("/sheets-test")
@@ -79,29 +79,47 @@ async def cleanup_stale():
 
 @router.get("/kie-ping")
 async def kie_ping():
+    """Test KIE AI API connectivity using the real createTask endpoint."""
     import httpx
     from backend.core.config import settings
+    base = (settings.kie_base_url or "https://api.kie.ai").rstrip("/")
+    key = settings.kie_api_key or ""
+    results = {}
+
+    # Test 1: create a market task (nano-banana) — no wait, just confirm API accepts it
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(
-                f"{settings.kie_base_url}/v1/nano-banana/generate",
-                headers={
-                    "Authorization": f"Bearer {settings.kie_api_key}",
-                    "Content-Type": "application/json"
-                },
+                f"{base}/api/v1/jobs/createTask",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                 json={
-                    "prompt": "a red circle",
-                    "model": "nano-banana-pro",
-                    "width": 512,
-                    "height": 512
-                }
+                    "model": "google/nano-banana",
+                    "input": {"prompt": "api connectivity test", "output_format": "png", "image_size": "1:1"},
+                },
             )
-            return {
-                "kie_status": r.status_code,
-                "kie_body": r.json() if r.status_code == 200 else r.text,
-                "key_first_8": settings.kie_api_key[:8] if settings.kie_api_key else "EMPTY",
-                "base_url": settings.kie_base_url,
-                "mock_mode": settings.ai_mock_mode
-            }
+            results["createTask_status"] = r.status_code
+            try:
+                body = r.json()
+                results["createTask_body"] = body
+                results["task_id"] = body.get("data", {}).get("taskId")
+            except Exception:
+                results["createTask_body"] = r.text
     except Exception as e:
-        return {"error": str(e)}
+        results["createTask_error"] = str(e)
+
+    # Test 2: veo endpoint ping
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r2 = await client.get(
+                f"{base}/api/v1/veo/record-info",
+                headers={"Authorization": f"Bearer {key}"},
+                params={"taskId": "ping_test"},
+            )
+            results["veo_status"] = r2.status_code
+    except Exception as e:
+        results["veo_error"] = str(e)
+
+    results["key_first_8"] = key[:8] if key else "EMPTY"
+    results["base_url"] = base
+    results["mock_mode"] = settings.ai_mock_mode
+    return results
