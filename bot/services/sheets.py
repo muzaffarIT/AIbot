@@ -129,6 +129,16 @@ def log_payment_confirmed(
         "", "✅ Подтверждено", "",
     ])
     logger.info(f"[SHEETS] payment confirmed #{payment_id}")
+    # Also log to multi-tab service
+    try:
+        from backend.services.sheets_service import log_payment_confirmed as _lpc
+        _lpc(
+            payment_id=payment_id, payment_type="💳 Покупка пакета",
+            telegram_id=telegram_id, full_name=user_full_name, username=username,
+            plan_name=plan_name, amount_uzs=amount_uzs, credits=credits,
+        )
+    except Exception as _e:
+        logger.error(f"[SHEETS_MT] log_payment_confirmed failed: {_e}")
 
 
 def log_payment_rejected(
@@ -148,6 +158,15 @@ def log_payment_rejected(
         "", "❌ Отклонено", reason,
     ])
     logger.info(f"[SHEETS] payment rejected #{payment_id}")
+    try:
+        from backend.services.sheets_service import log_payment_rejected as _lpr
+        _lpr(
+            payment_id=payment_id, payment_type="💳 Покупка пакета",
+            telegram_id=telegram_id, full_name=user_full_name, username=username,
+            plan_name=plan_name, amount_uzs=amount_uzs, reason=reason,
+        )
+    except Exception as _e:
+        logger.error(f"[SHEETS_MT] log_payment_rejected failed: {_e}")
 
 
 # ─── UZS balance top-up ───────────────────────────────────────────────────────
@@ -166,6 +185,14 @@ def log_uzs_topup_confirmed(
         "", "✅ Подтверждено", "",
     ])
     logger.info(f"[SHEETS] UZS topup confirmed for {telegram_id}: {amount_uzs}")
+    try:
+        from backend.services.sheets_service import log_uzs_topup_confirmed as _lutc
+        _lutc(
+            telegram_id=telegram_id, full_name=user_full_name,
+            username=username, amount_uzs=amount_uzs,
+        )
+    except Exception as _e:
+        logger.error(f"[SHEETS_MT] log_uzs_topup_confirmed failed: {_e}")
 
 
 def log_uzs_topup_rejected(
@@ -221,6 +248,17 @@ def log_referral_commission(
         "", "✅ Начислено", "",
     ])
     logger.info(f"[SHEETS] referral commission {commission_uzs} for {referrer_telegram_id}")
+    try:
+        from backend.services.sheets_service import log_referral_commission as _lrc
+        _lrc(
+            referrer_telegram_id=referrer_telegram_id,
+            referrer_name=referrer_full_name,
+            referrer_username=referrer_username,
+            referred_name=referred_full_name,
+            commission_uzs=commission_uzs,
+        )
+    except Exception as _e:
+        logger.error(f"[SHEETS_MT] log_referral_commission failed: {_e}")
 
 
 # ─── Generation (credit usage) ────────────────────────────────────────────────
@@ -248,3 +286,13 @@ def log_generation(
         f"≈${api_cost_usd} (≈{_fmt(api_cost_uzs)} сум)", "✅ Запущено", "",
     ])
     logger.info(f"[SHEETS] generation job#{job_id} for {telegram_id}: {credits_used}cr, ${api_cost_usd}")
+    # Multi-tab: log to 🎨 Генерации tab as well
+    try:
+        from backend.services.sheets_service import log_generation_started
+        log_generation_started(
+            job_id=job_id, telegram_id=telegram_id,
+            full_name=user_full_name, username=username,
+            provider=provider, prompt="", credits=credits_used,
+        )
+    except Exception as _e:
+        logger.error(f"[SHEETS_MT] log_generation (started) failed: {_e}")

@@ -48,6 +48,16 @@ def sheets_test():
 
     return result
 
+@router.post("/sheets-init")
+def sheets_init():
+    """
+    Create / repair all monitoring tabs in Google Sheets.
+    Call POST /api/debug/sheets-init once after deploy.
+    """
+    from backend.services.sheets_init import init_all_sheets
+    return init_all_sheets()
+
+
 @router.post("/cleanup-stale")
 async def cleanup_stale():
     db = SessionLocal()

@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     click_service_id: str | None = None
     click_secret_key: str | None = None
 
+    # Google Sheets monitoring
+    # Falls back to GOOGLE_SERVICE_ACCOUNT_JSON env var if not set
+    google_sheets_id: str = "1bXXHSV6NOg8PfIFabML5_kc_oivQjq-JH9drsacOe6Q"
+    google_credentials_json: str = ""
+
     @field_validator("secret_key", mode="before")
     @classmethod
     def validate_secret_key(cls, value: Any) -> Any:

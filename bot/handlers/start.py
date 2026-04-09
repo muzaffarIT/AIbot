@@ -99,6 +99,28 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
             balance_service.add_credits(user.id, welcome_credits, "welcome_bonus")
             db.commit()
 
+            # ── Sheets: log new user ─────────────────────────────────────────
+            try:
+                from backend.services.sheets_service import log_new_user
+                _total_start_credits = welcome_credits + (
+                    settings.referral_bonus_new_user if ref_code else 0
+                )
+                log_new_user(
+                    telegram_id=user.telegram_user_id,
+                    full_name=user.first_name or "—",
+                    username=user.username,
+                    lang=lang,
+                    source=f"ref_{ref_code}" if ref_code else "organic",
+                    referrer_telegram_id=(
+                        referrer.telegram_user_id
+                        if ref_code and 'referrer' in dir() and referrer else None
+                    ),
+                    start_credits=_total_start_credits,
+                )
+            except Exception as _se:
+                import logging as _log
+                _log.getLogger(__name__).error(f"[SHEETS] log_new_user failed: {_se}")
+
         # Onboarding trigger (Block 2)
         if not user.onboarding_completed:
             await state.clear()
