@@ -58,6 +58,18 @@ def sheets_init():
     return init_all_sheets()
 
 
+@router.post("/sheets-migrate")
+def sheets_migrate(clear: bool = True):
+    """
+    Migrate ALL historical DB data to Google Sheets.
+    ?clear=true  — clears tabs first (default), then writes everything.
+    ?clear=false — appends to existing data.
+    WARNING: can take 1-3 minutes depending on data volume.
+    """
+    from backend.services.sheets_migration import migrate_all_to_sheets
+    return migrate_all_to_sheets(clear_first=clear)
+
+
 @router.post("/cleanup-stale")
 async def cleanup_stale():
     db = SessionLocal()
