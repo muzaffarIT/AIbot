@@ -3,6 +3,7 @@ Manual card-based payment service for HARF AI.
 Flow: user picks a plan → bot shows card details → user confirms payment
      → admins get notified → admin approves/rejects → credits added.
 """
+from __future__ import annotations
 
 import logging
 from aiogram import Bot
@@ -301,7 +302,8 @@ class ManualPaymentService:
                                 commission_uzs=uzs_commission,
                             )
                         except Exception as _se:
-                            logger.warning(f"[SHEETS] referral commission log failed: {_se}")
+                            import traceback as _tb
+                            logger.error(f"[SHEETS] referral commission log failed: {_se}\n{_tb.format_exc()}")
                         ref_lang = referrer.language_code or "ru"
                         total_fmt = f"{referrer.referral_earnings:,}".replace(",", " ")
                         commission_fmt = f"{uzs_commission:,}".replace(",", " ")
@@ -340,7 +342,8 @@ class ManualPaymentService:
                         credits=plan.credits_amount,
                     )
                 except Exception as e:
-                    logger.error(f"Sheets log error (confirm): {e}")
+                    import traceback as _tb
+                    logger.error(f"[SHEETS] payment confirmed log failed: {e}\n{_tb.format_exc()}")
 
             return {"payment_id": payment_id, "balance": balance}
 
@@ -411,7 +414,8 @@ class ManualPaymentService:
                         reason=reason,
                     )
                 except Exception as e:
-                    logger.error(f"Sheets log error (reject): {e}")
+                    import traceback as _tb
+                    logger.error(f"[SHEETS] payment rejected log failed: {e}\n{_tb.format_exc()}")
 
         except Exception as e:
             db.rollback()

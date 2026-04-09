@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException
 import httpx
 from backend.core.config import settings
@@ -7,6 +9,44 @@ from backend.models.user import User
 from backend.services.balance_service import BalanceService
 
 router = APIRouter(prefix="/api/debug", tags=["debug"])
+
+
+@router.get("/sheets-test")
+def sheets_test():
+    """
+    Test Google Sheets connectivity.
+    Call GET /api/debug/sheets-test from Railway to diagnose logging issues.
+    """
+    import os
+    import traceback as _tb
+
+    result: dict = {
+        "env_var_set": bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()),
+        "env_var_length": len(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")),
+    }
+
+    try:
+        from bot.services.sheets import sheets_test as _st, _append, SPREADSHEET_ID
+        conn = _st()
+        result["connection"] = conn
+
+        if conn.get("ok"):
+            # Try writing a test row
+            _append([
+                "TEST", "🔧 Тест подключения", "—",
+                "System", "—", "0",
+                "Проверка связи с таблицей", "0", "0",
+                "", "✅ OK", "auto-test",
+            ])
+            result["write_test"] = "ok — test row appended"
+        else:
+            result["write_test"] = "skipped (connection failed)"
+
+    except Exception as e:
+        result["import_error"] = str(e)
+        result["import_traceback"] = _tb.format_exc()
+
+    return result
 
 @router.post("/cleanup-stale")
 async def cleanup_stale():

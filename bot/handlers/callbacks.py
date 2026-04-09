@@ -574,6 +574,7 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
     amount_fmt = f"{amount:,}".replace(",", " ")
 
     db = get_db_session()
+    _referrer_info = None  # (referrer_obj, commission_amount) for notification
     try:
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(tg_id)
@@ -581,6 +582,26 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
             await callback.answer("Пользователь не найден", show_alert=True)
             return
         user.uzs_balance = (getattr(user, "uzs_balance", 0) or 0) + amount
+
+        # Apply 10% referral commission if this user was referred
+        referred_by_tg_id = user.referred_by_telegram_id  # direct attribute access
+        logger.info(f"[REFERRAL] uzs_ok: user={tg_id} referred_by={referred_by_tg_id} amount={amount}")
+        if referred_by_tg_id:
+            commission = int(amount * 0.10)
+            logger.info(f"[REFERRAL] commission={commission} for referrer tg_id={referred_by_tg_id}")
+            if commission > 0:
+                referrer = user_service.get_user_by_telegram_id(referred_by_tg_id)
+                if referrer:
+                    referrer.uzs_balance = (getattr(referrer, "uzs_balance", 0) or 0) + commission
+                    referrer.referral_earnings = (getattr(referrer, "referral_earnings", 0) or 0) + commission
+                    _referrer_info = (referrer.telegram_user_id, referrer.first_name or "—",
+                                      referrer.username, referrer.language_code or "ru", commission)
+                    logger.info(f"[REFERRAL] credited {commission} UZS to referrer {referred_by_tg_id}")
+                else:
+                    logger.warning(f"[REFERRAL] referrer tg_id={referred_by_tg_id} not found in DB")
+        else:
+            logger.info(f"[REFERRAL] user {tg_id} has no referrer — no commission")
+
         db.commit()
         new_total = user.uzs_balance
         lang = user.language_code or "ru"
@@ -590,15 +611,47 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
         db.close()
 
     try:
-        from bot.services.sheets import log_uzs_topup_confirmed
+        from bot.services.sheets import log_uzs_topup_confirmed, log_referral_commission
         log_uzs_topup_confirmed(
             user_full_name=_user_name,
             username=_user_uname,
             telegram_id=tg_id,
             amount_uzs=amount,
         )
+        if _referrer_info:
+            _ref_tg_id, _ref_name, _ref_uname, _, _commission = _referrer_info
+            log_referral_commission(
+                referrer_full_name=_ref_name,
+                referrer_username=_ref_uname,
+                referrer_telegram_id=_ref_tg_id,
+                referred_full_name=_user_name,
+                commission_uzs=_commission,
+            )
     except Exception as _se:
-        logger.warning(f"[SHEETS] uzs topup log failed: {_se}")
+        import traceback as _tb
+        logger.error(f"[SHEETS] uzs topup log failed: {_se}\n{_tb.format_exc()}")
+
+    # Notify referrer about commission
+    if _referrer_info:
+        _ref_tg_id, _ref_name, _ref_uname, _ref_lang, _commission = _referrer_info
+        _comm_fmt = f"{_commission:,}".replace(",", " ")
+        _amount_fmt2 = f"{amount:,}".replace(",", " ")
+        if _ref_lang == "uz":
+            _ref_msg = (
+                f"💰 <b>Referal komissiyasi!</b>\n\n"
+                f"Referalingiz <b>{_user_name}</b> hisobini {_amount_fmt2} so'mga to'ldirdi.\n"
+                f"Sizga <b>+{_comm_fmt} so'm</b> komissiya berildi (10%) 🎁"
+            )
+        else:
+            _ref_msg = (
+                f"💰 <b>Реферальная комиссия!</b>\n\n"
+                f"Ваш реферал <b>{_user_name}</b> пополнил баланс на {_amount_fmt2} сум.\n"
+                f"Вам зачислено <b>+{_comm_fmt} сум</b> комиссия (10%) 🎁"
+            )
+        try:
+            await bot.send_message(_ref_tg_id, _ref_msg, parse_mode="HTML")
+        except Exception:
+            pass
 
     admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
     try:
@@ -657,7 +710,8 @@ async def process_uzs_reject(callback: CallbackQuery, bot: Bot) -> None:
             amount_uzs=0,
         )
     except Exception as _se:
-        logger.warning(f"[SHEETS] uzs topup reject log failed: {_se}")
+        import traceback as _tb
+        logger.error(f"[SHEETS] uzs topup reject log failed: {_se}\n{_tb.format_exc()}")
 
     admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
     try:

@@ -137,7 +137,8 @@ class GenerationService:
                     job_id=job.id,
                 )
             except Exception as _se:
-                logger.warning(f"[SHEETS] generation log failed: {_se}")
+                import traceback as _tb
+                logger.error(f"[SHEETS] generation log failed: {_se}\n{_tb.format_exc()}")
         else:
             logger.info(f"[ADMIN] No credit deduction for {user.telegram_user_id}")
 

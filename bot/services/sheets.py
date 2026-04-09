@@ -4,9 +4,13 @@ Google Sheets logging for all financial and credit events.
 Sheet columns:
   Дата | Тип | ID | Пользователь | Username | Telegram ID | Описание | Сумма (сум) | Кредиты | API стоимость ($) | Статус | Комментарий
 """
+from __future__ import annotations
+
 import logging
 import os
+import traceback
 from datetime import datetime, timezone
+from typing import Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -28,29 +32,31 @@ USD_TO_UZS = 12_700
 def _get_client():
     import json
     import gspread
-    from google.oauth2.service_account import Credentials
 
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
-
-    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
     if sa_json:
-        info = json.loads(sa_json)
-        creds = Credentials.from_service_account_info(info, scopes=scopes)
-    else:
-        creds = Credentials.from_service_account_file(
-            os.path.abspath(SERVICE_ACCOUNT_FILE), scopes=scopes
+        try:
+            info = json.loads(sa_json)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"GOOGLE_SERVICE_ACCOUNT_JSON is invalid JSON: {e}") from e
+        # gspread 6.x API — service_account_from_dict handles auth internally
+        return gspread.service_account_from_dict(info)
+
+    # Fallback: read from file (local dev)
+    sa_file = os.path.abspath(SERVICE_ACCOUNT_FILE)
+    if not os.path.exists(sa_file):
+        raise RuntimeError(
+            f"GOOGLE_SERVICE_ACCOUNT_JSON env var not set and "
+            f"service_account.json not found at {sa_file}"
         )
-    return gspread.authorize(creds)
+    return gspread.service_account(filename=sa_file)
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M")
 
 
-def _fmt(n: int | float) -> str:
+def _fmt(n: Union[int, float]) -> str:
     return f"{int(n):,}".replace(",", " ")
 
 
@@ -69,18 +75,31 @@ def ensure_headers() -> None:
         if not first or first[0] != "Дата":
             ws.insert_row(HEADERS, index=1)
             logger.info("[SHEETS] Headers written to Sheet1")
+        else:
+            logger.info("[SHEETS] Headers already present — OK")
     except Exception as e:
-        logger.error(f"[SHEETS] ensure_headers failed: {e}")
+        logger.error(f"[SHEETS] ensure_headers failed: {e}\n{traceback.format_exc()}")
 
 
 def _append(row: list) -> None:
-    """Append one row to Sheet1. Never raises."""
+    """Append one row to Sheet1. Logs full traceback on failure."""
     try:
         gc = _get_client()
         ws = gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
         ws.append_row(row, value_input_option="USER_ENTERED")
     except Exception as e:
-        logger.error(f"[SHEETS] append failed: {e}")
+        logger.error(f"[SHEETS] append failed: {e}\n{traceback.format_exc()}")
+
+
+def sheets_test() -> dict:
+    """Connectivity test — call from /api/debug/sheets-test to verify setup."""
+    try:
+        gc = _get_client()
+        ws = gc.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+        first = ws.row_values(1)
+        return {"ok": True, "headers": first}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "traceback": traceback.format_exc()}
 
 
 # ─── Payment: credit package purchase ────────────────────────────────────────
@@ -88,7 +107,7 @@ def _append(row: list) -> None:
 def log_payment_confirmed(
     payment_id: int,
     user_full_name: str,
-    username: str | None,
+    username: Optional[str],
     telegram_id: int,
     plan_name: str,
     amount_uzs: int,
@@ -107,7 +126,7 @@ def log_payment_confirmed(
 def log_payment_rejected(
     payment_id: int,
     user_full_name: str,
-    username: str | None,
+    username: Optional[str],
     telegram_id: int,
     plan_name: str,
     amount_uzs: int,
@@ -127,7 +146,7 @@ def log_payment_rejected(
 
 def log_uzs_topup_confirmed(
     user_full_name: str,
-    username: str | None,
+    username: Optional[str],
     telegram_id: int,
     amount_uzs: int,
 ) -> None:
@@ -143,7 +162,7 @@ def log_uzs_topup_confirmed(
 
 def log_uzs_topup_rejected(
     user_full_name: str,
-    username: str | None,
+    username: Optional[str],
     telegram_id: int,
     amount_uzs: int,
 ) -> None:
@@ -161,7 +180,7 @@ def log_uzs_topup_rejected(
 
 def log_balance_payment(
     user_full_name: str,
-    username: str | None,
+    username: Optional[str],
     telegram_id: int,
     plan_name: str,
     amount_uzs: int,
@@ -181,7 +200,7 @@ def log_balance_payment(
 
 def log_referral_commission(
     referrer_full_name: str,
-    referrer_username: str | None,
+    referrer_username: Optional[str],
     referrer_telegram_id: int,
     referred_full_name: str,
     commission_uzs: int,
@@ -200,7 +219,7 @@ def log_referral_commission(
 
 def log_generation(
     user_full_name: str,
-    username: str | None,
+    username: Optional[str],
     telegram_id: int,
     provider: str,
     credits_used: int,
@@ -217,7 +236,7 @@ def log_generation(
     _append([
         _now(), "🎨 Генерация", f"job#{job_id}",
         user_full_name, uname, str(telegram_id),
-        provider_label, "",  str(credits_used),
+        provider_label, "", str(credits_used),
         f"≈${api_cost_usd} (≈{_fmt(api_cost_uzs)} сум)", "✅ Запущено", "",
     ])
     logger.info(f"[SHEETS] generation job#{job_id} for {telegram_id}: {credits_used}cr, ${api_cost_usd}")

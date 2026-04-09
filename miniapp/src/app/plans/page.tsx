@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowLeft, Zap, CreditCard, Banknote, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Zap, CreditCard, Banknote, CheckCircle2, PlusCircle } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api } from "@/lib/api";
 
@@ -189,6 +189,38 @@ export default function PlansPage() {
                 ? `So'm balansida: ${fmtUzs(uzsBalance, "uz")} — tarif uchun to'g'ridan-to'g'ri foydalanishingiz mumkin`
                 : `На балансе: ${fmtUzs(uzsBalance, "ru")} — можно оплатить тариф напрямую`}
             </p>
+          </motion.div>
+        )}
+
+        {/* UZS Balance top-up card */}
+        {!successPlan && (
+          <motion.div variants={itemVariants} className="glass-card p-5 border-green-500/30">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-green-500/15 flex items-center justify-center">
+                  <Banknote className="text-green-400" size={18} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">
+                    {uz ? "So'm balansi" : "Денежный баланс (сум)"}
+                  </p>
+                  <p className="text-xs text-white/40">
+                    {uz ? "Balansdan to'g'ridan-to'g'ri to'lang" : "Оплачивайте тарифы напрямую"}
+                  </p>
+                </div>
+              </div>
+              <p className="text-base font-black text-green-400">
+                {fmtUzs(uzsBalance, language)}
+              </p>
+            </div>
+            <Link
+              href="/topup"
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-sm text-white transition-all active:scale-95"
+              style={{ background: "linear-gradient(135deg, #10b981, #059669)", boxShadow: "0 4px 14px rgba(16,185,129,0.25)" }}
+            >
+              <PlusCircle size={16} />
+              {uz ? "Balansni to'ldirish" : "Пополнить баланс в сумах"}
+            </Link>
           </motion.div>
         )}
 

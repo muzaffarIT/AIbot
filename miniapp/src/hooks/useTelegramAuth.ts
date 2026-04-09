@@ -70,10 +70,18 @@ export function useTelegramAuth() {
           setUserData(synced);
           setError(null);
         }
-      } catch (err: any) {
-        // Если sync упал — не показываем ошибку если есть кэш
-        if (!cancelled && !userData) {
-          setError(err?.message ?? "Ошибка синхронизации");
+      } catch {
+        // syncUser requires TMA auth — if initData not available, fall back to public profile endpoint
+        try {
+          const profile = await api.getProfile(user.id);
+          if (!cancelled) {
+            setUserData(profile);
+            setError(null);
+          }
+        } catch (fallbackErr: any) {
+          if (!cancelled && !loadCachedUser()) {
+            setError(fallbackErr?.message ?? "Ошибка загрузки профиля");
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -143,7 +151,13 @@ export function useTelegramAuth() {
         language_code: null,
       });
       setUserData(synced);
-    } catch {}
+    } catch {
+      // Fallback to public profile endpoint when TMA auth fails
+      try {
+        const profile = await api.getProfile(tgUser.id);
+        setUserData(profile);
+      } catch {}
+    }
   }, [tgUser]);
 
   return { tgUser, userData, loading, error, refresh };

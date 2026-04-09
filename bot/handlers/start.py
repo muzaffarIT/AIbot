@@ -102,7 +102,8 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
         # Onboarding trigger (Block 2)
         if not user.onboarding_completed:
             await state.clear()
-            await start_onboarding(message, state, lang)
+            _display_name = user.first_name or message.from_user.username or ("do'st" if lang == "uz" else "друг")
+            await start_onboarding(message, state, lang, name=_display_name)
             return
 
         name = user.first_name or message.from_user.username or "друг"
