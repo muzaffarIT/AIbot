@@ -32,12 +32,25 @@ class BalanceService:
         user = self.db.query(User).filter(User.id == user_id).first()
         return getattr(user, "uzs_balance", 0) or 0 if user else 0
 
-    def add_uzs(self, user_id: int, amount: int) -> int:
+    def _log_uzs(self, user_id: int, amount: int, type_: str, comment: str, balance_after: int) -> None:
+        """Insert a row into uzs_transactions for UZS history."""
+        try:
+            from sqlalchemy import text
+            self.db.execute(text(
+                "INSERT INTO uzs_transactions (user_id, amount, type, comment, balance_after) "
+                "VALUES (:uid, :amt, :type, :cmt, :bal)"
+            ), {"uid": user_id, "amt": amount, "type": type_, "cmt": comment, "bal": balance_after})
+        except Exception:
+            pass  # non-fatal
+
+    def add_uzs(self, user_id: int, amount: int, comment: str = "Пополнение") -> int:
         """Add sums to user's UZS wallet. Returns new balance."""
         from backend.models.user import User
         user = self.db.query(User).filter(User.id == user_id).first()
         if user:
             user.uzs_balance = (getattr(user, "uzs_balance", 0) or 0) + amount
+            self.db.commit()
+            self._log_uzs(user_id, amount, "topup", comment, user.uzs_balance)
             self.db.commit()
             return user.uzs_balance
         return 0
@@ -113,7 +126,7 @@ class BalanceService:
         )
         return after
 
-    def subtract_uzs(self, user_id: int, amount: int) -> int:
+    def subtract_uzs(self, user_id: int, amount: int, comment: str = "Списание") -> int:
         """Deduct sums from user's UZS wallet. Returns new balance. Raises ValueError if insufficient."""
         from backend.models.user import User
         user = self.db.query(User).with_for_update().filter(User.id == user_id).first()
@@ -124,6 +137,7 @@ class BalanceService:
             raise ValueError(f"Insufficient UZS balance: {current} < {amount}")
         user.uzs_balance = current - amount
         self.db.flush()
+        self._log_uzs(user_id, -amount, "spend", comment, user.uzs_balance)
         return user.uzs_balance
 
     def get_last_transactions(self, user_id: int, limit: int = 10):

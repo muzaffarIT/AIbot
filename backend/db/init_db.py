@@ -62,6 +62,17 @@ def _run_migrations(db) -> None:
         "CREATE INDEX IF NOT EXISTS ix_credit_tx_ref ON credit_transactions (reference_type, reference_id)",
         # Index for fast payment lookups by provider
         "CREATE INDEX IF NOT EXISTS ix_payments_provider_payment_id ON payments (provider_payment_id)",
+        # UZS transaction history
+        """CREATE TABLE IF NOT EXISTS uzs_transactions (
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            amount INTEGER NOT NULL,
+            type VARCHAR(50) NOT NULL,
+            comment TEXT,
+            balance_after INTEGER DEFAULT 0 NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS ix_uzs_tx_user_id ON uzs_transactions (user_id)",
     ]
     for sql in migrations:
         try:

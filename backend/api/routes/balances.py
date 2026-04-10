@@ -49,6 +49,45 @@ def get_balance_transactions_by_telegram_user_id(
         db.close()
 
 
+@router.get("/telegram/{telegram_user_id}/uzs-transactions")
+def get_uzs_transactions(
+    telegram_user_id: int,
+    limit: int = Query(default=30, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(telegram_user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        from sqlalchemy import text
+        rows = db.execute(text(
+            "SELECT id, amount, type, comment, balance_after, created_at "
+            "FROM uzs_transactions WHERE user_id = :uid "
+            "ORDER BY created_at DESC LIMIT :lim"
+        ), {"uid": user.id, "lim": limit}).fetchall()
+
+        return {
+            "user_id": user.id,
+            "telegram_user_id": user.telegram_user_id,
+            "uzs_balance": getattr(user, "uzs_balance", 0) or 0,
+            "transactions": [
+                {
+                    "id": r.id,
+                    "amount": r.amount,
+                    "type": r.type,
+                    "comment": r.comment,
+                    "balance_after": r.balance_after,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ],
+        }
+    finally:
+        db.close()
+
+
 @router.get("/telegram/{telegram_user_id}")
 def get_balance_by_telegram_user_id(telegram_user_id: int, db: Session = Depends(get_db)) -> dict:
     try:

@@ -140,6 +140,22 @@ export type ReferralData = {
   referral_earnings: number;
 };
 
+export type UzsTransaction = {
+  id: number;
+  amount: number;
+  type: string;
+  comment?: string | null;
+  balance_after: number;
+  created_at?: string | null;
+};
+
+export type UzsHistoryResponse = {
+  user_id: number;
+  telegram_user_id: number;
+  uzs_balance: number;
+  transactions: UzsTransaction[];
+};
+
 // ─── Error class ──────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -228,6 +244,11 @@ export const api = {
   getBalanceHistory: (telegramId: number, limit = 20) =>
     request<BalanceHistoryResponse>(
       `/api/balances/telegram/${telegramId}/transactions?limit=${limit}`
+    ),
+
+  getUzsHistory: (telegramId: number, limit = 30) =>
+    request<UzsHistoryResponse>(
+      `/api/balances/telegram/${telegramId}/uzs-transactions?limit=${limit}`
     ),
 
   getOrders: (telegramId: number, limit = 10) =>

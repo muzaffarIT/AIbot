@@ -38,17 +38,19 @@ async def process_start_menu_callback(callback: CallbackQuery, state: FSMContext
 
         if lang == "uz":
             text = (
-                f"Xush kelibsiz, <b>{name}</b> 👋\n\n"
-                f"<b>HARF AI</b> — sun'iy intellekt bilan rasm va video yarating.\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"Quyidagi menyudan foydalaning 👇"
+                f"✨ <b>Nima yaratamiz, {name}?</b>\n\n"
+                f"🍌 <b>Nano Banana</b> — rasmlar\n"
+                f"🎬 <b>Veo 3</b> — Google videolari\n"
+                f"🎥 <b>Kling Motion</b> — professional video\n\n"
+                f"Menyudan tanlang 👇"
             )
         else:
             text = (
-                f"Добро пожаловать, <b>{name}</b> 👋\n\n"
-                f"<b>HARF AI</b> — создавайте изображения и видео с помощью нейросетей.\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"Используйте меню ниже 👇"
+                f"✨ <b>Что создаём, {name}?</b>\n\n"
+                f"🍌 <b>Nano Banana</b> — изображения\n"
+                f"🎬 <b>Veo 3</b> — видео от Google\n"
+                f"🎥 <b>Kling Motion</b> — профессиональное видео\n\n"
+                f"Выбирай из меню ниже 👇"
             )
         from bot.keyboards.reply_menu import main_reply_keyboard
         try:
@@ -592,6 +594,16 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
         lang = user.language_code or "ru"
         _user_name = user.first_name or "—"
         _user_uname = user.username
+        # Log UZS transaction
+        try:
+            from sqlalchemy import text as _text
+            db.execute(_text(
+                "INSERT INTO uzs_transactions (user_id, amount, type, comment, balance_after) "
+                "VALUES (:uid, :amt, :type, :cmt, :bal)"
+            ), {"uid": user.id, "amt": amount, "type": "topup", "cmt": "Пополнение администратором", "bal": new_total})
+            db.commit()
+        except Exception:
+            pass
     finally:
         db.close()
 

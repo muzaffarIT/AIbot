@@ -26,7 +26,18 @@ class I18n:
 
     def t(self, lang: str, key: str, **kwargs: Any) -> str:
         lang_messages = self.messages.get(lang) or self.messages.get("ru", {})
-        template = lang_messages.get(key, key)
+
+        # Support dot notation for nested keys (e.g. "common.cancel")
+        template = lang_messages.get(key)
+        if template is None and "." in key:
+            parts = key.split(".", 1)
+            nested = lang_messages.get(parts[0])
+            if isinstance(nested, dict):
+                template = nested.get(parts[1], key)
+            else:
+                template = key
+        elif template is None:
+            template = key
 
         if kwargs:
             try:

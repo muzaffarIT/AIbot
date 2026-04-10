@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, RefreshCw, Coins, Banknote, PlusCircle } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
-import { api, type BalanceHistoryResponse } from "@/lib/api";
+import { api, type BalanceHistoryResponse, type UzsHistoryResponse } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 
 const containerVariants: Variants = {
@@ -43,12 +43,24 @@ function fmtUzs(n: number) {
   return n.toLocaleString("uz-UZ") + " so'm";
 }
 
+function humanizeUzsComment(comment: string | null | undefined, lang: "ru" | "uz"): string {
+  if (!comment) return lang === "uz" ? "Operatsiya" : "Операция";
+  const c = comment.toLowerCase();
+  if (c.includes("администратором") || c.includes("admin") || c.includes("topup")) return lang === "uz" ? "Balans to'ldirildi 💵" : "Пополнение баланса 💵";
+  if (c.includes("referal") || c.includes("реферал") || c.includes("commission")) return lang === "uz" ? "Referal komissiyasi 👥" : "Реферальная комиссия 👥";
+  if (c.includes("plan") || c.includes("kredit") || c.includes("кредит") || c.includes("spend") || c.includes("konvert")) return lang === "uz" ? "Xarid 🛒" : "Покупка 🛒";
+  return comment;
+}
+
 export default function WalletPage() {
   const router = useRouter();
   const { backendUser: userData, telegramUser: tgUser, loading, language } = useMiniAppUser();
   const [history, setHistory] = useState<BalanceHistoryResponse | null>(null);
+  const [uzsHistory, setUzsHistory] = useState<UzsHistoryResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [uzsHistoryLoading, setUzsHistoryLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"credits" | "uzs">("credits");
   const uz = language === "uz";
 
   const loadHistory = async (id: number) => {
@@ -60,22 +72,36 @@ export default function WalletPage() {
     finally { setHistoryLoading(false); }
   };
 
+  const loadUzsHistory = async (id: number) => {
+    setUzsHistoryLoading(true);
+    try {
+      const data = await api.getUzsHistory(id, 30);
+      setUzsHistory(data);
+    } catch {}
+    finally { setUzsHistoryLoading(false); }
+  };
+
   useEffect(() => {
     const id = userData?.telegram_user_id ?? tgUser?.id;
-    if (id) loadHistory(id);
-    else setHistoryLoading(false);
+    if (id) {
+      loadHistory(id);
+      loadUzsHistory(id);
+    } else {
+      setHistoryLoading(false);
+      setUzsHistoryLoading(false);
+    }
   }, [userData?.telegram_user_id, tgUser?.id]);
 
   const handleRefresh = async () => {
     const id = userData?.telegram_user_id ?? tgUser?.id;
     if (!id || refreshing) return;
     setRefreshing(true);
-    await loadHistory(id);
+    await Promise.all([loadHistory(id), loadUzsHistory(id)]);
     setRefreshing(false);
   };
 
   const credits = history?.credits_balance ?? userData?.credits_balance ?? 0;
-  const uzsBalance = userData?.uzs_balance ?? 0;
+  const uzsBalance = uzsHistory?.uzs_balance ?? userData?.uzs_balance ?? 0;
 
   if (loading && historyLoading) {
     return (
@@ -218,63 +244,143 @@ export default function WalletPage() {
           </div>
         </motion.div>
 
-        {/* Transaction history */}
+        {/* Transaction history tabs */}
         <motion.div variants={itemVariants} className="space-y-3">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-white/40 px-1">
-            {uz ? "Operatsiyalar tarixi" : "История операций"}
-          </h2>
-
-          <div className="glass-card overflow-hidden">
-            {historyLoading ? (
-              <div className="p-10 flex justify-center">
-                <div className="w-6 h-6 border-2 border-brand-primary/40 border-t-brand-primary rounded-full animate-spin" />
-              </div>
-            ) : (history?.transactions ?? []).length === 0 ? (
-              <div className="p-10 text-center">
-                <p className="text-white/30 text-sm italic">
-                  {uz ? "Hali operatsiyalar yo'q" : "Операций пока нет"}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-white/5">
-                {(history?.transactions ?? []).map((tx) => {
-                  const isPositive = tx.amount >= 0;
-                  return (
-                    <div
-                      key={tx.id}
-                      className="flex items-center justify-between px-4 py-3.5 hover:bg-white/3 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
-                          isPositive
-                            ? "bg-green-500/15 text-green-400"
-                            : "bg-red-500/15 text-red-400"
-                        }`}>
-                          {txIcon(tx.amount)}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-white/90 leading-tight">
-                            {humanizeComment(tx.comment ?? tx.transaction_type, language)}
-                          </p>
-                          <p className="text-xs text-white/35 mt-0.5">
-                            {formatDate(tx.created_at, language)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-3">
-                        <p className={`font-extrabold text-base ${isPositive ? "text-green-400" : "text-red-400"}`}>
-                          {isPositive ? "+" : ""}{tx.amount}
-                        </p>
-                        <p className="text-[10px] text-white/30 mt-0.5">
-                          {uz ? "qoldiq:" : "остаток:"} {tx.balance_after}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+          {/* Tab switcher */}
+          <div className="flex gap-2 p-1 rounded-2xl bg-white/5 border border-white/8">
+            <button
+              onClick={() => setActiveTab("credits")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === "credits"
+                  ? "bg-brand-primary text-white shadow-lg"
+                  : "text-white/40 hover:text-white/60"
+              }`}
+            >
+              <Coins size={15} />
+              {uz ? "Kreditlar" : "Кредиты"}
+            </button>
+            <button
+              onClick={() => setActiveTab("uzs")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === "uzs"
+                  ? "bg-green-600 text-white shadow-lg"
+                  : "text-white/40 hover:text-white/60"
+              }`}
+            >
+              <Banknote size={15} />
+              {uz ? "So'm" : "Сумы"}
+            </button>
           </div>
+
+          {/* Credits history */}
+          {activeTab === "credits" && (
+            <div className="glass-card overflow-hidden">
+              {historyLoading ? (
+                <div className="p-10 flex justify-center">
+                  <div className="w-6 h-6 border-2 border-brand-primary/40 border-t-brand-primary rounded-full animate-spin" />
+                </div>
+              ) : (history?.transactions ?? []).length === 0 ? (
+                <div className="p-10 text-center">
+                  <p className="text-white/30 text-sm italic">
+                    {uz ? "Hali operatsiyalar yo'q" : "Операций пока нет"}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {(history?.transactions ?? []).map((tx) => {
+                    const isPositive = tx.amount >= 0;
+                    return (
+                      <div
+                        key={tx.id}
+                        className="flex items-center justify-between px-4 py-3.5 hover:bg-white/3 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
+                            isPositive
+                              ? "bg-green-500/15 text-green-400"
+                              : "bg-red-500/15 text-red-400"
+                          }`}>
+                            {txIcon(tx.amount)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white/90 leading-tight">
+                              {humanizeComment(tx.comment ?? tx.transaction_type, language)}
+                            </p>
+                            <p className="text-xs text-white/35 mt-0.5">
+                              {formatDate(tx.created_at, language)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <p className={`font-extrabold text-base ${isPositive ? "text-green-400" : "text-red-400"}`}>
+                            {isPositive ? "+" : ""}{tx.amount} {uz ? "kr." : "кр."}
+                          </p>
+                          <p className="text-[10px] text-white/30 mt-0.5">
+                            {uz ? "qoldiq:" : "остаток:"} {tx.balance_after}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* UZS history */}
+          {activeTab === "uzs" && (
+            <div className="glass-card overflow-hidden">
+              {uzsHistoryLoading ? (
+                <div className="p-10 flex justify-center">
+                  <div className="w-6 h-6 border-2 border-green-500/40 border-t-green-400 rounded-full animate-spin" />
+                </div>
+              ) : (uzsHistory?.transactions ?? []).length === 0 ? (
+                <div className="p-10 text-center">
+                  <p className="text-white/30 text-sm italic">
+                    {uz ? "Hali so'm operatsiyalar yo'q" : "Операций в сумах пока нет"}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {(uzsHistory?.transactions ?? []).map((tx) => {
+                    const isPositive = tx.amount >= 0;
+                    return (
+                      <div
+                        key={tx.id}
+                        className="flex items-center justify-between px-4 py-3.5 hover:bg-white/3 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
+                            isPositive
+                              ? "bg-green-500/15 text-green-400"
+                              : "bg-red-500/15 text-red-400"
+                          }`}>
+                            {txIcon(tx.amount)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white/90 leading-tight">
+                              {humanizeUzsComment(tx.comment, language)}
+                            </p>
+                            <p className="text-xs text-white/35 mt-0.5">
+                              {formatDate(tx.created_at, language)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <p className={`font-extrabold text-base ${isPositive ? "text-green-400" : "text-red-400"}`}>
+                            {isPositive ? "+" : ""}{Math.abs(tx.amount).toLocaleString("uz-UZ")} so'm
+                          </p>
+                          <p className="text-[10px] text-white/30 mt-0.5">
+                            {uz ? "qoldiq:" : "остаток:"} {tx.balance_after.toLocaleString("uz-UZ")}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </motion.div>
       </motion.div>
     </main>

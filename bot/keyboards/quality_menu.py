@@ -25,7 +25,8 @@ def get_quality_keyboard(provider: str, lang: str) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text=i18n.t(lang, "quality.kling.pro10"), callback_data="q:kling:pro10")],
         ]
     
-    buttons.append([InlineKeyboardButton(text=i18n.t(lang, "common.cancel"), callback_data="start_menu")])
+    back_text = "← Orqaga" if lang == "uz" else "← Назад"
+    buttons.append([InlineKeyboardButton(text=back_text, callback_data="menu_create")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 QUALITY_DATA = {

@@ -60,35 +60,36 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
             await _send_history(message)
 
         elif action == "menu_balance":
-            uzs_balance = getattr(user, "referral_earnings", 0) or 0
+            uzs_balance = getattr(user, "uzs_balance", 0) or 0
             uzs_fmt = f"{uzs_balance:,}".replace(",", " ")
+            miniapp_url = (settings.miniapp_url or "").rstrip("/")
             if lang == "uz":
                 text = (
                     f"💳 <b>Balansingiz</b>\n\n"
                     f"⚡ Kreditlar: <b>{credits} kr.</b>\n"
                     f"💵 So'm balansi: <b>{uzs_fmt} so'm</b>\n\n"
-                    f"Generatsiya narxlari:\n"
-                    f"🍌 Nano Banana — 5–20 kr.\n"
-                    f"🎬 Veo 3 — 30–80 kr.\n"
-                    f"🎥 Kling — 40–120 kr."
+                    f"Batafsil ko'rish uchun kabinetni oching 👇"
                 )
-                btn_credits = "💎 Kredit sotib olish"
+                btn_wallet = "💼 Balansni ko'rish"
+                btn_credits_buy = "💎 Kredit sotib olish"
                 btn_uzs = "💵 So'm balansi to'ldirish"
             else:
                 text = (
                     f"💳 <b>Ваш баланс</b>\n\n"
                     f"⚡ Кредиты: <b>{credits} кр.</b>\n"
                     f"💵 Денежный баланс: <b>{uzs_fmt} сум</b>\n\n"
-                    f"Стоимость генераций:\n"
-                    f"🍌 Nano Banana — 5–20 кр.\n"
-                    f"🎬 Veo 3 — 30–80 кр.\n"
-                    f"🎥 Kling — 40–120 кр."
+                    f"Откройте кабинет для просмотра истории 👇"
                 )
-                btn_credits = "💎 Купить кредиты"
+                btn_wallet = "💼 Открыть кошелёк"
+                btn_credits_buy = "💎 Купить кредиты"
                 btn_uzs = "💵 Пополнить баланс в сумах"
 
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=btn_credits, callback_data="menu_plans")],
+                [InlineKeyboardButton(
+                    text=btn_wallet,
+                    web_app=WebAppInfo(url=f"{miniapp_url}/wallet"),
+                )],
+                [InlineKeyboardButton(text=btn_credits_buy, callback_data="menu_plans")],
                 [InlineKeyboardButton(text=btn_uzs, callback_data="uzs_topup_menu")],
             ])
             await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
