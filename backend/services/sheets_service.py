@@ -2,11 +2,15 @@
 Multi-tab Google Sheets monitoring service.
 
 Tabs:
+  📊 Дашборд       — summary dashboard with auto-formulas
   👥 Пользователи  — new user registrations
   💳 Оплаты        — payment requests & confirmations
   🎨 Генерации     — generation jobs (start / complete / fail)
   ⚠️ Ошибки        — system errors
   📅 Дневник       — daily summary (written by Celery Beat at 23:59)
+
+IMPORTANT: amount/numeric columns are stored as raw int/float
+so Google Sheets can sum/average them with formulas.
 """
 from __future__ import annotations
 
@@ -27,25 +31,33 @@ _SERVICE_ACCOUNT_FILE = os.path.join(
 )
 
 # Tab names
+TAB_DASHBOARD   = "📊 Дашборд"
 TAB_USERS       = "👥 Пользователи"
 TAB_PAYMENTS    = "💳 Оплаты"
 TAB_GENERATIONS = "🎨 Генерации"
 TAB_ERRORS      = "⚠️ Ошибки"
 TAB_DIARY       = "📅 Дневник"
 
-# Headers per tab
+# ─── Column headers ──────────────────────────────────────────────────────────
+# IMPORTANT: column order here defines column letters used in Dashboard formulas.
+# Оплаты:     H=Сумма(сум)  I=Кредиты  J=Статус  C=Тип
+# Генерации:  H=Кредиты  I=Статус  J=API($)  K=Время(сек)
+# Пользователи: F=Источник  G=Реферер
+# Дневник:    G=Выручка(сум)  I=API($)
+
 HEADERS: dict[str, list[str]] = {
+    TAB_DASHBOARD: ["Показатель", "Значение", "Единица / Примечание"],
     TAB_USERS: [
         "Дата", "Telegram ID", "Имя", "Username", "Язык",
-        "Источник", "Реферер", "Стартовые кредиты",
+        "Источник", "Реферер (tg_id)", "Стартовые кредиты",
     ],
     TAB_PAYMENTS: [
         "Дата", "ID", "Тип", "Telegram ID", "Имя", "Username",
-        "Пакет / Сумма", "Сумма (сум)", "Кредиты", "Статус", "Комментарий",
+        "Пакет / Описание", "Сумма (сум)", "Кредиты", "Статус", "Комментарий",
     ],
     TAB_GENERATIONS: [
         "Дата", "Job ID", "Telegram ID", "Имя", "Username",
-        "Провайдер", "Промпт (100)", "Кредиты", "Статус",
+        "Провайдер", "Промпт (100 симв)", "Кредиты", "Статус",
         "API стоимость ($)", "Время (сек)", "Комментарий",
     ],
     TAB_ERRORS: [
@@ -53,7 +65,7 @@ HEADERS: dict[str, list[str]] = {
         "Job ID", "Сообщение", "Traceback",
     ],
     TAB_DIARY: [
-        "Дата", "Новых пользователей", "Генераций (всего)",
+        "Дата", "Новых польз.", "Генераций всего",
         "Генераций OK", "Генераций FAIL",
         "Оплат подтверждено", "Выручка (сум)", "Кредитов продано",
         "API расход ($)", "Ошибок",
@@ -68,7 +80,6 @@ API_COST_USD: dict[str, float] = {
 }
 
 _lock = threading.Lock()
-_gc_cache: object = None  # cached gspread client
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -80,8 +91,6 @@ def _spreadsheet_id() -> str:
 
 
 def _get_client():
-    """Return a gspread client, reusing the cached one when possible."""
-    global _gc_cache
     import json
     import gspread
 
@@ -114,14 +123,14 @@ def _try_setting(attr: str) -> str:
 
 
 def _get_worksheet(tab_name: str):
-    """Return worksheet by name, creating it (with headers) if it doesn't exist."""
+    """Return worksheet, creating it with headers if it doesn't exist."""
     gc = _get_client()
     sh = gc.open_by_key(_spreadsheet_id())
-
     try:
         ws = sh.worksheet(tab_name)
     except Exception:
-        ws = sh.add_worksheet(title=tab_name, rows=1000, cols=20)
+        rows = 5000 if tab_name in (TAB_PAYMENTS, TAB_GENERATIONS) else 2000
+        ws = sh.add_worksheet(title=tab_name, rows=rows, cols=20)
         ws.append_row(HEADERS.get(tab_name, []), value_input_option="USER_ENTERED")
         logger.info(f"[SHEETS] Created tab '{tab_name}'")
     return ws
@@ -131,14 +140,22 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M")
 
 
-def _fmt(n: Union[int, float, None]) -> str:
+def _int(n: Union[int, float, None]) -> int:
+    """Return raw int for numeric cells — so Sheets can SUM them."""
     if n is None:
-        return "0"
-    return f"{int(n):,}".replace(",", " ")
+        return 0
+    return int(n)
+
+
+def _float2(n: Union[int, float, None]) -> float:
+    """Return rounded float for monetary/cost cells."""
+    if n is None:
+        return 0.0
+    return round(float(n), 4)
 
 
 def _append(tab: str, row: list) -> None:
-    """Append one row to the given tab, with full error logging."""
+    """Append one row to a tab."""
     try:
         with _lock:
             ws = _get_worksheet(tab)
@@ -163,8 +180,14 @@ def log_new_user(
     uname = f"@{username}" if username else "—"
     ref = str(referrer_telegram_id) if referrer_telegram_id else "—"
     _append(TAB_USERS, [
-        _now(), str(telegram_id), full_name, uname,
-        lang, source, ref, str(start_credits),
+        _now(),
+        telegram_id,          # raw int → Telegram ID
+        full_name,
+        uname,
+        lang,
+        source,
+        ref,
+        start_credits,        # raw int → Стартовые кредиты
     ])
     logger.info(f"[SHEETS] new user {telegram_id}")
 
@@ -184,11 +207,12 @@ def log_payment_request(
     uname = f"@{username}" if username else "—"
     _append(TAB_PAYMENTS, [
         _now(), f"#{payment_id}", payment_type,
-        str(telegram_id), full_name, uname,
-        plan_name, _fmt(amount_uzs), str(credits) if credits else "",
+        telegram_id, full_name, uname,
+        plan_name,
+        _int(amount_uzs),     # ← raw int: SUMIF works
+        _int(credits),
         "⏳ Ожидание", "",
     ])
-    logger.info(f"[SHEETS] payment request #{payment_id}")
 
 
 def log_payment_confirmed(
@@ -205,8 +229,10 @@ def log_payment_confirmed(
     uname = f"@{username}" if username else "—"
     _append(TAB_PAYMENTS, [
         _now(), f"#{payment_id}", payment_type,
-        str(telegram_id), full_name, uname,
-        plan_name, _fmt(amount_uzs), str(credits) if credits else "",
+        telegram_id, full_name, uname,
+        plan_name,
+        _int(amount_uzs),     # ← raw int
+        _int(credits),
         "✅ Подтверждено", comment,
     ])
     logger.info(f"[SHEETS] payment confirmed #{payment_id}")
@@ -225,8 +251,10 @@ def log_payment_rejected(
     uname = f"@{username}" if username else "—"
     _append(TAB_PAYMENTS, [
         _now(), f"#{payment_id}", payment_type,
-        str(telegram_id), full_name, uname,
-        plan_name, _fmt(amount_uzs), "",
+        telegram_id, full_name, uname,
+        plan_name,
+        _int(amount_uzs),     # ← raw int
+        0,
         "❌ Отклонено", reason,
     ])
     logger.info(f"[SHEETS] payment rejected #{payment_id}")
@@ -261,11 +289,34 @@ def log_referral_commission(
     uname = f"@{referrer_username}" if referrer_username else "—"
     _append(TAB_PAYMENTS, [
         _now(), "—", "👥 Реферальная комиссия",
-        str(referrer_telegram_id), referrer_name, uname,
-        f"Комиссия за реферала ({referred_name})", _fmt(commission_uzs), "",
+        referrer_telegram_id, referrer_name, uname,
+        f"Комиссия за реферала ({referred_name})",
+        _int(commission_uzs),  # ← raw int
+        0,
         "✅ Начислено", "",
     ])
-    logger.info(f"[SHEETS] referral commission {commission_uzs} for {referrer_telegram_id}")
+    logger.info(f"[SHEETS] referral commission {commission_uzs} UZS for {referrer_telegram_id}")
+
+
+def log_balance_payment(
+    telegram_id: int,
+    full_name: str,
+    username: Optional[str],
+    plan_name: str,
+    amount_uzs: int,
+    credits: int = 0,
+) -> None:
+    """Payment from UZS balance."""
+    log_payment_confirmed(
+        payment_id=0,
+        payment_type="💸 Оплата с баланса",
+        telegram_id=telegram_id,
+        full_name=full_name,
+        username=username,
+        plan_name=plan_name,
+        amount_uzs=amount_uzs,
+        credits=credits,
+    )
 
 
 # ─── 🎨 Генерации ─────────────────────────────────────────────────────────────
@@ -280,13 +331,14 @@ def log_generation_started(
     credits: int,
 ) -> None:
     uname = f"@{username}" if username else "—"
-    api_cost = API_COST_USD.get(provider, 0)
+    api_cost = _float2(API_COST_USD.get(provider, 0))
     _append(TAB_GENERATIONS, [
-        _now(), str(job_id),
-        str(telegram_id), full_name, uname,
-        _provider_label(provider), prompt[:100],
-        str(credits), "🔄 Запущено",
-        f"≈${api_cost}", "", "",
+        _now(), job_id,
+        telegram_id, full_name, uname,
+        _provider_label(provider), (prompt or "")[:100],
+        _int(credits), "🔄 Запущено",
+        api_cost,        # ← raw float: SUM works
+        0, "",
     ])
     logger.info(f"[SHEETS] generation started job#{job_id}")
 
@@ -302,15 +354,16 @@ def log_generation_complete(
     elapsed_seconds: int = 0,
 ) -> None:
     uname = f"@{username}" if username else "—"
-    api_cost = API_COST_USD.get(provider, 0)
+    api_cost = _float2(API_COST_USD.get(provider, 0))
     _append(TAB_GENERATIONS, [
-        _now(), str(job_id),
-        str(telegram_id), full_name, uname,
-        _provider_label(provider), prompt[:100],
-        str(credits), "✅ Готово",
-        f"≈${api_cost}", str(elapsed_seconds), "",
+        _now(), job_id,
+        telegram_id, full_name, uname,
+        _provider_label(provider), (prompt or "")[:100],
+        _int(credits), "✅ Готово",
+        api_cost,        # ← raw float
+        _int(elapsed_seconds), "",
     ])
-    logger.info(f"[SHEETS] generation complete job#{job_id}")
+    logger.info(f"[SHEETS] generation complete job#{job_id} in {elapsed_seconds}s")
 
 
 def log_generation_failed(
@@ -324,14 +377,16 @@ def log_generation_failed(
     error: str = "",
 ) -> None:
     uname = f"@{username}" if username else "—"
+    api_cost = _float2(API_COST_USD.get(provider, 0))
     _append(TAB_GENERATIONS, [
-        _now(), str(job_id),
-        str(telegram_id), full_name, uname,
-        _provider_label(provider), prompt[:100],
-        str(credits), "❌ Ошибка",
-        "", "", error[:200],
+        _now(), job_id,
+        telegram_id, full_name, uname,
+        _provider_label(provider), (prompt or "")[:100],
+        _int(credits), "❌ Ошибка",
+        api_cost,        # ← counted as cost even if failed
+        0, (error or "")[:200],
     ])
-    logger.info(f"[SHEETS] generation failed job#{job_id}")
+    logger.info(f"[SHEETS] generation failed job#{job_id}: {error[:80]}")
 
 
 def _provider_label(provider: str) -> str:
@@ -339,7 +394,7 @@ def _provider_label(provider: str) -> str:
         "nano_banana": "🍌 Nano Banana",
         "kling":       "🎥 Kling",
         "veo":         "🎬 Veo 3",
-    }.get(provider, provider)
+    }.get(provider or "", provider or "—")
 
 
 # ─── ⚠️ Ошибки ────────────────────────────────────────────────────────────────
@@ -356,7 +411,7 @@ def log_error(
         _now(), level, source,
         str(telegram_id) if telegram_id else "—",
         str(job_id) if job_id else "—",
-        message[:300], tb[:500],
+        (message or "")[:300], (tb or "")[:500],
     ])
 
 
@@ -377,15 +432,14 @@ def log_daily_summary(
     row_date = date or datetime.now(timezone.utc).strftime("%d.%m.%Y")
     _append(TAB_DIARY, [
         row_date,
-        str(new_users),
-        str(total_gens),
-        str(ok_gens),
-        str(fail_gens),
-        str(confirmed_payments),
-        _fmt(revenue_uzs),
-        str(credits_sold),
-        f"${api_cost_usd:.3f}",
-        str(errors),
+        _int(new_users),
+        _int(total_gens),
+        _int(ok_gens),
+        _int(fail_gens),
+        _int(confirmed_payments),
+        _int(revenue_uzs),      # ← raw int
+        _int(credits_sold),
+        _float2(api_cost_usd),  # ← raw float
+        _int(errors),
     ])
     logger.info(f"[SHEETS] daily summary written for {row_date}")
-# Multi-tab monitoring deployed Fri Apr 10 04:47:07 +05 2026

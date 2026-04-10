@@ -70,6 +70,16 @@ def sheets_migrate(clear: bool = True):
     return migrate_all_to_sheets(clear_first=clear)
 
 
+@router.post("/sheets-dashboard")
+def sheets_dashboard():
+    """
+    (Re)build the 📊 Дашборд tab with live profit/monitoring formulas.
+    Call after deploy or after changing tab structure.
+    """
+    from backend.services.sheets_init import create_dashboard
+    return create_dashboard()
+
+
 @router.post("/cleanup-stale")
 async def cleanup_stale():
     db = SessionLocal()

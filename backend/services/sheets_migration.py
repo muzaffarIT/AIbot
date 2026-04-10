@@ -164,8 +164,8 @@ def migrate_all_to_sheets(clear_first: bool = True) -> dict:
                     "💳 Покупка пакета",
                     tg_id, full_name, uname,
                     plan_name,
-                    _fmt_num(o.amount),
-                    str(credits) if credits else "",
+                    int(o.amount),    # ← raw int: SUM works
+                    credits if credits else 0,
                     status_emoji,
                     o.payment_method or "",
                 ])
@@ -218,8 +218,8 @@ def migrate_all_to_sheets(clear_first: bool = True) -> dict:
                     type_labels,
                     tg_id, full_name, uname,
                     t.comment or "—",
-                    "",   # no UZS
-                    str(t.amount),
+                    0,              # no UZS amount for credit txns
+                    int(t.amount),  # ← raw int: credits amount
                     "✅ Выполнено",
                     "",
                 ])
@@ -278,14 +278,14 @@ def migrate_all_to_sheets(clear_first: bool = True) -> dict:
 
                 rows_gen.append([
                     _fmt_dt(j.created_at),
-                    str(j.id),
+                    j.id,               # raw int
                     tg_id, full_name, uname,
                     _provider_label(j.provider),
                     (j.prompt or "")[:100],
-                    str(j.credits_reserved),
+                    j.credits_reserved, # raw int
                     status,
-                    f"≈${api_cost}",
-                    elapsed,
+                    round(api_cost, 4), # raw float: SUM works
+                    int(elapsed) if elapsed else 0,
                     comment,
                 ])
 
