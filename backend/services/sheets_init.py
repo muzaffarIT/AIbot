@@ -121,8 +121,12 @@ def _build_dashboard_rows() -> list[list]:
 
     # ── Cross-tab references ──────────────────────────────────────────────
     # Пользователи
+    # F column = Источник: "organic" или "ref_XXXXX"
+    # G column = Реферер tg_id: "—" или число
+    # COUNTIF G:"<>—" counts empty cells too (thousands of empty rows = wrong result)
+    # → count by F column instead: "ref_*" = пришли по реферальной ссылке
     total_users   = counta(f"{U}!A2:A")
-    ref_users     = countif(f"{U}!G2:G", '"<>—"')
+    ref_users     = countif(f"{U}!F2:F", '"ref_*"')
 
     # Оплаты
     rev_ok        = sumif(f"{P}!J2:J", '"✅ Подтверждено"', f"{P}!H2:H")
