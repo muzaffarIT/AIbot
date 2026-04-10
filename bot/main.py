@@ -66,27 +66,23 @@ async def main() -> None:
     dp.include_router(payments_router)     # 1. payments (Critical: first)
     dp.include_router(onboarding_router)   # 2. onboarding (Block 2)
     dp.include_router(start_router)        # 3. start
-    dp.include_router(cabinet_router)      # 4. cabinet (🌐 mini app button)
-    dp.include_router(language_router)     # 5. language switcher
-    dp.include_router(prompts_router)      # 5. surprise me
-    dp.include_router(quality_router)      # 6. quality selection
-    dp.include_router(callbacks_router)    # 7. callbacks
-    dp.include_router(daily_router)        # 8. daily
-    dp.include_router(referral_router)     # 9. referral
-    dp.include_router(achievements_router)  # 10. achievements
-    dp.include_router(veo_router)          # 11. veo (with F.photo)
-    dp.include_router(kling_router)        # 12. kling router
-    dp.include_router(nanobanana_router)   # 13. nanobanana
-    # Kling is currently inside veo_router or nanobanana_router context in some cases, 
-    # but the point is to keep the order logic.
-    dp.include_router(history_router)      # 13. history
-    dp.include_router(admin_router)        # 14. admin
-    dp.include_router(help_router)         # 15. help
-    dp.include_router(terms_router)        # 14. terms
-    
-    # reply_router is a catch-all for reply buttons, usually registered after specific commands 
-    # but before generic message filters.
-    dp.include_router(reply_router)
+    dp.include_router(reply_router)        # 4. reply keyboard buttons — MUST be before FSM routers
+    #                                            so button presses are never swallowed as prompts
+    dp.include_router(cabinet_router)      # 5. cabinet (🌐 mini app button)
+    dp.include_router(language_router)     # 6. language switcher
+    dp.include_router(prompts_router)      # 7. surprise me
+    dp.include_router(quality_router)      # 8. quality selection
+    dp.include_router(callbacks_router)    # 9. callbacks
+    dp.include_router(daily_router)        # 10. daily
+    dp.include_router(referral_router)     # 11. referral
+    dp.include_router(achievements_router) # 12. achievements
+    dp.include_router(veo_router)          # 13. veo (with F.photo)
+    dp.include_router(kling_router)        # 14. kling router
+    dp.include_router(nanobanana_router)   # 15. nanobanana
+    dp.include_router(history_router)      # 16. history
+    dp.include_router(admin_router)        # 17. admin
+    dp.include_router(help_router)         # 18. help
+    dp.include_router(terms_router)        # 19. terms
 
     logging.info(f"[BOT] Webhook deleted, starting polling...")
     try:
