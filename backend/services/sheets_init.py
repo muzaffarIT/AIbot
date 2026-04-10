@@ -71,120 +71,192 @@ _P  = "'💳 Оплаты'"
 _G  = "'🎨 Генерации'"
 _D  = "'📅 Дневник'"
 
-# ── Column map (1-indexed; match HEADERS order) ──
+# ── Column map (match HEADERS order) ──
 # Оплаты:     H=Сумма(сум)  I=Кредиты  J=Статус  C=Тип
 # Генерации:  H=Кредиты     I=Статус   J=API($)  K=Время(сек)
-# Польз:      G=Реферер     F=Источник
+# Польз:      G=Реферер
 # Дневник:    G=Выручка     I=API($)
 
+# IMPORTANT: Russian-locale Google Sheets uses ";" as formula argument separator.
+# We use S=";" throughout.
+S = ";"
+
+
 def _f(formula: str) -> str:
-    """Prefix string with = so gspread writes it as a formula."""
+    """Prefix with = so gspread writes it as a formula."""
     return f"={formula}"
 
 
-def _build_dashboard_rows(usd_rate_cell: str = "B33") -> list[list]:
+def _build_dashboard_rows() -> list[list]:
     """
-    Returns the full dashboard as a list of [label, value/formula, note] rows.
-    usd_rate_cell — the cell where the USD/UZS rate is stored (used in formulas).
+    Returns the full dashboard as list of [label, value/formula, note] rows.
+
+    Row layout (sheet row = data index + 2, because row 1 = header):
+      Row 2  = title
+      Row 34 = Курс USD→UZS (used as rate cell B34)
     """
     U, P, G, D = _U, _P, _G, _D
 
-    # Часто используемые формулы
-    total_users   = f"COUNTA({U}!A2:A)"
-    ref_users     = f"COUNTIF({U}!G2:G,\"<>—\")"
-    rev_confirmed = f"SUMIF({P}!J2:J,\"✅ Подтверждено\",{P}!H2:H)"
-    rev_topup     = f"SUMIF({P}!C2:C,\"💵 Пополнение баланса\",{P}!H2:H)"
-    rev_balance   = f"SUMIF({P}!C2:C,\"💸 Оплата с баланса\",{P}!H2:H)"
-    commissions   = f"SUMIF({P}!C2:C,\"👥 Реферальная комиссия\",{P}!H2:H)"
-    cnt_confirmed = f"COUNTIF({P}!J2:J,\"✅ Подтверждено\")"
-    cnt_waiting   = f"COUNTIF({P}!J2:J,\"⏳ Ожидание\")"
-    cnt_rejected  = f"COUNTIF({P}!J2:J,\"❌ Отклонено\")"
-    total_gens    = f"COUNTA({G}!A2:A)"
-    ok_gens       = f"COUNTIF({G}!I2:I,\"✅ Готово\")"
-    fail_gens     = f"COUNTIF({G}!I2:I,\"❌ Ошибка\")"
-    nb_gens       = f"COUNTIF({G}!F2:F,\"🍌 Nano Banana\")"
-    kl_gens       = f"COUNTIF({G}!F2:F,\"🎥 Kling\")"
-    veo_gens      = f"COUNTIF({G}!F2:F,\"🎬 Veo 3\")"
-    cr_spent      = f"SUMIF({G}!I2:I,\"✅ Готово\",{G}!H2:H)"
-    api_total     = f"SUM({G}!J2:J)"
-    avg_time      = (f"IFERROR(ROUND(AVERAGEIF({G}!I2:I,"
-                    f"\"✅ Готово\",{G}!K2:K),0),0)")
+    # ── Shorthand formula builders ────────────────────────────────────────
+    def sumif(rng, crit, sum_rng):
+        return f"SUMIF({rng}{S}{crit}{S}{sum_rng})"
+
+    def countif(rng, crit):
+        return f"COUNTIF({rng}{S}{crit})"
+
+    def counta(rng):
+        return f"COUNTA({rng})"
+
+    def ifn(cond, t, f_):
+        return f"IF({cond}{S}{t}{S}{f_})"
+
+    def rnd(val, digits):
+        return f"ROUND({val}{S}{digits})"
+
+    def iferr(val, fallback):
+        return f"IFERROR({val}{S}{fallback})"
+
+    def avgif(rng, crit, avg_rng):
+        return f"AVERAGEIF({rng}{S}{crit}{S}{avg_rng})"
+
+    # ── Cross-tab references ──────────────────────────────────────────────
+    # Пользователи
+    total_users   = counta(f"{U}!A2:A")
+    ref_users     = countif(f"{U}!G2:G", '"<>—"')
+
+    # Оплаты
+    rev_ok        = sumif(f"{P}!J2:J", '"✅ Подтверждено"', f"{P}!H2:H")
+    rev_topup     = sumif(f"{P}!C2:C", '"💵 Пополнение баланса"', f"{P}!H2:H")
+    rev_balance   = sumif(f"{P}!C2:C", '"💸 Оплата с баланса"', f"{P}!H2:H")
+    commissions   = sumif(f"{P}!C2:C", '"👥 Реферальная комиссия"', f"{P}!H2:H")
+    cnt_ok        = countif(f"{P}!J2:J", '"✅ Подтверждено"')
+    cnt_wait      = countif(f"{P}!J2:J", '"⏳ Ожидание"')
+    cnt_rej       = countif(f"{P}!J2:J", '"❌ Отклонено"')
+
+    # Генерации
+    total_gens    = counta(f"{G}!A2:A")
+    ok_gens       = countif(f"{G}!I2:I", '"✅ Готово"')
+    fail_gens     = countif(f"{G}!I2:I", '"❌ Ошибка"')
+    nb_gens       = countif(f"{G}!F2:F", '"🍌 Nano Banana"')
+    kl_gens       = countif(f"{G}!F2:F", '"🎥 Kling"')
+    veo_gens      = countif(f"{G}!F2:F", '"🎬 Veo 3"')
+    cr_spent      = sumif(f"{G}!I2:I", '"✅ Готово"', f"{G}!H2:H")
+    api_sum       = f"SUM({G}!J2:J)"
+    avg_time      = iferr(rnd(avgif(f"{G}!I2:I", '"✅ Готово"', f"{G}!K2:K"), "0"), "0")
+
+    # ── Dashboard rows ────────────────────────────────────────────────────
+    # Each row: [label, formula/value, unit/note]
+    # NOTE: Row 34 of the SHEET = data index 32 = "Курс USD→UZS"
+    # (1 header row + 32 data rows before it = row 33... wait let me count)
+    # header=row1, data[0]=row2 ... data[32]=row34.  ✓
 
     rows: list[list] = [
-        # ── Заголовок ──────────────────────────────────────────────────────
+        # data[0] = row 2
         ["📊 HARF AI — МОНИТОРИНГ", _f("NOW()"), "Обновляется при открытии"],
+        # data[1] = row 3
         ["", "", ""],
 
-        # ── 👥 Пользователи ────────────────────────────────────────────────
+        # ── 👥 ПОЛЬЗОВАТЕЛИ ─────────────────────────────────── row 4-9
+        # data[2] = row 4
         ["👥 ПОЛЬЗОВАТЕЛИ", "", ""],
-        ["Всего зарегистрировано",     _f(total_users),                   "человек"],
-        ["По реферальной ссылке",      _f(ref_users),                     "человек"],
-        ["Без реферала (органика)",    _f(f"{total_users}-{ref_users}"),  "человек"],
-        ["Доля рефералов (%)",         _f(f"IF({total_users}>0,"
-                                           f"ROUND({ref_users}/{total_users}*100,1),0)"),
-                                       "%"],
+        # data[3] = row 5
+        ["Всего зарегистрировано",  _f(total_users),                          "человек"],
+        # data[4] = row 6
+        ["По реферальной ссылке",   _f(ref_users),                            "человек"],
+        # data[5] = row 7
+        ["Органика (без реферала)", _f(f"B5-B6"),                             "человек"],
+        # data[6] = row 8
+        ["Доля рефералов (%)",      _f(ifn("B5>0", rnd("B6/B5*100", "1"), "0")), "%"],
+        # data[7] = row 9
         ["", "", ""],
 
-        # ── 💰 Финансы ─────────────────────────────────────────────────────
+        # ── 💰 ФИНАНСЫ ──────────────────────────────────────── row 10-20
+        # data[8] = row 10
         ["💰 ФИНАНСЫ", "", ""],
-        ["Выручка подтверждена (UZS)", _f(rev_confirmed),                 "сум"],
-        ["Выручка (USD)",              _f(f"IFERROR(ROUND({rev_confirmed}/{usd_rate_cell},2),0)"),
-                                       "долларов"],
-        ["Пополнений баланса (UZS)",   _f(rev_topup),                     "сум"],
-        ["Оплат с баланса (UZS)",      _f(rev_balance),                   "сум"],
-        ["Оплат подтверждено",         _f(cnt_confirmed),                 "шт"],
-        ["Оплат ожидает",              _f(cnt_waiting),                   "шт"],
-        ["Оплат отклонено",            _f(cnt_rejected),                  "шт"],
-        ["Реферальных комиссий (UZS)", _f(commissions),                   "сум"],
-        ["Средний чек (UZS)",          _f(f"IF({cnt_confirmed}>0,"
-                                           f"ROUND({rev_confirmed}/{cnt_confirmed},0),0)"),
-                                       "сум"],
+        # data[9] = row 11
+        ["Выручка подтверждена (UZS)", _f(rev_ok),                            "сум"],
+        # data[10] = row 12
+        ["Выручка (USD)",              _f(iferr(rnd("B11/B34", "2"), "0")),   "$"],
+        # data[11] = row 13
+        ["Пополнений баланса (UZS)",   _f(rev_topup),                         "сум"],
+        # data[12] = row 14
+        ["Оплат с баланса (UZS)",      _f(rev_balance),                       "сум"],
+        # data[13] = row 15
+        ["Оплат подтверждено",         _f(cnt_ok),                            "шт"],
+        # data[14] = row 16
+        ["Оплат ожидает",              _f(cnt_wait),                          "шт"],
+        # data[15] = row 17
+        ["Оплат отклонено",            _f(cnt_rej),                           "шт"],
+        # data[16] = row 18
+        ["Реферальных комиссий (UZS)", _f(commissions),                       "сум"],
+        # data[17] = row 19
+        ["Средний чек (UZS)",          _f(ifn("B15>0", rnd("B11/B15", "0"), "0")), "сум"],
+        # data[18] = row 20
         ["", "", ""],
 
-        # ── 🎨 Генерации ───────────────────────────────────────────────────
+        # ── 🎨 ГЕНЕРАЦИИ ─────────────────────────────────────── row 21-32
+        # data[19] = row 21
         ["🎨 ГЕНЕРАЦИИ", "", ""],
-        ["Всего задач",                _f(total_gens),   "шт"],
-        ["Успешных",                   _f(ok_gens),      "шт"],
-        ["Ошибок",                     _f(fail_gens),    "шт"],
-        ["В процессе / ожидании",      _f(f"{total_gens}-{ok_gens}-{fail_gens}"),
-                                       "шт"],
-        ["Успешность (%)",             _f(f"IF({total_gens}>0,"
-                                           f"ROUND({ok_gens}/{total_gens}*100,1),0)"),
-                                       "%"],
-        ["🍌 Nano Banana",             _f(nb_gens),      "генераций"],
-        ["🎥 Kling",                   _f(kl_gens),      "генераций"],
-        ["🎬 Veo 3",                   _f(veo_gens),     "генераций"],
-        ["Кредитов потрачено",         _f(cr_spent),     "кредитов"],
-        ["Среднее время (сек)",        _f(avg_time),     "секунд"],
+        # data[20] = row 22
+        ["Всего задач",              _f(total_gens),                           "шт"],
+        # data[21] = row 23
+        ["Успешных",                 _f(ok_gens),                              "шт"],
+        # data[22] = row 24
+        ["Ошибок",                   _f(fail_gens),                            "шт"],
+        # data[23] = row 25
+        ["В процессе / ожидании",    _f(f"B22-B23-B24"),                       "шт"],
+        # data[24] = row 26
+        ["Успешность (%)",           _f(ifn("B22>0", rnd("B23/B22*100", "1"), "0")), "%"],
+        # data[25] = row 27
+        ["🍌 Nano Banana",           _f(nb_gens),                              "генераций"],
+        # data[26] = row 28
+        ["🎥 Kling",                 _f(kl_gens),                              "генераций"],
+        # data[27] = row 29
+        ["🎬 Veo 3",                 _f(veo_gens),                             "генераций"],
+        # data[28] = row 30
+        ["Кредитов потрачено",       _f(cr_spent),                             "кредитов"],
+        # data[29] = row 31
+        ["Среднее время (сек)",      _f(avg_time),                             "сек"],
+        # data[30] = row 32
         ["", "", ""],
 
-        # ── 📊 Прибыль ─────────────────────────────────────────────────────
+        # ── 📊 РАСЧЁТ ПРИБЫЛИ ────────────────────────────────── row 33-44
+        # data[31] = row 33
         ["📊 РАСЧЁТ ПРИБЫЛИ", "", ""],
-        ["Курс USD → UZS",            12700,             "← измените при необходимости"],
-        ["API: Nano Banana ($)",       _f(f"{nb_gens}*0.004"),    "$"],
-        ["API: Kling ($)",             _f(f"{kl_gens}*0.14"),     "$"],
-        ["API: Veo 3 ($)",             _f(f"{veo_gens}*0.10"),    "$"],
-        ["Итого API расходы ($)",      _f(f"SUM({api_total})"),   "$"],
-        ["Итого API расходы (UZS)",    _f(f"ROUND({api_total}*{usd_rate_cell},0)"),
-                                       "сум"],
+        # data[32] = row 34  ← USD RATE CELL (B34)
+        ["Курс USD → UZS",           12700,                                    "← измените при необходимости"],
+        # data[33] = row 35
+        ["API: Nano Banana ($)",     _f(f"B27*0.004"),                         "$"],
+        # data[34] = row 36
+        ["API: Kling ($)",           _f(f"B28*0.14"),                          "$"],
+        # data[35] = row 37
+        ["API: Veo 3 ($)",           _f(f"B29*0.10"),                          "$"],
+        # data[36] = row 38
+        ["Итого API расходы ($)",    _f(f"B35+B36+B37"),                       "$"],
+        # data[37] = row 39
+        ["Итого API расходы (UZS)", _f(rnd("B38*B34", "0")),                  "сум"],
+        # data[38] = row 40
         ["", "", ""],
-        ["💰 ПРИБЫЛЬ (UZS)",          _f(f"{rev_confirmed}-ROUND({api_total}*{usd_rate_cell},0)"),
-                                       "сум"],
-        ["💰 ПРИБЫЛЬ (USD)",          _f(f"IFERROR(ROUND(({rev_confirmed}-"
-                                           f"ROUND({api_total}*{usd_rate_cell},0))/{usd_rate_cell},2),0)"),
-                                       "долларов"],
-        ["Маржинальность (%)",         _f(f"IF({rev_confirmed}>0,"
-                                           f"ROUND(({rev_confirmed}-"
-                                           f"ROUND({api_total}*{usd_rate_cell},0))/{rev_confirmed}*100,1),0)"),
-                                       "%"],
+        # data[39] = row 41
+        ["💰 ПРИБЫЛЬ (UZS)",         _f("B11-B39"),                            "сум"],
+        # data[40] = row 42
+        ["💰 ПРИБЫЛЬ (USD)",         _f(iferr(rnd("B41/B34", "2"), "0")),      "$"],
+        # data[41] = row 43
+        ["Маржинальность (%)",       _f(ifn("B11>0", rnd("B41/B11*100", "1"), "0")), "%"],
+        # data[42] = row 44
         ["", "", ""],
 
-        # ── 📅 Дневник — итоги ────────────────────────────────────────────
+        # ── 📅 ДНЕВНИК — ИТОГИ ──────────────────────────────── row 45-49
+        # data[43] = row 45
         ["📅 ИТОГИ ЗА ВСЁ ВРЕМЯ (из Дневника)", "", ""],
-        ["Всего новых польз. (из дн.)", _f(f"SUM({D}!B2:B)"),    "человек"],
-        ["Выручка по дневнику (UZS)",   _f(f"SUM({D}!G2:G)"),    "сум"],
-        ["API расход по дневнику ($)",  _f(f"SUM({D}!I2:I)"),    "$"],
-        ["Дней с записями",             _f(f"COUNTA({D}!A2:A)"), "дней"],
+        # data[44] = row 46
+        ["Всего новых польз. (из дн.)", _f(f"SUM({D}!B2:B)"),                "человек"],
+        # data[45] = row 47
+        ["Выручка по дневнику (UZS)",   _f(f"SUM({D}!G2:G)"),                "сум"],
+        # data[46] = row 48
+        ["API расход по дневнику ($)",  _f(f"SUM({D}!I2:I)"),                "$"],
+        # data[47] = row 49
+        ["Дней с записями",             _f(counta(f"{D}!A2:A")),              "дней"],
     ]
     return rows
 
@@ -214,10 +286,9 @@ def create_dashboard() -> dict:
         ws.append_row(HEADERS[TAB_DASHBOARD], value_input_option="USER_ENTERED")
         time.sleep(0.5)
 
-        # Build and write all rows
-        # usd_rate_cell = B33 (row 33 in data = row 34 in sheet because of header row)
-        # We build rows first to find the rate row, then write
-        data_rows = _build_dashboard_rows(usd_rate_cell="B34")
+        # Build and write all data rows
+        # Rate cell = B34 (row 34 = header + 32 data rows before it)
+        data_rows = _build_dashboard_rows()
         ws.append_rows(data_rows, value_input_option="USER_ENTERED")
 
         # Format: bold section headers (rows where column B is empty and A has emoji)
