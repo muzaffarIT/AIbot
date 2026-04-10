@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, RefreshCw, Coins, Banknote } from "lucide-react";
+import { ArrowLeft, Plus, ArrowUpRight, ArrowDownRight, RefreshCw, Coins, Banknote, PlusCircle } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api, type BalanceHistoryResponse } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -43,6 +44,7 @@ function fmtUzs(n: number) {
 }
 
 export default function WalletPage() {
+  const router = useRouter();
   const { backendUser: userData, telegramUser: tgUser, loading, language } = useMiniAppUser();
   const [history, setHistory] = useState<BalanceHistoryResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -73,7 +75,7 @@ export default function WalletPage() {
   };
 
   const credits = history?.credits_balance ?? userData?.credits_balance ?? 0;
-  const uzsBalance = userData?.referral_earnings ?? 0;
+  const uzsBalance = userData?.uzs_balance ?? 0;
 
   if (loading && historyLoading) {
     return (
@@ -168,12 +170,23 @@ export default function WalletPage() {
                 {uz ? "So'm balansi" : "Баланс в сумах"}
               </p>
             </div>
-            <div className="flex items-end gap-3 mb-2">
+            <div className="flex items-end gap-3 mb-4">
               <span className="text-3xl font-black tracking-tighter text-green-400 leading-none">
                 {fmtUzs(uzsBalance)}
               </span>
             </div>
-            <p className="text-xs text-white/35 mt-1">
+            <button
+              onClick={() => router.push("/topup")}
+              className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-2xl font-bold text-sm transition-all active:scale-95"
+              style={{
+                background: "linear-gradient(135deg, #10b981, #059669)",
+                boxShadow: "0 4px 16px rgba(16,185,129,0.35)",
+              }}
+            >
+              <PlusCircle size={16} />
+              {uz ? "So'm balansini to'ldirish" : "Пополнить баланс в сумах"}
+            </button>
+            <p className="text-xs text-white/35 mt-3">
               {uz
                 ? "Referal komissiyalari va to'ldirishlar shu yerga tushadi"
                 : "Комиссии с рефералов и пополнения накапливаются здесь"}

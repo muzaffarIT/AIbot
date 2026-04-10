@@ -34,7 +34,11 @@ celery_app.conf.beat_schedule = {
     "lifecycle-notification": {
         "task": "worker.tasks.notification_tasks.lifecycle_notification_task",
         "schedule": crontab(minute=0, hour=0),
-    }
+    },
+    "daily-sheets-summary": {
+        "task": "worker.tasks.monitoring_tasks.daily_sheets_summary",
+        "schedule": crontab(hour=23, minute=59),
+    },
 }
 
 celery_app.conf.update(

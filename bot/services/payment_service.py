@@ -95,10 +95,11 @@ class ManualPaymentService:
             pay_repo = PaymentRepository(db)
             existing = pay_repo.get_pending_manual_payment(user.id)
 
-            # Auto-cancel payments older than 24 hours
+            # Auto-cancel stale or unsubmitted payments
             if existing:
                 age = datetime.now(timezone.utc) - existing.created_at.replace(tzinfo=timezone.utc)
-                if age > timedelta(hours=24):
+                # Cancel if: older than 24h OR still in CREATED state (user never clicked "я оплатил")
+                if age > timedelta(hours=24) or existing.status == PaymentStatus.CREATED:
                     pay_repo.update_status(existing, PaymentStatus.CANCELLED)
                     order_repo2 = _OrderRepo(db)
                     order2 = order_repo2.get_by_id(existing.order_id)
@@ -107,6 +108,7 @@ class ManualPaymentService:
                     db.commit()
                     existing = None
 
+            # Only block on PROCESSING (user claimed paid, awaiting admin)
             if existing:
                 await bot.send_message(
                     chat_id,
@@ -279,33 +281,44 @@ class ManualPaymentService:
                 except Exception as e:
                     logger.error(f"Achievement check error after payment: {e}")
 
-            # 10% referral commission — earnings tracked in UZS, credits given proportionally
-            if user and plan and user.referred_by_telegram_id:
+            # 10% referral commission — 10% of payment amount in UZS added to referrer's money balance
+            if user and user.referred_by_telegram_id:
                 try:
                     referrer = user_service.get_user_by_telegram_id(user.referred_by_telegram_id)
                     if referrer:
-                        # Credits to add: 10% of plan credits
-                        credits_commission = max(1, int(plan.credits_amount * 0.10))
-                        # UZS earnings to track (shown in referral stats)
-                        uzs_commission = int(float(plan.price) * 0.10)
-                        balance_service.add_credits(referrer.id, credits_commission, "referral_commission")
-                        referrer.referral_earnings = (referrer.referral_earnings or 0) + uzs_commission
+                        # 10% of actual payment amount in UZS
+                        uzs_commission = max(100, int(float(payment.amount) * 0.10))
+                        referrer.referral_earnings = (referrer.referral_earnings or 0) + uzs_commission  # stats tracker
+                        referrer.uzs_balance = (getattr(referrer, "uzs_balance", 0) or 0) + uzs_commission  # spendable wallet
                         db.commit()
+                        try:
+                            from bot.services.sheets import log_referral_commission
+                            log_referral_commission(
+                                referrer_full_name=referrer.first_name or "—",
+                                referrer_username=referrer.username,
+                                referrer_telegram_id=referrer.telegram_user_id,
+                                referred_full_name=user.first_name or "—",
+                                commission_uzs=uzs_commission,
+                            )
+                        except Exception as _se:
+                            logger.warning(f"[SHEETS] referral commission log failed: {_se}")
                         ref_lang = referrer.language_code or "ru"
+                        total_fmt = f"{referrer.referral_earnings:,}".replace(",", " ")
+                        commission_fmt = f"{uzs_commission:,}".replace(",", " ")
                         try:
                             if ref_lang == "uz":
                                 ref_text = (
                                     f"💰 <b>Referal komissiyasi!</b>\n\n"
-                                    f"Referalingiz balansini to'ldirdi.\n"
-                                    f"Sizga: <b>+{credits_commission}</b> kredit qo'shildi 🎁\n"
-                                    f"Jami daromad: <b>{referrer.referral_earnings:,} so'm</b>".replace(",", " ")
+                                    f"Referalingiz {commission_fmt} so'm miqdorida balansini to'ldirdi.\n"
+                                    f"Sizning so'm balansingizga: <b>+{commission_fmt} so'm</b> qo'shildi 🎁\n\n"
+                                    f"Jami so'm balansi: <b>{total_fmt} so'm</b>"
                                 )
                             else:
                                 ref_text = (
                                     f"💰 <b>Реферальная комиссия!</b>\n\n"
                                     f"Ваш реферал пополнил баланс.\n"
-                                    f"Начислено: <b>+{credits_commission}</b> кредитов 🎁\n"
-                                    f"Всего заработано: <b>{referrer.referral_earnings:,} сум</b>".replace(",", " ")
+                                    f"На ваш денежный баланс: <b>+{commission_fmt} сум</b> 🎁\n\n"
+                                    f"Итого на балансе: <b>{total_fmt} сум</b>"
                                 )
                             await bot.send_message(referrer.telegram_user_id, ref_text, parse_mode="HTML")
                         except Exception:
@@ -324,6 +337,7 @@ class ManualPaymentService:
                         telegram_id=user.telegram_user_id,
                         plan_name=plan.name,
                         amount_uzs=int(payment.amount),
+                        credits=plan.credits_amount,
                     )
                 except Exception as e:
                     logger.error(f"Sheets log error (confirm): {e}")

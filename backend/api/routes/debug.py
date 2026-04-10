@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Header
 import httpx
 from backend.core.config import settings
 from backend.db.session import SessionLocal
@@ -6,9 +8,77 @@ from backend.models.generation_job import GenerationJob
 from backend.models.user import User
 from backend.services.balance_service import BalanceService
 
-router = APIRouter(prefix="/api/debug", tags=["debug"])
+router = APIRouter(prefix="/debug", tags=["debug"])
 
-@router.post("/cleanup-stale")
+
+# ── Auth dependency ───────────────────────────────────────────────────────────
+
+def _require_debug_token(x_debug_token: str | None = Header(default=None)) -> None:
+    """All /debug endpoints require X-Debug-Token: <SECRET_KEY> header."""
+    if not settings.secret_key:
+        raise HTTPException(status_code=500, detail="Secret key not configured")
+    if not x_debug_token or x_debug_token != settings.secret_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing X-Debug-Token")
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/sheets-test", dependencies=[Depends(_require_debug_token)])
+def sheets_test():
+    """Test Google Sheets connectivity."""
+    import os
+    import traceback as _tb
+
+    result: dict = {
+        "env_var_set": bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()),
+        "env_var_length": len(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")),
+    }
+
+    try:
+        from bot.services.sheets import sheets_test as _st, _append, SPREADSHEET_ID
+        conn = _st()
+        result["connection"] = conn
+
+        if conn.get("ok"):
+            _append([
+                "TEST", "🔧 Тест подключения", "—",
+                "System", "—", "0",
+                "Проверка связи с таблицей", "0", "0",
+                "", "✅ OK", "auto-test",
+            ])
+            result["write_test"] = "ok — test row appended"
+        else:
+            result["write_test"] = "skipped (connection failed)"
+
+    except Exception as e:
+        result["import_error"] = str(e)
+        result["import_traceback"] = _tb.format_exc()
+
+    return result
+
+
+@router.post("/sheets-init", dependencies=[Depends(_require_debug_token)])
+def sheets_init():
+    """Create / repair all monitoring tabs in Google Sheets."""
+    from backend.services.sheets_init import init_all_sheets
+    return init_all_sheets()
+
+
+@router.post("/sheets-migrate", dependencies=[Depends(_require_debug_token)])
+def sheets_migrate(clear: bool = True):
+    """Migrate ALL historical DB data to Google Sheets."""
+    from backend.services.sheets_migration import migrate_all_to_sheets
+    return migrate_all_to_sheets(clear_first=clear)
+
+
+@router.post("/sheets-dashboard", dependencies=[Depends(_require_debug_token)])
+def sheets_dashboard():
+    """(Re)build the 📊 Дашборд tab with live profit/monitoring formulas."""
+    from backend.services.sheets_init import create_dashboard
+    return create_dashboard()
+
+
+@router.post("/cleanup-stale", dependencies=[Depends(_require_debug_token)])
 async def cleanup_stale():
     db = SessionLocal()
     try:
@@ -18,7 +88,7 @@ async def cleanup_stale():
             GenerationJob.status == "pending",
             GenerationJob.created_at < cutoff
         ).all()
-        
+
         refunded = 0
         balance_service = BalanceService(db)
         for job in stale:
@@ -37,31 +107,47 @@ async def cleanup_stale():
     finally:
         db.close()
 
-@router.get("/kie-ping")
+
+@router.get("/kie-ping", dependencies=[Depends(_require_debug_token)])
 async def kie_ping():
-    import httpx
+    """Test KIE AI API connectivity."""
     from backend.core.config import settings
+    base = (settings.kie_base_url or "https://api.kie.ai").rstrip("/")
+    key = settings.kie_api_key or ""
+    results = {}
+
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(
-                f"{settings.kie_base_url}/v1/nano-banana/generate",
-                headers={
-                    "Authorization": f"Bearer {settings.kie_api_key}",
-                    "Content-Type": "application/json"
-                },
+                f"{base}/api/v1/jobs/createTask",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                 json={
-                    "prompt": "a red circle",
-                    "model": "nano-banana-pro",
-                    "width": 512,
-                    "height": 512
-                }
+                    "model": "google/nano-banana",
+                    "input": {"prompt": "api connectivity test", "output_format": "png", "image_size": "1:1"},
+                },
             )
-            return {
-                "kie_status": r.status_code,
-                "kie_body": r.json() if r.status_code == 200 else r.text,
-                "key_first_8": settings.kie_api_key[:8] if settings.kie_api_key else "EMPTY",
-                "base_url": settings.kie_base_url,
-                "mock_mode": settings.ai_mock_mode
-            }
+            results["createTask_status"] = r.status_code
+            try:
+                body = r.json()
+                results["createTask_body"] = body
+                results["task_id"] = body.get("data", {}).get("taskId")
+            except Exception:
+                results["createTask_body"] = r.text
     except Exception as e:
-        return {"error": str(e)}
+        results["createTask_error"] = str(e)
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r2 = await client.get(
+                f"{base}/api/v1/veo/record-info",
+                headers={"Authorization": f"Bearer {key}"},
+                params={"taskId": "ping_test"},
+            )
+            results["veo_status"] = r2.status_code
+    except Exception as e:
+        results["veo_error"] = str(e)
+
+    results["key_first_8"] = key[:8] if key else "EMPTY"
+    results["base_url"] = base
+    results["mock_mode"] = settings.ai_mock_mode
+    return results

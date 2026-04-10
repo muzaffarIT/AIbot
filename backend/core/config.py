@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_env: str = "development"
-    debug: bool = True
+    debug: bool = False
 
     bot_token: str | None = None
     backend_host: str = "0.0.0.0"
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     secret_key: str
     default_language: str = "ru"
-    ai_mock_mode: bool = True
+    ai_mock_mode: bool = False
     generation_process_now: bool = True
     celery_task_always_eager: bool = False
     generation_poll_interval_seconds: int = 2
@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     click_merchant_id: str | None = None
     click_service_id: str | None = None
     click_secret_key: str | None = None
+
+    # Google Sheets monitoring
+    # Falls back to GOOGLE_SERVICE_ACCOUNT_JSON env var if not set
+    google_sheets_id: str = "1bXXHSV6NOg8PfIFabML5_kc_oivQjq-JH9drsacOe6Q"
+    google_credentials_json: str = ""
 
     @field_validator("secret_key", mode="before")
     @classmethod

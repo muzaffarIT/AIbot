@@ -21,20 +21,25 @@ class OnboardingStates(StatesGroup):
     step_3 = State()
     step_4 = State()
 
-async def start_onboarding(message: types.Message, state: FSMContext, lang: str):
+async def start_onboarding(message: types.Message, state: FSMContext, lang: str, name: str = ""):
     await state.set_state(OnboardingStates.step_1)
+    step1_text = i18n.t(lang, "onboarding_step_1")
+    if name and "{name}" in step1_text:
+        step1_text = step1_text.replace("{name}", name)
     await message.answer(
-        i18n.t(lang, "onboarding_step_1"),
-        reply_markup=ReplyKeyboardRemove()
+        step1_text,
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode="HTML",
     )
     await asyncio.sleep(1.5)
     await state.set_state(OnboardingStates.step_2)
-    await message.answer(i18n.t(lang, "onboarding_step_2"))
-    
+    await message.answer(i18n.t(lang, "onboarding_step_2"), parse_mode="HTML")
+
     await asyncio.sleep(1.5)
     await state.set_state(OnboardingStates.step_3)
     await message.answer(
         i18n.t(lang, "onboarding_step_3"),
+        parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=i18n.t(lang, "btn_continue"), callback_data="onboarding_next")]
         ])

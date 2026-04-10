@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import {
-  Sparkles, Users, Coins, ChevronRight, Activity, Zap, AlertCircle, Wallet,
+  Sparkles, Users, Coins, ChevronRight, Activity, Zap, AlertCircle, Wallet, Banknote,
 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api, type GenerationJob } from "@/lib/api";
@@ -70,7 +70,13 @@ export default function HomePage() {
 
   const displayName = tgUser?.first_name || userData?.username || (uz ? "Ijodkor" : "Творец");
   const credits = userData?.credits_balance ?? 0;
+  const uzsBalance = userData?.uzs_balance ?? 0;
   const activeCount = jobs.filter((j) => isActiveJob(j.status)).length;
+
+  function fmtUzs(n: number) {
+    if (n === 0) return "0";
+    return n.toLocaleString("uz-UZ");
+  }
 
   return (
     <main className="min-h-screen px-5 pt-6 pb-24 overflow-x-hidden">
@@ -140,7 +146,16 @@ export default function HomePage() {
                 <Wallet className="text-white" size={22} />
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-xs text-brand-cyan font-semibold">
+            {uzsBalance > 0 && (
+              <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/20">
+                <Banknote size={14} className="text-green-400 shrink-0" />
+                <span className="text-xs text-green-400 font-semibold">
+                  {uz ? "So'm balansi:" : "Баланс в сумах:"}{" "}
+                  <span className="font-black">{fmtUzs(uzsBalance)} {uz ? "so'm" : "сум"}</span>
+                </span>
+              </div>
+            )}
+            <div className="mt-3 flex items-center gap-2 text-xs text-brand-cyan font-semibold">
               <Zap size={12} className="fill-brand-cyan/40" />
               {uz ? "To'ldirish uchun bosing" : "Нажмите, чтобы пополнить"}
               <ChevronRight size={14} className="ml-auto text-white/30 group-hover:text-white/70 transition-colors" />

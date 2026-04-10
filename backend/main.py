@@ -48,4 +48,17 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/health/worker")
+async def health_worker() -> dict:
+    """Check that Celery worker is alive by sending a ping task."""
+    try:
+        from worker.celery_app import celery_app
+        result = celery_app.control.ping(timeout=3)
+        if result:
+            return {"status": "ok", "workers": len(result)}
+        return {"status": "degraded", "detail": "No workers responded"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
 app.include_router(api_router, prefix="/api")

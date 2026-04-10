@@ -53,6 +53,12 @@ async def main() -> None:
 
     init_db()
 
+    try:
+        from bot.services.sheets import ensure_headers
+        ensure_headers()
+    except Exception as _sh_err:
+        logging.warning(f"[SHEETS] Header init failed (non-fatal): {_sh_err}")
+
     bot = Bot(token=bot_token)
     dp = Dispatcher()
     dp.message.middleware(GenerationRateLimitMiddleware(limit=3, interval=60))

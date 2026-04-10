@@ -106,9 +106,7 @@ async def _send_lifecycle_notifications():
                     await asyncio.sleep(0.05)
                     
                 except TelegramForbiddenError:
-                    logger.warning(f"User blocked bot: {user.telegram_user_id}")
-                except TelegramForbiddenError:
-                    logger.warning(f"User blocked bot: {user.telegram_user_id}")
+                    logger.warning(f"[Lifecycle] User blocked bot: {user.telegram_user_id}")
                 except Exception as e:
                     logger.error(f"[Lifecycle] Day {day} failed for {user.telegram_user_id}: {e}")
             

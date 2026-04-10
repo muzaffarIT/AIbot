@@ -24,11 +24,15 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
         user_service = UserService(db)
         balance_service = BalanceService(db)
 
-        # Check referral deep link: /start ref_XXXXXXXX
+        # Check deep link param
         ref_code: str | None = None
         args = message.text.split(" ", 1) if message.text else [""]
-        if len(args) > 1 and args[1].startswith("ref_"):
-            ref_code = args[1][4:]  # strip "ref_"
+        deep_link_arg = args[1] if len(args) > 1 else ""
+
+        if deep_link_arg.startswith("ref_"):
+            ref_code = deep_link_arg[4:]  # strip "ref_"
+        elif deep_link_arg == "uzs_topup":
+            pass  # handled after user setup below
 
         # Detect if user is new
         existing = user_service.get_user_by_telegram_id(message.from_user.id)
@@ -54,20 +58,32 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
                 balance_service.add_credits(referrer.id, 5, "referral_registration_bonus")
                 db.commit()
                 
-                # Notify referrer
+                # Notify referrer — show who joined
                 try:
                     ref_lang = referrer.language_code or "ru"
-                    ref_notify = (
-                        f"👥 <b>Yangi referal!</b>\n\n"
-                        f"Havolangiz orqali yangi foydalanuvchi ro'yxatdan o'tdi.\n"
-                        f"Hisobingizga <b>+5</b> kredit qo'shildi 🎁\n\n"
-                        f"Hamkorlik dasturi: har bir to'ldirishdan 10% komissiya olasiz!"
-                        if ref_lang == "uz" else
-                        f"👥 <b>Новый реферал!</b>\n\n"
-                        f"По вашей ссылке зарегистрировался новый пользователь.\n"
-                        f"На ваш счёт зачислено <b>+5</b> кредитов 🎁\n\n"
-                        f"Партнёрская программа: получайте 10% с каждого пополнения друга!"
-                    )
+                    new_name = user.first_name or "—"
+                    new_uname = f"@{user.username}" if user.username else "—"
+                    new_tg_id = user.telegram_user_id
+                    if ref_lang == "uz":
+                        ref_notify = (
+                            f"👥 <b>Yangi referal!</b>\n\n"
+                            f"👤 {new_name}\n"
+                            f"🔗 {new_uname}\n"
+                            f"🆔 <code>{new_tg_id}</code>\n\n"
+                            f"Havolangiz orqali ro'yxatdan o'tdi.\n"
+                            f"Hisobingizga <b>+5</b> kredit qo'shildi 🎁\n\n"
+                            f"Ular balansni to'ldirganda siz <b>10% komissiya</b> olasiz!"
+                        )
+                    else:
+                        ref_notify = (
+                            f"👥 <b>Новый реферал!</b>\n\n"
+                            f"👤 {new_name}\n"
+                            f"🔗 {new_uname}\n"
+                            f"🆔 <code>{new_tg_id}</code>\n\n"
+                            f"Зарегистрировался по вашей ссылке.\n"
+                            f"На ваш счёт зачислено <b>+5</b> кредитов 🎁\n\n"
+                            f"Когда они пополнят баланс — вы получите <b>10% комиссию</b>!"
+                        )
                     await bot.send_message(
                         referrer.telegram_user_id,
                         ref_notify,
@@ -83,10 +99,33 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
             balance_service.add_credits(user.id, welcome_credits, "welcome_bonus")
             db.commit()
 
+            # ── Sheets: log new user ─────────────────────────────────────────
+            try:
+                from backend.services.sheets_service import log_new_user
+                _total_start_credits = welcome_credits + (
+                    settings.referral_bonus_new_user if ref_code else 0
+                )
+                log_new_user(
+                    telegram_id=user.telegram_user_id,
+                    full_name=user.first_name or "—",
+                    username=user.username,
+                    lang=lang,
+                    source=f"ref_{ref_code}" if ref_code else "organic",
+                    referrer_telegram_id=(
+                        referrer.telegram_user_id
+                        if ref_code and 'referrer' in dir() and referrer else None
+                    ),
+                    start_credits=_total_start_credits,
+                )
+            except Exception as _se:
+                import logging as _log
+                _log.getLogger(__name__).error(f"[SHEETS] log_new_user failed: {_se}")
+
         # Onboarding trigger (Block 2)
         if not user.onboarding_completed:
             await state.clear()
-            await start_onboarding(message, state, lang)
+            _display_name = user.first_name or message.from_user.username or ("do'st" if lang == "uz" else "друг")
+            await start_onboarding(message, state, lang, name=_display_name)
             return
 
         name = user.first_name or message.from_user.username or "друг"
@@ -127,6 +166,14 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
             )
         except TelegramForbiddenError:
             return
+
+        # Deep link: open UZS top-up menu directly
+        if deep_link_arg == "uzs_topup":
+            from bot.handlers.callbacks import send_uzs_topup_menu
+            try:
+                await send_uzs_topup_menu(message.answer, lang)
+            except Exception:
+                pass
 
     finally:
         db.close()

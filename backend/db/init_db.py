@@ -25,6 +25,10 @@ def _run_migrations(db) -> None:
         # Onboarding
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE NOT NULL",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_bonus_paid BOOLEAN DEFAULT FALSE NOT NULL",
+        # UZS money wallet — real money balance, separate from credits and referral stats
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS uzs_balance INTEGER DEFAULT 0 NOT NULL",
+        # Migrate existing referral_earnings to uzs_balance (before the fix, direct top-ups used referral_earnings)
+        "UPDATE users SET uzs_balance = referral_earnings WHERE uzs_balance = 0 AND referral_earnings > 0",
         # Generation Jobs
         "ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS job_payload JSON",
         "ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS original_prompt TEXT",
@@ -41,6 +45,23 @@ def _run_migrations(db) -> None:
             value TEXT NOT NULL,
             updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
         )""",
+        # Safety constraints: prevent negative balances
+        """DO $$ BEGIN
+            ALTER TABLE users ADD CONSTRAINT check_uzs_balance_non_negative
+                CHECK (uzs_balance >= 0);
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$""",
+        """DO $$ BEGIN
+            ALTER TABLE users ADD CONSTRAINT check_referral_earnings_non_negative
+                CHECK (referral_earnings >= 0);
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$""",
+        """DO $$ BEGIN
+            ALTER TABLE balances ADD CONSTRAINT check_credits_balance_non_negative
+                CHECK (credits_balance >= 0);
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$""",
+        # Index for fast lookup of credit transactions by reference
+        "CREATE INDEX IF NOT EXISTS ix_credit_tx_ref ON credit_transactions (reference_type, reference_id)",
+        # Index for fast payment lookups by provider
+        "CREATE INDEX IF NOT EXISTS ix_payments_provider_payment_id ON payments (provider_payment_id)",
     ]
     for sql in migrations:
         try:

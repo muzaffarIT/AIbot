@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from backend.db.session import SessionLocal
 from backend.models.generation_job import GenerationJob
@@ -77,5 +77,102 @@ async def run_financial_monitor():
             
             logger.critical(f"Emergency mode activated: api={sum_api}, rev={sum_rev}")
 
+    finally:
+        db.close()
+
+
+# ─── Daily Sheets Summary ─────────────────────────────────────────────────────
+
+@celery_app.task(name="worker.tasks.monitoring_tasks.daily_sheets_summary")
+def daily_sheets_summary():
+    """Write a daily summary row to the 📅 Дневник tab at 23:59 every day."""
+    db = SessionLocal()
+    try:
+        today_start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        today_end = datetime.now(timezone.utc)
+
+        # New users registered today
+        from backend.models.user import User
+        new_users = db.query(func.count(User.id)).filter(
+            User.created_at >= today_start,
+            User.created_at <= today_end,
+        ).scalar() or 0
+
+        # Generations today
+        total_gens = db.query(func.count(GenerationJob.id)).filter(
+            GenerationJob.created_at >= today_start,
+            GenerationJob.created_at <= today_end,
+        ).scalar() or 0
+
+        ok_gens = db.query(func.count(GenerationJob.id)).filter(
+            GenerationJob.created_at >= today_start,
+            GenerationJob.created_at <= today_end,
+            GenerationJob.status == "completed",
+        ).scalar() or 0
+
+        fail_gens = db.query(func.count(GenerationJob.id)).filter(
+            GenerationJob.created_at >= today_start,
+            GenerationJob.created_at <= today_end,
+            GenerationJob.status == "failed",
+        ).scalar() or 0
+
+        # Payments confirmed today
+        confirmed_payments = db.query(func.count(Order.id)).filter(
+            Order.created_at >= today_start,
+            Order.created_at <= today_end,
+            Order.status == "completed",
+        ).scalar() or 0
+
+        # Revenue today (UZS)
+        revenue_uzs = int(
+            db.query(func.sum(Order.amount)).filter(
+                Order.created_at >= today_start,
+                Order.created_at <= today_end,
+                Order.status == "completed",
+            ).scalar() or 0
+        )
+
+        # Credits sold today (sum of credits in completed orders)
+        credits_sold = 0
+        try:
+            from backend.models.credit_package import CreditPackage
+            # Use a join or just approximate from orders
+            orders_today = db.query(Order).filter(
+                Order.created_at >= today_start,
+                Order.created_at <= today_end,
+                Order.status == "completed",
+            ).all()
+            for o in orders_today:
+                credits_sold += getattr(o, "credits", 0) or 0
+        except Exception:
+            pass
+
+        # API cost estimate
+        jobs_today = db.query(GenerationJob).filter(
+            GenerationJob.created_at >= today_start,
+            GenerationJob.created_at <= today_end,
+            GenerationJob.status == "completed",
+        ).all()
+        api_cost_usd = sum(COST_MAP.get(j.provider, 0.01) for j in jobs_today)
+
+        # Write to sheets
+        from backend.services.sheets_service import log_daily_summary
+        log_daily_summary(
+            new_users=new_users,
+            total_gens=total_gens,
+            ok_gens=ok_gens,
+            fail_gens=fail_gens,
+            confirmed_payments=confirmed_payments,
+            revenue_uzs=revenue_uzs,
+            credits_sold=credits_sold,
+            api_cost_usd=api_cost_usd,
+            errors=0,  # could hook into error counter later
+        )
+        logger.info(f"[DAILY SUMMARY] users={new_users} gens={total_gens} rev={revenue_uzs} api=${api_cost_usd:.3f}")
+
+    except Exception as exc:
+        logger.error(f"[DAILY SUMMARY] Failed: {exc}", exc_info=True)
     finally:
         db.close()

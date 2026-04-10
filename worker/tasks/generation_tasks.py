@@ -246,12 +246,19 @@ async def _notify_user(telegram_id: int, url: str,
         await bot.session.close()
 
 
-@celery_app.task(name="worker.tasks.generation_tasks.run_generation_job")
-def run_generation_job(job_id: int) -> dict | None:
+@celery_app.task(
+    name="worker.tasks.generation_tasks.run_generation_job",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    acks_late=True,
+)
+def run_generation_job(self, job_id: int) -> dict | None:
     logger.info(f"[WORKER] Job {job_id} started")
     logger.info(f"[WORKER] mock_mode={settings.ai_mock_mode}")
     logger.info(f"[WORKER] kie_key={'present' if settings.kie_api_key else 'MISSING'}")
-    
+    _job_start_time = time.time()
+
     db = SessionLocal()
     try:
         service = GenerationService(db)
@@ -271,6 +278,21 @@ def run_generation_job(job_id: int) -> dict | None:
         service.repo.update_job(job, status=JobStatus.PROCESSING)
         user = user_service.get_user_by_id(job.user_id)
         chat_id = user.telegram_user_id if user else None
+
+        # ── Sheets: log generation started ──────────────────────────────────
+        try:
+            from backend.services.sheets_service import log_generation_started
+            log_generation_started(
+                job_id=job.id,
+                telegram_id=user.telegram_user_id if user else 0,
+                full_name=user.first_name or "—" if user else "—",
+                username=user.username if user else None,
+                provider=job.provider,
+                prompt=job.prompt or "",
+                credits=job.credits_reserved,
+            )
+        except Exception as _se:
+            logger.error(f"[SHEETS] log_generation_started failed: {_se}")
 
         if not settings.kie_api_key:
             raise ValueError("KIE_API_KEY not set")
@@ -382,7 +404,24 @@ def run_generation_job(job_id: int) -> dict | None:
                 result_url=final_result_url,
                 completed=True
             )
-            
+
+            # ── Sheets: log generation complete ─────────────────────────────
+            try:
+                from backend.services.sheets_service import log_generation_complete
+                _elapsed = int(time.time() - _job_start_time)
+                log_generation_complete(
+                    job_id=job.id,
+                    telegram_id=user.telegram_user_id if user else 0,
+                    full_name=user.first_name or "—" if user else "—",
+                    username=user.username if user else None,
+                    provider=job.provider,
+                    prompt=job.prompt or "",
+                    credits=job.credits_reserved,
+                    elapsed_seconds=_elapsed,
+                )
+            except Exception as _se:
+                logger.error(f"[SHEETS] log_generation_complete failed: {_se}")
+
             # Check achievements
             try:
                 from bot.services.achievements import check_and_award_achievements
@@ -420,15 +459,44 @@ def run_generation_job(job_id: int) -> dict | None:
 
     except Exception as e:
         logger.error(f"[JOB {job_id}] FAILED: {e}", exc_info=True)
-        
+
+        # ── Sheets: log generation failed ───────────────────────────────────
         try:
-            job.status = JobStatus.FAILED  # Used the enum directly here! Wait, the prompt used "failed", but enum might be safer.
-            job.error_message = str(e)[:500]
-            balance_service.add_credits(
-                user_id=job.user_id,
-                amount=job.credits_reserved,
-                comment="Refund after crash"
+            from backend.services.sheets_service import log_generation_failed
+            _u = locals().get("user")
+            log_generation_failed(
+                job_id=job_id,
+                telegram_id=_u.telegram_user_id if _u else 0,
+                full_name=_u.first_name or "—" if _u else "—",
+                username=_u.username if _u else None,
+                provider=getattr(locals().get("job"), "provider", "unknown"),
+                prompt=getattr(locals().get("job"), "prompt", "") or "",
+                credits=getattr(locals().get("job"), "credits_reserved", 0),
+                error=str(e),
             )
+        except Exception as _se:
+            logger.error(f"[SHEETS] log_generation_failed failed: {_se}")
+
+        try:
+            job.status = JobStatus.FAILED
+            job.error_message = str(e)[:500]
+            # Idempotency: only refund if not already refunded
+            from backend.models.credit_transaction import CreditTransaction
+            from shared.enums.credit_transaction_type import CreditTransactionType
+            already_refunded = db.query(CreditTransaction).filter(
+                CreditTransaction.reference_type == "generation_job",
+                CreditTransaction.reference_id == str(job_id),
+                CreditTransaction.transaction_type == CreditTransactionType.REFUND,
+            ).first()
+            if not already_refunded:
+                balance_service.add_credits(
+                    user_id=job.user_id,
+                    amount=job.credits_reserved,
+                    transaction_type=CreditTransactionType.REFUND,
+                    reference_type="generation_job",
+                    reference_id=str(job_id),
+                    comment="Refund after crash",
+                )
             db.commit()
             logger.info(f"[JOB {job_id}] Refunded {job.credits_reserved} credits")
         except Exception as db_err:
