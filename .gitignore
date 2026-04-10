@@ -14,10 +14,16 @@ env/
 .env
 .env.local
 
-# Service account credentials (never commit)
+# Service account credentials — NEVER commit these
 service_account.json
+*.service_account.json
+google-credentials*.json
 *.env.local
 miniapp/.env.local
+
+# Temporary patch/migration scripts — delete after use
+patch.py
+patch_*.py
 
 # IDE
 .idea/

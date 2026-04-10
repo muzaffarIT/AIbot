@@ -137,8 +137,7 @@ class GenerationService:
                     job_id=job.id,
                 )
             except Exception as _se:
-                import traceback as _tb
-                logger.error(f"[SHEETS] generation log failed: {_se}\n{_tb.format_exc()}")
+                logger.warning(f"[SHEETS] generation log failed: {_se}")
         else:
             logger.info(f"[ADMIN] No credit deduction for {user.telegram_user_id}")
 
@@ -233,16 +232,24 @@ class GenerationService:
             self.repo.model.created_at <= threshold
         ).all()
         
+        from backend.models.credit_transaction import CreditTransaction
         results = []
         for job in stale_jobs:
-            self.balance_service.add_credits(
-                user_id=job.user_id,
-                amount=job.credits_reserved,
-                transaction_type=CreditTransactionType.REFUND,
-                reference_type="generation_job",
-                reference_id=str(job.id),
-                comment=f"Timeout refund for job {job.id}",
-            )
+            # Idempotency: skip refund if already issued for this job
+            already_refunded = self.db.query(CreditTransaction).filter(
+                CreditTransaction.reference_type == "generation_job",
+                CreditTransaction.reference_id == str(job.id),
+                CreditTransaction.transaction_type == CreditTransactionType.REFUND,
+            ).first()
+            if not already_refunded:
+                self.balance_service.add_credits(
+                    user_id=job.user_id,
+                    amount=job.credits_reserved,
+                    transaction_type=CreditTransactionType.REFUND,
+                    reference_type="generation_job",
+                    reference_id=str(job.id),
+                    comment=f"Timeout refund for job {job.id}",
+                )
             self.repo.update_job(
                 job,
                 status=JobStatus.FAILED,

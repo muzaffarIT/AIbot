@@ -45,6 +45,23 @@ def _run_migrations(db) -> None:
             value TEXT NOT NULL,
             updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
         )""",
+        # Safety constraints: prevent negative balances
+        """DO $$ BEGIN
+            ALTER TABLE users ADD CONSTRAINT check_uzs_balance_non_negative
+                CHECK (uzs_balance >= 0);
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$""",
+        """DO $$ BEGIN
+            ALTER TABLE users ADD CONSTRAINT check_referral_earnings_non_negative
+                CHECK (referral_earnings >= 0);
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$""",
+        """DO $$ BEGIN
+            ALTER TABLE balances ADD CONSTRAINT check_credits_balance_non_negative
+                CHECK (credits_balance >= 0);
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$""",
+        # Index for fast lookup of credit transactions by reference
+        "CREATE INDEX IF NOT EXISTS ix_credit_tx_ref ON credit_transactions (reference_type, reference_id)",
+        # Index for fast payment lookups by provider
+        "CREATE INDEX IF NOT EXISTS ix_payments_provider_payment_id ON payments (provider_payment_id)",
     ]
     for sql in migrations:
         try:

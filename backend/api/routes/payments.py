@@ -1,12 +1,13 @@
 import logging
 
 import httpx
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.api.deps import get_db
 from backend.core.config import settings
+from backend.core.security import verify_telegram_data
 from backend.services.payment_service import PaymentService
 from backend.services.order_service import OrderService
 from backend.services.user_service import UserService
@@ -15,6 +16,26 @@ from shared.enums.payment_status import PaymentStatus
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _require_tg_auth(
+    authorization: str | None = Header(default=None),
+    x_telegram_init_data: str | None = Header(default=None),
+) -> dict:
+    """Validate Telegram WebApp initData.
+    Accepts either:
+      - Authorization: tma <initData>   (sent by miniapp)
+      - X-Telegram-Init-Data: <initData>  (alternative)
+    """
+    init_data: str | None = None
+    if authorization and authorization.lower().startswith("tma "):
+        init_data = authorization[4:].strip()
+    elif x_telegram_init_data:
+        init_data = x_telegram_init_data
+
+    if not init_data:
+        raise HTTPException(status_code=401, detail="Missing Telegram auth header")
+    return verify_telegram_data(init_data)
 
 
 class CreatePaymentRequest(BaseModel):
@@ -202,7 +223,11 @@ def create_manual_payment(payload: CreateManualPaymentRequest, db: Session = Dep
 
 
 @router.post("/{payment_id}/notify-paid")
-async def notify_paid(payment_id: int, db: Session = Depends(get_db)) -> dict:
+async def notify_paid(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    _tg_user: dict = Depends(_require_tg_auth),
+) -> dict:
     """User claims they paid. Mark as processing and notify admins via Telegram."""
     try:
         pay_repo = PaymentRepository(db)
@@ -313,7 +338,11 @@ class UzsTopupNotifyRequest(BaseModel):
 
 
 @router.post("/uzs-topup-notify")
-async def uzs_topup_notify(payload: UzsTopupNotifyRequest, db: Session = Depends(get_db)) -> dict:
+async def uzs_topup_notify(
+    payload: UzsTopupNotifyRequest,
+    db: Session = Depends(get_db),
+    _tg_user: dict = Depends(_require_tg_auth),
+) -> dict:
     """User claims they paid for UZS balance top-up. Notify admins via bot."""
     import json as _json
 
@@ -398,6 +427,10 @@ def pay_from_balance(payload: PayFromBalanceRequest, db: Session = Depends(get_d
             raise HTTPException(status_code=404, detail="Plan not found")
 
         plan_price = int(plan.price)
+
+        # Lock the user row to prevent concurrent double-spend
+        from backend.models.user import User as _User
+        user = db.query(_User).with_for_update().filter(_User.id == user.id).first()
         uzs_balance = getattr(user, "uzs_balance", 0) or 0
         if uzs_balance < plan_price:
             raise HTTPException(
@@ -425,29 +458,10 @@ def pay_from_balance(payload: PayFromBalanceRequest, db: Session = Depends(get_d
 
         from backend.services.balance_service import BalanceService
         new_credits = BalanceService(db).get_balance_value(user.id)
-
-        # Apply 10% referral commission if this user was referred
-        _referrer_commission_info = None
-        referred_by_tg_id = getattr(user, "referred_by_telegram_id", None)
-        if referred_by_tg_id:
-            commission = int(plan_price * 0.10)
-            if commission > 0:
-                referrer = user_service.get_user_by_telegram_id(referred_by_tg_id)
-                if referrer:
-                    referrer.uzs_balance = (getattr(referrer, "uzs_balance", 0) or 0) + commission
-                    referrer.referral_earnings = (getattr(referrer, "referral_earnings", 0) or 0) + commission
-                    _referrer_commission_info = {
-                        "tg_id": referrer.telegram_user_id,
-                        "name": referrer.first_name or "—",
-                        "username": referrer.username,
-                        "lang": referrer.language_code or "ru",
-                        "commission": commission,
-                    }
-
         db.commit()
 
         try:
-            from bot.services.sheets import log_balance_payment, log_referral_commission
+            from bot.services.sheets import log_balance_payment
             log_balance_payment(
                 user_full_name=user.first_name or "—",
                 username=user.username,
@@ -456,48 +470,8 @@ def pay_from_balance(payload: PayFromBalanceRequest, db: Session = Depends(get_d
                 amount_uzs=plan_price,
                 credits=plan.credits_amount,
             )
-            if _referrer_commission_info:
-                log_referral_commission(
-                    referrer_full_name=_referrer_commission_info["name"],
-                    referrer_username=_referrer_commission_info["username"],
-                    referrer_telegram_id=_referrer_commission_info["tg_id"],
-                    referred_full_name=user.first_name or "—",
-                    commission_uzs=_referrer_commission_info["commission"],
-                )
         except Exception as _se:
-            import traceback as _tb
-            logger.error(f"[SHEETS] balance payment log failed: {_se}\n{_tb.format_exc()}")
-
-        # Notify referrer via bot (sync httpx, best effort)
-        if _referrer_commission_info:
-            try:
-                import httpx as _httpx
-                from backend.core.config import settings as _s
-                _ref = _referrer_commission_info
-                _user_name = user.first_name or "—"
-                _comm_fmt = f"{_ref['commission']:,}".replace(",", " ")
-                _price_fmt = f"{plan_price:,}".replace(",", " ")
-                if _ref["lang"] == "uz":
-                    _msg = (
-                        f"💰 <b>Referal komissiyasi!</b>\n\n"
-                        f"Referalingiz <b>{_user_name}</b> <b>{plan.name}</b> paketini sotib oldi ({_price_fmt} so'm).\n"
-                        f"Sizga <b>+{_comm_fmt} so'm</b> komissiya berildi (10%) 🎁"
-                    )
-                else:
-                    _msg = (
-                        f"💰 <b>Реферальная комиссия!</b>\n\n"
-                        f"Ваш реферал <b>{_user_name}</b> купил пакет <b>{plan.name}</b> ({_price_fmt} сум).\n"
-                        f"Вам зачислено <b>+{_comm_fmt} сум</b> комиссия (10%) 🎁"
-                    )
-                bot_token = (_s.bot_token or "").strip()
-                if bot_token:
-                    with _httpx.Client(timeout=5) as _c:
-                        _c.post(
-                            f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                            json={"chat_id": _ref["tg_id"], "text": _msg, "parse_mode": "HTML"},
-                        )
-            except Exception as _ne:
-                logger.warning(f"[REFERRAL] commission notify failed: {_ne}")
+            logger.warning(f"[SHEETS] balance payment log failed: {_se}")
 
         return {
             "success": True,

@@ -84,7 +84,7 @@ class BalanceService:
             deficit = amount - balance.credits_balance
             uzs_needed = deficit * UZS_PER_CREDIT
             from backend.models.user import User
-            user = self.db.query(User).filter(User.id == user_id).first()
+            user = self.db.query(User).with_for_update().filter(User.id == user_id).first()
             uzs_bal = (getattr(user, "uzs_balance", 0) or 0) if user else 0
             if user and uzs_bal >= uzs_needed:
                 user.uzs_balance = uzs_bal - uzs_needed
@@ -116,7 +116,7 @@ class BalanceService:
     def subtract_uzs(self, user_id: int, amount: int) -> int:
         """Deduct sums from user's UZS wallet. Returns new balance. Raises ValueError if insufficient."""
         from backend.models.user import User
-        user = self.db.query(User).filter(User.id == user_id).first()
+        user = self.db.query(User).with_for_update().filter(User.id == user_id).first()
         if not user:
             raise ValueError("User not found")
         current = getattr(user, "uzs_balance", 0) or 0

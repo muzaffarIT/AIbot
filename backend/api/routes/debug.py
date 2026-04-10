@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 import httpx
 from backend.core.config import settings
 from backend.db.session import SessionLocal
@@ -11,12 +11,21 @@ from backend.services.balance_service import BalanceService
 router = APIRouter(prefix="/debug", tags=["debug"])
 
 
-@router.get("/sheets-test")
+# ── Auth dependency ───────────────────────────────────────────────────────────
+
+def _require_debug_token(x_debug_token: str | None = Header(default=None)) -> None:
+    """All /debug endpoints require X-Debug-Token: <SECRET_KEY> header."""
+    if not settings.secret_key:
+        raise HTTPException(status_code=500, detail="Secret key not configured")
+    if not x_debug_token or x_debug_token != settings.secret_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing X-Debug-Token")
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/sheets-test", dependencies=[Depends(_require_debug_token)])
 def sheets_test():
-    """
-    Test Google Sheets connectivity.
-    Call GET /api/debug/sheets-test from Railway to diagnose logging issues.
-    """
+    """Test Google Sheets connectivity."""
     import os
     import traceback as _tb
 
@@ -31,7 +40,6 @@ def sheets_test():
         result["connection"] = conn
 
         if conn.get("ok"):
-            # Try writing a test row
             _append([
                 "TEST", "🔧 Тест подключения", "—",
                 "System", "—", "0",
@@ -48,39 +56,29 @@ def sheets_test():
 
     return result
 
-@router.post("/sheets-init")
+
+@router.post("/sheets-init", dependencies=[Depends(_require_debug_token)])
 def sheets_init():
-    """
-    Create / repair all monitoring tabs in Google Sheets.
-    Call POST /api/debug/sheets-init once after deploy.
-    """
+    """Create / repair all monitoring tabs in Google Sheets."""
     from backend.services.sheets_init import init_all_sheets
     return init_all_sheets()
 
 
-@router.post("/sheets-migrate")
+@router.post("/sheets-migrate", dependencies=[Depends(_require_debug_token)])
 def sheets_migrate(clear: bool = True):
-    """
-    Migrate ALL historical DB data to Google Sheets.
-    ?clear=true  — clears tabs first (default), then writes everything.
-    ?clear=false — appends to existing data.
-    WARNING: can take 1-3 minutes depending on data volume.
-    """
+    """Migrate ALL historical DB data to Google Sheets."""
     from backend.services.sheets_migration import migrate_all_to_sheets
     return migrate_all_to_sheets(clear_first=clear)
 
 
-@router.post("/sheets-dashboard")
+@router.post("/sheets-dashboard", dependencies=[Depends(_require_debug_token)])
 def sheets_dashboard():
-    """
-    (Re)build the 📊 Дашборд tab with live profit/monitoring formulas.
-    Call after deploy or after changing tab structure.
-    """
+    """(Re)build the 📊 Дашборд tab with live profit/monitoring formulas."""
     from backend.services.sheets_init import create_dashboard
     return create_dashboard()
 
 
-@router.post("/cleanup-stale")
+@router.post("/cleanup-stale", dependencies=[Depends(_require_debug_token)])
 async def cleanup_stale():
     db = SessionLocal()
     try:
@@ -90,7 +88,7 @@ async def cleanup_stale():
             GenerationJob.status == "pending",
             GenerationJob.created_at < cutoff
         ).all()
-        
+
         refunded = 0
         balance_service = BalanceService(db)
         for job in stale:
@@ -109,16 +107,15 @@ async def cleanup_stale():
     finally:
         db.close()
 
-@router.get("/kie-ping")
+
+@router.get("/kie-ping", dependencies=[Depends(_require_debug_token)])
 async def kie_ping():
-    """Test KIE AI API connectivity using the real createTask endpoint."""
-    import httpx
+    """Test KIE AI API connectivity."""
     from backend.core.config import settings
     base = (settings.kie_base_url or "https://api.kie.ai").rstrip("/")
     key = settings.kie_api_key or ""
     results = {}
 
-    # Test 1: create a market task (nano-banana) — no wait, just confirm API accepts it
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(
@@ -139,7 +136,6 @@ async def kie_ping():
     except Exception as e:
         results["createTask_error"] = str(e)
 
-    # Test 2: veo endpoint ping
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r2 = await client.get(

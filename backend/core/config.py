@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_env: str = "development"
-    debug: bool = True
+    debug: bool = False
 
     bot_token: str | None = None
     backend_host: str = "0.0.0.0"
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     secret_key: str
     default_language: str = "ru"
-    ai_mock_mode: bool = True
+    ai_mock_mode: bool = False
     generation_process_now: bool = True
     celery_task_always_eager: bool = False
     generation_poll_interval_seconds: int = 2

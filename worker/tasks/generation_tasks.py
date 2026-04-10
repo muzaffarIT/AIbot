@@ -246,8 +246,14 @@ async def _notify_user(telegram_id: int, url: str,
         await bot.session.close()
 
 
-@celery_app.task(name="worker.tasks.generation_tasks.run_generation_job")
-def run_generation_job(job_id: int) -> dict | None:
+@celery_app.task(
+    name="worker.tasks.generation_tasks.run_generation_job",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    acks_late=True,
+)
+def run_generation_job(self, job_id: int) -> dict | None:
     logger.info(f"[WORKER] Job {job_id} started")
     logger.info(f"[WORKER] mock_mode={settings.ai_mock_mode}")
     logger.info(f"[WORKER] kie_key={'present' if settings.kie_api_key else 'MISSING'}")
@@ -472,13 +478,25 @@ def run_generation_job(job_id: int) -> dict | None:
             logger.error(f"[SHEETS] log_generation_failed failed: {_se}")
 
         try:
-            job.status = JobStatus.FAILED  # Used the enum directly here! Wait, the prompt used "failed", but enum might be safer.
+            job.status = JobStatus.FAILED
             job.error_message = str(e)[:500]
-            balance_service.add_credits(
-                user_id=job.user_id,
-                amount=job.credits_reserved,
-                comment="Refund after crash"
-            )
+            # Idempotency: only refund if not already refunded
+            from backend.models.credit_transaction import CreditTransaction
+            from shared.enums.credit_transaction_type import CreditTransactionType
+            already_refunded = db.query(CreditTransaction).filter(
+                CreditTransaction.reference_type == "generation_job",
+                CreditTransaction.reference_id == str(job_id),
+                CreditTransaction.transaction_type == CreditTransactionType.REFUND,
+            ).first()
+            if not already_refunded:
+                balance_service.add_credits(
+                    user_id=job.user_id,
+                    amount=job.credits_reserved,
+                    transaction_type=CreditTransactionType.REFUND,
+                    reference_type="generation_job",
+                    reference_id=str(job_id),
+                    comment="Refund after crash",
+                )
             db.commit()
             logger.info(f"[JOB {job_id}] Refunded {job.credits_reserved} credits")
         except Exception as db_err:
