@@ -230,11 +230,11 @@ def _build_dashboard_rows() -> list[list]:
         # data[32] = row 34  ← USD RATE CELL (B34)
         ["Курс USD → UZS",           12700,                                    "← измените при необходимости"],
         # data[33] = row 35
-        ["API: Nano Banana ($)",     _f(f"B27*0.004"),                         "$"],
+        ["API: Nano Banana ($)",     _f(f"B27*0,004"),                         "$"],
         # data[34] = row 36
-        ["API: Kling ($)",           _f(f"B28*0.14"),                          "$"],
+        ["API: Kling ($)",           _f(f"B28*0,14"),                          "$"],
         # data[35] = row 37
-        ["API: Veo 3 ($)",           _f(f"B29*0.10"),                          "$"],
+        ["API: Veo 3 ($)",           _f(f"B29*0,10"),                          "$"],
         # data[36] = row 38
         ["Итого API расходы ($)",    _f(f"B35+B36+B37"),                       "$"],
         # data[37] = row 39
