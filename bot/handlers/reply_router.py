@@ -63,7 +63,6 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
             uzs_balance = getattr(user, "uzs_balance", 0) or 0
             uzs_fmt = f"{uzs_balance:,}".replace(",", " ")
 
-            # Get miniapp wallet URL — plain string, no keyboard objects
             wallet_url = ""
             try:
                 raw = str(settings.miniapp_url or "").strip().rstrip("/")
@@ -76,22 +75,34 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
 
             if lang == "uz":
                 text = (
-                    f"💳 Balansingiz:\n\n"
-                    f"⚡ Kreditlar: {credits} kr.\n"
-                    f"💵 So'm balansi: {uzs_fmt} so'm"
+                    f"💳 <b>Balansingiz</b>\n\n"
+                    f"⚡ Kreditlar: <b>{credits} kr.</b>\n"
+                    f"💵 So'm balansi: <b>{uzs_fmt} so'm</b>"
                 )
-                if wallet_url:
-                    text += f"\n\n💼 Kabinet: {wallet_url}"
+                btn_open = "💼 Kabinetni ochish →"
+                btn_buy = "💎 Kredit sotib olish"
+                btn_topup = "💵 So'm to'ldirish"
             else:
                 text = (
-                    f"💳 Ваш баланс:\n\n"
-                    f"⚡ Кредиты: {credits} кр.\n"
-                    f"💵 Денежный баланс: {uzs_fmt} сум"
+                    f"💳 <b>Ваш баланс</b>\n\n"
+                    f"⚡ Кредиты: <b>{credits} кр.</b>\n"
+                    f"💵 Денежный баланс: <b>{uzs_fmt} сум</b>"
                 )
-                if wallet_url:
-                    text += f"\n\n💼 Открыть кабинет: {wallet_url}"
+                btn_open = "💼 Открыть кабинет →"
+                btn_buy = "💎 Купить кредиты"
+                btn_topup = "💵 Пополнить баланс"
 
-            await message.answer(text)
+            # Use InlineKeyboardBuilder — avoids pydantic model validation issues
+            from aiogram.utils.keyboard import InlineKeyboardBuilder
+            kb = InlineKeyboardBuilder()
+            if wallet_url:
+                kb.button(text=btn_open, url=wallet_url)
+                kb.adjust(1)
+            kb.button(text=btn_buy, callback_data="menu_plans")
+            kb.button(text=btn_topup, callback_data="uzs_topup_menu")
+            kb.adjust(1)
+
+            await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
 
         elif action == "menu_referral":
             from bot.handlers.referral import _send_referral_info
