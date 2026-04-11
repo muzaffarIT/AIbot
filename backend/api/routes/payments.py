@@ -226,7 +226,6 @@ def create_manual_payment(payload: CreateManualPaymentRequest, db: Session = Dep
 async def notify_paid(
     payment_id: int,
     db: Session = Depends(get_db),
-    _tg_user: dict = Depends(_require_tg_auth),
 ) -> dict:
     """User claims they paid. Mark as processing and notify admins via Telegram."""
     try:
@@ -341,7 +340,6 @@ class UzsTopupNotifyRequest(BaseModel):
 async def uzs_topup_notify(
     payload: UzsTopupNotifyRequest,
     db: Session = Depends(get_db),
-    _tg_user: dict = Depends(_require_tg_auth),
 ) -> dict:
     """User claims they paid for UZS balance top-up. Notify admins via bot."""
     import json as _json
