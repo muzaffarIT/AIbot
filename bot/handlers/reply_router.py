@@ -84,11 +84,14 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
                 btn_credits_buy = "💎 Купить кредиты"
                 btn_uzs = "💵 Пополнить баланс в сумах"
 
+            wallet_url = f"{miniapp_url}/wallet" if miniapp_url else None
+            wallet_btn = (
+                InlineKeyboardButton(text=btn_wallet, web_app=WebAppInfo(url=wallet_url))
+                if wallet_url
+                else InlineKeyboardButton(text=btn_wallet, callback_data="open_cabinet")
+            )
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(
-                    text=btn_wallet,
-                    web_app=WebAppInfo(url=f"{miniapp_url}/wallet"),
-                )],
+                [wallet_btn],
                 [InlineKeyboardButton(text=btn_credits_buy, callback_data="menu_plans")],
                 [InlineKeyboardButton(text=btn_uzs, callback_data="uzs_topup_menu")],
             ])

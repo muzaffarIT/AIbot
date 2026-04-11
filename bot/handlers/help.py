@@ -26,6 +26,12 @@ def _get_lang(telegram_id: int) -> str:
 
 
 
+async def show_help_cmd(message: Message) -> None:
+    """Callable by other handlers — shows help text."""
+    lang = _get_lang(message.from_user.id)
+    await message.answer(i18n.t(lang, "help.text"), parse_mode="HTML")
+
+
 @router.callback_query(F.data == "menu_help")
 async def show_help_callback(callback: CallbackQuery) -> None:
     lang = _get_lang(callback.from_user.id)
@@ -36,5 +42,4 @@ async def show_help_callback(callback: CallbackQuery) -> None:
 # Handle reply keyboard button "❓ Помощь" / "❓ Yordam"
 @router.message(F.text.in_(["❓ Помощь", "❓ Yordam"]))
 async def help_reply_btn(message: Message) -> None:
-    lang = _get_lang(message.from_user.id)
-    await message.answer(i18n.t(lang, "help.text"), parse_mode="HTML")
+    await show_help_cmd(message)

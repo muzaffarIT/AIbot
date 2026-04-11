@@ -68,7 +68,7 @@ async def handle_photo_action(callback, state: FSMContext) -> None:
     state_map = {
         "veo3": (VeoStates.waiting_for_prompt, "🎬 Veo 3 выбран. Напиши промпт для анимации этого фото:"),
         "kling": (KlingStates.waiting_for_prompt, "🎥 Kling Motion выбран. Напиши промпт для анимации:"),
-        "nano_banana": ("nano:waiting", "🍌 Nano Banana выбран. Напиши промпт для Image-to-Image:"),
+        "nano_banana": (NanoBananaStates.waiting_for_prompt, "🍌 Nano Banana выбран. Напиши промпт для Image-to-Image:"),
     }
     state_cls, text = state_map[action]
     await state.set_state(state_cls)
