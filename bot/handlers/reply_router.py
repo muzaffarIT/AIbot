@@ -60,52 +60,59 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
             await _send_history(message)
 
         elif action == "menu_balance":
-            uzs_balance = getattr(user, "uzs_balance", 0) or 0
-            uzs_fmt = f"{uzs_balance:,}".replace(",", " ")
-            raw_url = (settings.miniapp_url or "").strip().rstrip("/")
-            # Ensure proper https:// prefix so Telegram accepts the URL button
-            if raw_url and not raw_url.startswith("http"):
-                raw_url = "https://" + raw_url
-            miniapp_url = raw_url
-
-            if lang == "uz":
-                text = (
-                    f"💳 <b>Balansingiz</b>\n\n"
-                    f"⚡ Kreditlar: <b>{credits} kr.</b>\n"
-                    f"💵 So'm balansi: <b>{uzs_fmt} so'm</b>"
-                )
-                btn_wallet = "💼 Kabinetni ochish"
-                btn_credits_buy = "💎 Kredit sotib olish"
-                btn_uzs = "💵 So'm to'ldirish"
-            else:
-                text = (
-                    f"💳 <b>Ваш баланс</b>\n\n"
-                    f"⚡ Кредиты: <b>{credits} кр.</b>\n"
-                    f"💵 Денежный баланс: <b>{uzs_fmt} сум</b>"
-                )
-                btn_wallet = "💼 Открыть кабинет"
-                btn_credits_buy = "💎 Купить кредиты"
-                btn_uzs = "💵 Пополнить баланс"
-
-            # Build keyboard — wallet button only if we have a valid URL
-            wallet_url = f"{miniapp_url}/wallet" if miniapp_url else None
-            inline_rows: list = [
-                [InlineKeyboardButton(text=btn_credits_buy, callback_data="menu_plans")],
-                [InlineKeyboardButton(text=btn_uzs, callback_data="uzs_topup_menu")],
-            ]
-            if wallet_url:
-                inline_rows.insert(0, [InlineKeyboardButton(text=btn_wallet, url=wallet_url)])
-            keyboard = InlineKeyboardMarkup(inline_keyboard=inline_rows)
-
             try:
-                await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
-            except Exception as exc:
-                logger.error(f"[BALANCE] keyboard send failed: {exc}")
-                # Fallback — plain text, guaranteed to work
-                fallback = text
+                uzs_balance = getattr(user, "uzs_balance", 0) or 0
+                uzs_fmt = f"{uzs_balance:,}".replace(",", " ")
+
+                if lang == "uz":
+                    text = (
+                        f"💳 <b>Balansingiz</b>\n\n"
+                        f"⚡ Kreditlar: <b>{credits} kr.</b>\n"
+                        f"💵 So'm balansi: <b>{uzs_fmt} so'm</b>"
+                    )
+                    btn_credits_buy = "💎 Kredit sotib olish"
+                    btn_uzs = "💵 So'm to'ldirish"
+                    btn_wallet = "💼 Kabinetni ochish"
+                else:
+                    text = (
+                        f"💳 <b>Ваш баланс</b>\n\n"
+                        f"⚡ Кредиты: <b>{credits} кр.</b>\n"
+                        f"💵 Денежный баланс: <b>{uzs_fmt} сум</b>"
+                    )
+                    btn_credits_buy = "💎 Купить кредиты"
+                    btn_uzs = "💵 Пополнить баланс"
+                    btn_wallet = "💼 Открыть кабинет"
+
+                try:
+                    raw = (settings.miniapp_url or "").strip().rstrip("/")
+                    if raw and not raw.startswith("http"):
+                        raw = "https://" + raw
+                    wallet_url = f"{raw}/wallet" if raw else None
+                except Exception:
+                    wallet_url = None
+
+                inline_rows: list = [
+                    [InlineKeyboardButton(text=btn_credits_buy, callback_data="menu_plans")],
+                    [InlineKeyboardButton(text=btn_uzs, callback_data="uzs_topup_menu")],
+                ]
                 if wallet_url:
-                    fallback += f"\n\n🔗 {wallet_url}"
-                await message.answer(fallback, parse_mode="HTML")
+                    inline_rows.insert(0, [InlineKeyboardButton(text=btn_wallet, url=wallet_url)])
+                keyboard = InlineKeyboardMarkup(inline_keyboard=inline_rows)
+
+                try:
+                    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+                except Exception as e1:
+                    logger.error(f"[BALANCE] keyboard failed ({e1}), trying plain text")
+                    plain = text + (f"\n\n🔗 {wallet_url}" if wallet_url else "")
+                    await message.answer(plain, parse_mode="HTML")
+
+            except Exception as exc:
+                logger.error(f"[BALANCE] outer error: {exc}", exc_info=True)
+                # Absolute last resort — hardcoded, can never fail
+                await message.answer(
+                    f"💳 Кредиты: <b>{credits} кр.</b>",
+                    parse_mode="HTML"
+                )
 
         elif action == "menu_referral":
             from bot.handlers.referral import _send_referral_info
