@@ -62,41 +62,50 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
         elif action == "menu_balance":
             uzs_balance = getattr(user, "uzs_balance", 0) or 0
             uzs_fmt = f"{uzs_balance:,}".replace(",", " ")
-            miniapp_url = (settings.miniapp_url or "").rstrip("/")
+            raw_url = (settings.miniapp_url or "").strip().rstrip("/")
+            # Ensure proper https:// prefix so Telegram accepts the URL button
+            if raw_url and not raw_url.startswith("http"):
+                raw_url = "https://" + raw_url
+            miniapp_url = raw_url
+
             if lang == "uz":
                 text = (
                     f"💳 <b>Balansingiz</b>\n\n"
                     f"⚡ Kreditlar: <b>{credits} kr.</b>\n"
-                    f"💵 So'm balansi: <b>{uzs_fmt} so'm</b>\n\n"
-                    f"Batafsil ko'rish uchun kabinetni oching 👇"
+                    f"💵 So'm balansi: <b>{uzs_fmt} so'm</b>"
                 )
-                btn_wallet = "💼 Balansni ko'rish"
+                btn_wallet = "💼 Kabinetni ochish"
                 btn_credits_buy = "💎 Kredit sotib olish"
-                btn_uzs = "💵 So'm balansi to'ldirish"
+                btn_uzs = "💵 So'm to'ldirish"
             else:
                 text = (
                     f"💳 <b>Ваш баланс</b>\n\n"
                     f"⚡ Кредиты: <b>{credits} кр.</b>\n"
-                    f"💵 Денежный баланс: <b>{uzs_fmt} сум</b>\n\n"
-                    f"Откройте кабинет для просмотра истории 👇"
+                    f"💵 Денежный баланс: <b>{uzs_fmt} сум</b>"
                 )
-                btn_wallet = "💼 Открыть кошелёк"
+                btn_wallet = "💼 Открыть кабинет"
                 btn_credits_buy = "💎 Купить кредиты"
-                btn_uzs = "💵 Пополнить баланс в сумах"
+                btn_uzs = "💵 Пополнить баланс"
 
-            inline_rows = [
+            # Build keyboard — wallet button only if we have a valid URL
+            wallet_url = f"{miniapp_url}/wallet" if miniapp_url else None
+            inline_rows: list = [
                 [InlineKeyboardButton(text=btn_credits_buy, callback_data="menu_plans")],
                 [InlineKeyboardButton(text=btn_uzs, callback_data="uzs_topup_menu")],
             ]
-            # Use URL button (not web_app) — InlineKeyboardButton.web_app has
-            # different semantics and requires BotFather domain registration.
-            # A regular url button reliably opens the miniapp page.
-            if miniapp_url:
-                inline_rows.insert(0, [
-                    InlineKeyboardButton(text=btn_wallet, url=f"{miniapp_url}/wallet")
-                ])
+            if wallet_url:
+                inline_rows.insert(0, [InlineKeyboardButton(text=btn_wallet, url=wallet_url)])
             keyboard = InlineKeyboardMarkup(inline_keyboard=inline_rows)
-            await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+
+            try:
+                await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+            except Exception as exc:
+                logger.error(f"[BALANCE] keyboard send failed: {exc}")
+                # Fallback — plain text, guaranteed to work
+                fallback = text
+                if wallet_url:
+                    fallback += f"\n\n🔗 {wallet_url}"
+                await message.answer(fallback, parse_mode="HTML")
 
         elif action == "menu_referral":
             from bot.handlers.referral import _send_referral_info
