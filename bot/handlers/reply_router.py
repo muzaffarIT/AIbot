@@ -5,7 +5,7 @@ Converts reply keyboard button text into handler actions.
 import asyncio
 import logging
 from aiogram import F, Router, Bot
-from aiogram.types import Message, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from bot.keyboards.reply_menu import REPLY_BUTTON_ACTIONS
@@ -84,17 +84,18 @@ async def handle_reply_button(message: Message, bot: Bot, state: FSMContext) -> 
                 btn_credits_buy = "💎 Купить кредиты"
                 btn_uzs = "💵 Пополнить баланс в сумах"
 
-            wallet_url = f"{miniapp_url}/wallet" if miniapp_url else None
-            wallet_btn = (
-                InlineKeyboardButton(text=btn_wallet, web_app=WebAppInfo(url=wallet_url))
-                if wallet_url
-                else InlineKeyboardButton(text=btn_wallet, callback_data="open_cabinet")
-            )
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [wallet_btn],
+            inline_rows = [
                 [InlineKeyboardButton(text=btn_credits_buy, callback_data="menu_plans")],
                 [InlineKeyboardButton(text=btn_uzs, callback_data="uzs_topup_menu")],
-            ])
+            ]
+            # Use URL button (not web_app) — InlineKeyboardButton.web_app has
+            # different semantics and requires BotFather domain registration.
+            # A regular url button reliably opens the miniapp page.
+            if miniapp_url:
+                inline_rows.insert(0, [
+                    InlineKeyboardButton(text=btn_wallet, url=f"{miniapp_url}/wallet")
+                ])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=inline_rows)
             await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
         elif action == "menu_referral":
