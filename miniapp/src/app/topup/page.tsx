@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, Banknote, Copy, CheckCircle2, Loader2, CreditCard } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
@@ -61,6 +61,9 @@ export default function TopupPage() {
   const [cardsLoading, setCardsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tgId = userData?.telegram_user_id ?? tgUser?.id ?? 0;
 
@@ -94,12 +97,28 @@ export default function TopupPage() {
     setStep("card");
   };
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setReceiptFile(file);
+    if (file && file.type.startsWith("image/")) {
+      setReceiptPreview(URL.createObjectURL(file));
+    } else {
+      setReceiptPreview(null);
+    }
+  }
+
+  function handleRemoveReceipt() {
+    setReceiptFile(null);
+    setReceiptPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   const handleConfirmPaid = async () => {
-    if (!tgId || submitting) return;
+    if (!tgId || submitting || !receiptFile) return;
     setSubmitting(true);
     setError("");
     try {
-      await api.uzsTopupNotify(tgId, selectedAmount);
+      await api.uzsTopupNotify(tgId, selectedAmount, receiptFile);
       setStep("success");
     } catch (e: any) {
       setError(e?.message || (uz ? "Xatolik yuz berdi" : "Произошла ошибка"));
@@ -300,6 +319,55 @@ export default function TopupPage() {
               </p>
             </motion.div>
 
+            {/* Receipt upload */}
+            <motion.div variants={itemVariants} className="glass-card p-4 space-y-3">
+              <p className="text-xs font-bold text-white/40 uppercase tracking-wider">
+                {uz ? "To'lov cheki" : "Чек перевода"}
+              </p>
+              {receiptFile ? (
+                <div className="space-y-2">
+                  {receiptPreview ? (
+                    <img src={receiptPreview} alt="receipt" className="w-full rounded-xl max-h-48 object-cover" />
+                  ) : (
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/50 shrink-0">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round"/>
+                        <polyline points="14 2 14 8 20 8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <span className="text-sm text-white truncate">{receiptFile.name}</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleRemoveReceipt}
+                    className="w-full py-2 rounded-xl bg-white/5 text-white/50 text-sm hover:bg-white/10 transition-colors"
+                  >
+                    {uz ? "✕ O'chirish va boshqasini tanlash" : "✕ Удалить и выбрать другой"}
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-white/15 bg-white/3 cursor-pointer hover:border-white/30 hover:bg-white/5 transition-colors">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf,application/pdf"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round"/>
+                    <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round"/>
+                    <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round"/>
+                  </svg>
+                  <p className="text-sm text-white/50 text-center">
+                    {uz ? "Chekni biriktiring" : "Прикрепить скриншот чека"}
+                  </p>
+                  <p className="text-xs text-white/25 text-center">
+                    {uz ? "Rasm yoki PDF" : "Фото или PDF"}
+                  </p>
+                </label>
+              )}
+            </motion.div>
+
             {error && (
               <motion.div variants={itemVariants}
                 className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center"
@@ -311,11 +379,12 @@ export default function TopupPage() {
             <motion.div variants={itemVariants} className="space-y-3">
               <button
                 onClick={handleConfirmPaid}
-                disabled={submitting}
+                disabled={submitting || !receiptFile}
                 className="w-full py-4 rounded-2xl font-bold text-base transition-all active:scale-95 disabled:opacity-60"
                 style={{
-                  background: "linear-gradient(135deg, #10b981, #059669)",
-                  boxShadow: "0 4px 20px rgba(16,185,129,0.4)",
+                  background: receiptFile ? "linear-gradient(135deg, #10b981, #059669)" : undefined,
+                  backgroundColor: receiptFile ? undefined : "rgba(255,255,255,0.05)",
+                  boxShadow: receiptFile ? "0 4px 20px rgba(16,185,129,0.4)" : undefined,
                 }}
               >
                 <div className="flex items-center justify-center gap-2 text-white">
@@ -326,7 +395,9 @@ export default function TopupPage() {
                   )}
                   {submitting
                     ? (uz ? "Yuborilmoqda..." : "Отправляем...")
-                    : (uz ? "Men to'ladim" : "Я оплатил")}
+                    : !receiptFile
+                      ? (uz ? "📎 Avval chekni biriktiring" : "📎 Сначала прикрепите чек")
+                      : (uz ? "Men to'ladim" : "Я оплатил")}
                 </div>
               </button>
               <button

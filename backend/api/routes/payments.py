@@ -1,7 +1,8 @@
 import logging
+from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, File, UploadFile, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -226,6 +227,7 @@ def create_manual_payment(payload: CreateManualPaymentRequest, db: Session = Dep
 async def notify_paid(
     payment_id: int,
     db: Session = Depends(get_db),
+    receipt: Optional[UploadFile] = File(default=None),
 ) -> dict:
     """User claims they paid. Mark as processing and notify admins via Telegram."""
     try:
@@ -306,6 +308,29 @@ async def notify_paid(
                     logger.error(f"Failed to notify — {err}")
                     tg_errors.append(err)
 
+        # Forward receipt file to admin chat if provided
+        if receipt and user:
+            try:
+                receipt_content = await receipt.read()
+                receipt_filename = receipt.filename or "receipt"
+                content_type = receipt.content_type or "application/octet-stream"
+                is_image = content_type.startswith("image/")
+                tg_method = "sendPhoto" if is_image else "sendDocument"
+                field_name = "photo" if is_image else "document"
+                caption = f"🧾 Чек оплаты #{payment_id} от {full_name} ({uname})"
+                for chat_id in recipient_ids:
+                    try:
+                        async with httpx.AsyncClient(timeout=30) as client:
+                            await client.post(
+                                f"https://api.telegram.org/bot{bot_token}/{tg_method}",
+                                data={"chat_id": str(chat_id), "caption": caption},
+                                files={field_name: (receipt_filename, receipt_content, content_type)},
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to send receipt to chat {chat_id}: {e}")
+            except Exception as e:
+                logger.error(f"notify_paid receipt forwarding error: {e}")
+
         result: dict = {"status": "notified", "payment_id": payment_id}
         if tg_errors:
             result["tg_errors"] = tg_errors
@@ -331,31 +356,28 @@ def get_card_details() -> dict:
     }
 
 
-class UzsTopupNotifyRequest(BaseModel):
-    telegram_user_id: int
-    amount: int  # in sums
-
-
 @router.post("/uzs-topup-notify")
 async def uzs_topup_notify(
-    payload: UzsTopupNotifyRequest,
+    telegram_user_id: int = Form(...),
+    amount: int = Form(...),
+    receipt: Optional[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     """User claims they paid for UZS balance top-up. Notify admins via bot."""
     import json as _json
 
     user_service = UserService(db)
-    user = user_service.get_user_by_telegram_id(payload.telegram_user_id)
+    user = user_service.get_user_by_telegram_id(telegram_user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     full_name = user.first_name or "—"
     uname = f"@{user.username}" if user.username else "—"
-    amount_fmt = f"{payload.amount:,}".replace(",", " ")
-    tg_id = payload.telegram_user_id
+    amount_fmt = f"{amount:,}".replace(",", " ")
+    tg_id = telegram_user_id
 
     confirm_kb = _json.dumps({"inline_keyboard": [[
-        {"text": "✅ Подтвердить", "callback_data": f"uzs_ok:{tg_id}:{payload.amount}"},
+        {"text": "✅ Подтвердить", "callback_data": f"uzs_ok:{tg_id}:{amount}"},
         {"text": "❌ Отклонить",   "callback_data": f"uzs_no:{tg_id}"},
     ]]})
 
@@ -388,10 +410,33 @@ async def uzs_topup_notify(
                         tg_errors.append(f"chat {chat_id}: {resp.text}")
             except Exception as e:
                 tg_errors.append(str(e))
+
+        # Forward receipt file if provided
+        if receipt:
+            try:
+                receipt_content = await receipt.read()
+                receipt_filename = receipt.filename or "receipt"
+                content_type = receipt.content_type or "application/octet-stream"
+                is_image = content_type.startswith("image/")
+                tg_method = "sendPhoto" if is_image else "sendDocument"
+                field_name = "photo" if is_image else "document"
+                caption = f"🧾 Чек пополнения {amount_fmt} сум от {full_name} ({uname})"
+                for chat_id in recipients:
+                    try:
+                        async with httpx.AsyncClient(timeout=30) as client:
+                            await client.post(
+                                f"https://api.telegram.org/bot{bot_token}/{tg_method}",
+                                data={"chat_id": str(chat_id), "caption": caption},
+                                files={field_name: (receipt_filename, receipt_content, content_type)},
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to send receipt to chat {chat_id}: {e}")
+            except Exception as e:
+                logger.error(f"uzs_topup_notify receipt forwarding error: {e}")
     else:
         logger.warning("uzs_topup_notify: no bot_token or admin recipients configured")
 
-    result: dict = {"ok": True, "amount": payload.amount}
+    result: dict = {"ok": True, "amount": amount}
     if tg_errors:
         result["warnings"] = tg_errors
     return result

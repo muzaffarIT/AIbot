@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api } from "@/lib/api";
 
@@ -46,6 +46,9 @@ export default function CheckoutClient({
   const [cancelling, setCancelling] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const [error, setError] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const parsedAmount = Number(amount || "0");
   const parsedPaymentId = Number(paymentId || "0");
@@ -66,27 +69,29 @@ export default function CheckoutClient({
     }
   }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setReceiptFile(file);
+    if (file && file.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file);
+      setReceiptPreview(url);
+    } else {
+      setReceiptPreview(null);
+    }
+  }
+
+  function handleRemoveReceipt() {
+    setReceiptFile(null);
+    setReceiptPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function handlePaid() {
-    if (!parsedPaymentId) return;
+    if (!parsedPaymentId || !receiptFile) return;
     try {
       setLoading(true);
       setError("");
-      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL?.trim() ?? "";
-      let initData = "";
-      if (typeof window !== "undefined") {
-        initData = (window as any).Telegram?.WebApp?.initData ?? "";
-      }
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (initData) headers["Authorization"] = `tma ${initData}`;
-      const res = await fetch(`${BACKEND_URL}/api/payments/${parsedPaymentId}/notify-paid`, {
-        method: "POST",
-        headers,
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as any)?.detail || (isRu ? "Ошибка запроса" : "So'rov xatosi"));
-      }
+      await api.notifyPaid(parsedPaymentId, receiptFile);
       setNotified(true);
     } catch (e: any) {
       setError(e?.message ?? (isRu ? "Ошибка. Попробуйте снова." : "Xatolik. Qayta urinib ko'ring."));
@@ -203,6 +208,57 @@ export default function CheckoutClient({
           </div>
         )}
 
+        {/* Receipt Upload */}
+        {!notified && (
+          <div className="glass-card p-5 space-y-3">
+            <p className="text-xs text-white/40 uppercase tracking-wider font-bold">
+              {isRu ? "Чек перевода" : "To'lov cheki"}
+            </p>
+            {receiptFile ? (
+              <div className="space-y-2">
+                {receiptPreview ? (
+                  <img src={receiptPreview} alt="receipt" className="w-full rounded-xl max-h-48 object-cover" />
+                ) : (
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/50 shrink-0">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round"/>
+                      <polyline points="14 2 14 8 20 8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="text-sm text-white truncate">{receiptFile.name}</span>
+                  </div>
+                )}
+                <button
+                  onClick={handleRemoveReceipt}
+                  className="w-full py-2 rounded-xl bg-white/5 text-white/50 text-sm hover:bg-white/10 transition-colors"
+                >
+                  {isRu ? "✕ Удалить и выбрать другой" : "✕ O'chirish va boshqasini tanlash"}
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/15 bg-white/3 cursor-pointer hover:border-white/30 hover:bg-white/5 transition-colors">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,.pdf,application/pdf"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" strokeLinecap="round" strokeLinejoin="round"/>
+                  <polyline points="17 8 12 3 7 8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round"/>
+                </svg>
+                <p className="text-sm text-white/50 text-center">
+                  {isRu ? "Прикрепить скриншот чека" : "To'lov chekini biriktiring"}
+                </p>
+                <p className="text-xs text-white/25 text-center">
+                  {isRu ? "Фото или PDF" : "Rasm yoki PDF"}
+                </p>
+              </label>
+            )}
+          </div>
+        )}
+
         {/* Action */}
         {error && (
           <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
@@ -225,12 +281,14 @@ export default function CheckoutClient({
         ) : (
           <button
             onClick={handlePaid}
-            disabled={loading || !parsedPaymentId}
+            disabled={loading || !parsedPaymentId || !receiptFile}
             className="w-full py-4 rounded-2xl bg-brand-primary font-bold text-white text-base disabled:opacity-50 transition-all active:scale-95"
           >
             {loading
               ? (isRu ? "Отправка..." : "Yuborilmoqda...")
-              : (isRu ? "✅ Я перевёл — подтвердить оплату" : "✅ To'lovni tasdiqlash")}
+              : !receiptFile
+                ? (isRu ? "📎 Сначала прикрепите чек" : "📎 Avval chekni biriktiring")
+                : (isRu ? "✅ Я перевёл — подтвердить оплату" : "✅ To'lovni tasdiqlash")}
           </button>
         )}
 

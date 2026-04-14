@@ -11,12 +11,12 @@
     },
     {
       "name": "MiniApp (Next.js)",
-      "runtimeExecutable": "/opt/homebrew/bin/npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "/opt/homebrew/Cellar/node/25.8.1_1/bin/node",
+      "runtimeArgs": ["/opt/homebrew/Cellar/node/25.8.1_1/libexec/lib/node_modules/npm/bin/npm-cli.js", "run", "dev"],
       "port": 3000,
-      "cwd": "/Users/user/Desktop/ai-bot-platform/.claude/worktrees/admiring-sinoussi/miniapp",
+      "cwd": "/Users/user/Desktop/ai-bot-platform/.claude/worktrees/elegant-satoshi/miniapp",
       "env": {
-        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+        "PATH": "/opt/homebrew/Cellar/node/25.8.1_1/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
       }
     },
     {

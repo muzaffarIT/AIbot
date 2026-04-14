@@ -212,6 +212,36 @@ export async function fetchJson<T>(path: string, options?: RequestInit): Promise
   return request<T>(path, options);
 }
 
+// ─── Multipart helper (for file uploads) ─────────────────────────────────────
+
+async function requestMultipart<T>(path: string, body: FormData): Promise<T> {
+  const url = BACKEND_URL ? `${BACKEND_URL}${path}` : path;
+  let initData = "";
+  if (typeof window !== "undefined") {
+    initData = window.Telegram?.WebApp?.initData ?? "";
+  }
+  const headers: Record<string, string> = {};
+  if (initData) headers["Authorization"] = `tma ${initData}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    cache: "no-store",
+    headers,
+    body,
+  });
+
+  if (!res.ok) {
+    let msg = res.statusText || `Request failed: ${res.status}`;
+    try {
+      const data = (await res.json()) as { detail?: string };
+      if (data?.detail) msg = data.detail;
+    } catch {}
+    throw new ApiError(msg, res.status);
+  }
+
+  return res.json() as Promise<T>;
+}
+
 // ─── Clean api object ─────────────────────────────────────────────────────────
 
 export const api = {
@@ -260,10 +290,19 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  notifyPaid: (paymentId: number) =>
-    request<{ status: string; payment_id: number }>(`/api/payments/${paymentId}/notify-paid`, {
+  notifyPaid: (paymentId: number, receipt?: File) => {
+    if (receipt) {
+      const form = new FormData();
+      form.append("receipt", receipt);
+      return requestMultipart<{ status: string; payment_id: number }>(
+        `/api/payments/${paymentId}/notify-paid`,
+        form,
+      );
+    }
+    return request<{ status: string; payment_id: number }>(`/api/payments/${paymentId}/notify-paid`, {
       method: "POST",
-    }),
+    });
+  },
 
   cancelPayment: (paymentId: number) =>
     request<{ status: string; payment_id: number }>(`/api/payments/${paymentId}/cancel`, {
@@ -275,11 +314,13 @@ export const api = {
       "/api/payments/card-details"
     ),
 
-  uzsTopupNotify: (telegram_user_id: number, amount: number) =>
-    request<{ ok: boolean; amount: number }>("/api/payments/uzs-topup-notify", {
-      method: "POST",
-      body: JSON.stringify({ telegram_user_id, amount }),
-    }),
+  uzsTopupNotify: (telegram_user_id: number, amount: number, receipt?: File) => {
+    const form = new FormData();
+    form.append("telegram_user_id", String(telegram_user_id));
+    form.append("amount", String(amount));
+    if (receipt) form.append("receipt", receipt);
+    return requestMultipart<{ ok: boolean; amount: number }>("/api/payments/uzs-topup-notify", form);
+  },
 
   payFromBalance: (telegram_user_id: number, plan_code: string) =>
     request<{
