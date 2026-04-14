@@ -279,26 +279,46 @@ async def notify_paid(
                 {"text": "✅ Подтвердить", "callback_data": f"manual_confirm:{payment_id}"},
                 {"text": "❌ Отклонить", "callback_data": f"manual_reject_menu:{payment_id}"},
             ]]})
+            notify_text = (
+                f"⚡ <b>НОВАЯ ОПЛАТА #{payment_id}</b>\n\n"
+                f"👤 {full_name}\n"
+                f"🔗 {uname}\n"
+                f"🆔 <code>{user.telegram_user_id}</code>\n\n"
+                f"📦 {plan_name}\n"
+                f"💰 {amount_fmt} сум\n\n"
+                f"Проверь карту и нажми кнопку:"
+            )
+
+            receipt_content = None
+            receipt_filename = "receipt"
+            content_type = "application/octet-stream"
+            if receipt:
+                try:
+                    receipt_content = await receipt.read()
+                    receipt_filename = receipt.filename or "receipt"
+                    content_type = receipt.content_type or "application/octet-stream"
+                except Exception as e:
+                    logger.error(f"notify_paid: failed to read receipt: {e}")
+
             for chat_id in recipient_ids:
                 try:
-                    async with httpx.AsyncClient(timeout=10) as client:
-                        resp = await client.post(
-                            f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                            json={
-                                "chat_id": chat_id,
-                                "text": (
-                                    f"⚡ <b>НОВАЯ ОПЛАТА #{payment_id}</b>\n\n"
-                                    f"👤 {full_name}\n"
-                                    f"🔗 {uname}\n"
-                                    f"🆔 <code>{user.telegram_user_id}</code>\n\n"
-                                    f"📦 {plan_name}\n"
-                                    f"💰 {amount_fmt} сум\n\n"
-                                    f"Проверь карту и нажми кнопку:"
-                                ),
-                                "parse_mode": "HTML",
-                                "reply_markup": confirm_kb,
-                            },
-                        )
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        if receipt_content:
+                            is_image = content_type.startswith("image/")
+                            tg_method = "sendPhoto" if is_image else "sendDocument"
+                            field_name = "photo" if is_image else "document"
+                            resp = await client.post(
+                                f"https://api.telegram.org/bot{bot_token}/{tg_method}",
+                                data={"chat_id": str(chat_id), "caption": notify_text,
+                                      "parse_mode": "HTML", "reply_markup": confirm_kb},
+                                files={field_name: (receipt_filename, receipt_content, content_type)},
+                            )
+                        else:
+                            resp = await client.post(
+                                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                                json={"chat_id": chat_id, "text": notify_text,
+                                      "parse_mode": "HTML", "reply_markup": confirm_kb},
+                            )
                         if not resp.is_success:
                             err = f"chat {chat_id}: {resp.text}"
                             logger.error(f"Telegram API error — {err}")
@@ -307,29 +327,6 @@ async def notify_paid(
                     err = f"chat {chat_id}: {e}"
                     logger.error(f"Failed to notify — {err}")
                     tg_errors.append(err)
-
-        # Forward receipt file to admin chat if provided
-        if receipt and user:
-            try:
-                receipt_content = await receipt.read()
-                receipt_filename = receipt.filename or "receipt"
-                content_type = receipt.content_type or "application/octet-stream"
-                is_image = content_type.startswith("image/")
-                tg_method = "sendPhoto" if is_image else "sendDocument"
-                field_name = "photo" if is_image else "document"
-                caption = f"🧾 Чек оплаты #{payment_id} от {full_name} ({uname})"
-                for chat_id in recipient_ids:
-                    try:
-                        async with httpx.AsyncClient(timeout=30) as client:
-                            await client.post(
-                                f"https://api.telegram.org/bot{bot_token}/{tg_method}",
-                                data={"chat_id": str(chat_id), "caption": caption},
-                                files={field_name: (receipt_filename, receipt_content, content_type)},
-                            )
-                    except Exception as e:
-                        logger.error(f"Failed to send receipt to chat {chat_id}: {e}")
-            except Exception as e:
-                logger.error(f"notify_paid receipt forwarding error: {e}")
 
         result: dict = {"status": "notified", "payment_id": payment_id}
         if tg_errors:
@@ -385,54 +382,51 @@ async def uzs_topup_notify(
     recipients = [int(notify_chat)] if notify_chat else list(settings.admin_ids_list)
     bot_token = (settings.bot_token or "").strip()
 
+    notify_text = (
+        f"💵 <b>ПОПОЛНЕНИЕ БАЛАНСА (СУМ)</b>\n\n"
+        f"👤 {full_name}\n"
+        f"🔗 {uname}\n"
+        f"🆔 <code>{tg_id}</code>\n\n"
+        f"💰 Сумма: <b>{amount_fmt} сум</b>\n\n"
+        f"Проверь карту и нажми кнопку:"
+    )
+
+    receipt_content = None
+    receipt_filename = "receipt"
+    content_type = "application/octet-stream"
+    if receipt:
+        try:
+            receipt_content = await receipt.read()
+            receipt_filename = receipt.filename or "receipt"
+            content_type = receipt.content_type or "application/octet-stream"
+        except Exception as e:
+            logger.error(f"uzs_topup_notify: failed to read receipt: {e}")
+
     tg_errors = []
     if bot_token and recipients:
         for chat_id in recipients:
             try:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    resp = await client.post(
-                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                        json={
-                            "chat_id": chat_id,
-                            "text": (
-                                f"💵 <b>ПОПОЛНЕНИЕ БАЛАНСА (СУМ)</b>\n\n"
-                                f"👤 {full_name}\n"
-                                f"🔗 {uname}\n"
-                                f"🆔 <code>{tg_id}</code>\n\n"
-                                f"💰 Сумма: <b>{amount_fmt} сум</b>\n\n"
-                                f"Проверь карту и нажми кнопку:"
-                            ),
-                            "parse_mode": "HTML",
-                            "reply_markup": confirm_kb,
-                        },
-                    )
+                async with httpx.AsyncClient(timeout=30) as client:
+                    if receipt_content:
+                        is_image = content_type.startswith("image/")
+                        tg_method = "sendPhoto" if is_image else "sendDocument"
+                        field_name = "photo" if is_image else "document"
+                        resp = await client.post(
+                            f"https://api.telegram.org/bot{bot_token}/{tg_method}",
+                            data={"chat_id": str(chat_id), "caption": notify_text,
+                                  "parse_mode": "HTML", "reply_markup": confirm_kb},
+                            files={field_name: (receipt_filename, receipt_content, content_type)},
+                        )
+                    else:
+                        resp = await client.post(
+                            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                            json={"chat_id": chat_id, "text": notify_text,
+                                  "parse_mode": "HTML", "reply_markup": confirm_kb},
+                        )
                     if not resp.is_success:
                         tg_errors.append(f"chat {chat_id}: {resp.text}")
             except Exception as e:
                 tg_errors.append(str(e))
-
-        # Forward receipt file if provided
-        if receipt:
-            try:
-                receipt_content = await receipt.read()
-                receipt_filename = receipt.filename or "receipt"
-                content_type = receipt.content_type or "application/octet-stream"
-                is_image = content_type.startswith("image/")
-                tg_method = "sendPhoto" if is_image else "sendDocument"
-                field_name = "photo" if is_image else "document"
-                caption = f"🧾 Чек пополнения {amount_fmt} сум от {full_name} ({uname})"
-                for chat_id in recipients:
-                    try:
-                        async with httpx.AsyncClient(timeout=30) as client:
-                            await client.post(
-                                f"https://api.telegram.org/bot{bot_token}/{tg_method}",
-                                data={"chat_id": str(chat_id), "caption": caption},
-                                files={field_name: (receipt_filename, receipt_content, content_type)},
-                            )
-                    except Exception as e:
-                        logger.error(f"Failed to send receipt to chat {chat_id}: {e}")
-            except Exception as e:
-                logger.error(f"uzs_topup_notify receipt forwarding error: {e}")
     else:
         logger.warning("uzs_topup_notify: no bot_token or admin recipients configured")
 
