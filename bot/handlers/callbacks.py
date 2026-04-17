@@ -570,9 +570,9 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    # Idempotency: check if already processed (message already edited with result)
-    msg_text = callback.message.text or ""
-    if "✅ Подтверждено" in msg_text or "❌ Отклонено" in msg_text:
+    # Idempotency: works for both text and photo/document messages
+    _content = callback.message.text or callback.message.caption or ""
+    if "✅ Подтверждено" in _content or "❌ Отклонено" in _content:
         await callback.answer("Уже обработано", show_alert=True)
         return
 
@@ -620,9 +620,17 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
 
     admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
     try:
-        await callback.message.edit_text(
-            callback.message.text + f"\n\n✅ Подтверждено @{admin_name}"
-        )
+        _suffix = f"\n\n✅ Подтверждено @{admin_name}"
+        if callback.message.photo or callback.message.document:
+            await callback.message.edit_caption(
+                caption=(callback.message.caption or "") + _suffix,
+                parse_mode="HTML",
+            )
+        else:
+            await callback.message.edit_text(
+                (callback.message.text or "") + _suffix,
+                parse_mode="HTML",
+            )
     except Exception:
         pass
 
@@ -654,9 +662,9 @@ async def process_uzs_reject(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
-    # Idempotency: check if already processed
-    msg_text = callback.message.text or ""
-    if "✅ Подтверждено" in msg_text or "❌ Отклонено" in msg_text:
+    # Idempotency: works for both text and photo/document messages
+    _content = callback.message.text or callback.message.caption or ""
+    if "✅ Подтверждено" in _content or "❌ Отклонено" in _content:
         await callback.answer("Уже обработано", show_alert=True)
         return
 
@@ -685,9 +693,17 @@ async def process_uzs_reject(callback: CallbackQuery, bot: Bot) -> None:
 
     admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
     try:
-        await callback.message.edit_text(
-            callback.message.text + f"\n\n❌ Отклонено @{admin_name}"
-        )
+        _suffix = f"\n\n❌ Отклонено @{admin_name}"
+        if callback.message.photo or callback.message.document:
+            await callback.message.edit_caption(
+                caption=(callback.message.caption or "") + _suffix,
+                parse_mode="HTML",
+            )
+        else:
+            await callback.message.edit_text(
+                (callback.message.text or "") + _suffix,
+                parse_mode="HTML",
+            )
     except Exception:
         pass
 

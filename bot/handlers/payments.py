@@ -19,6 +19,40 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+def _is_admin(user_id: int) -> bool:
+    return user_id in settings.admin_ids_list
+
+
+def _msg_content(message) -> str:
+    """Return text or caption of a message (handles both text and media messages)."""
+    return message.text or message.caption or ""
+
+
+def _is_processed(message) -> bool:
+    """Return True if the admin notification was already acted on."""
+    c = _msg_content(message)
+    return "✅ Подтверждено" in c or "❌ Отклонено" in c or "⏳ Отклонение" in c
+
+
+async def _edit_admin_msg(message, suffix: str) -> None:
+    """Append suffix to a notification message, works for both text and photo/document."""
+    try:
+        if message.photo or message.document:
+            await message.edit_caption(
+                caption=(message.caption or "") + suffix,
+                parse_mode="HTML",
+            )
+        else:
+            await message.edit_text(
+                (message.text or "") + suffix,
+                parse_mode="HTML",
+            )
+    except Exception as e:
+        logger.warning(f"_edit_admin_msg failed: {e}")
+
+
 # ── MiniApp web_app_data ────────────────────────────────────────────────────
 
 @router.message(F.web_app_data)
@@ -46,10 +80,6 @@ async def web_app_data_handler(message: Message, bot: Bot) -> None:
             )
         except Exception:
             pass
-
-
-def _is_admin(user_id: int) -> bool:
-    return user_id in settings.admin_ids_list
 
 
 # ── User: confirmed payment ─────────────────────────────────────────────────
@@ -181,17 +211,16 @@ async def cb_manual_confirm(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
+    if _is_processed(callback.message):
+        await callback.answer("Уже обработано", show_alert=True)
+        return
+
     payment_id = int(callback.data.split(":")[1])
+    admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
 
     try:
-        result = await ManualPaymentService.confirm_payment(bot, payment_id)
-        admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
-        try:
-            await callback.message.edit_text(
-                callback.message.text + f"\n\n✅ Подтверждено @{admin_name}"
-            )
-        except Exception:
-            pass
+        await ManualPaymentService.confirm_payment(bot, payment_id)
+        await _edit_admin_msg(callback.message, f"\n\n✅ Подтверждено @{admin_name}")
         await callback.answer(f"✅ Оплата #{payment_id} подтверждена!")
     except Exception as e:
         logger.error(f"admin confirm error: {e}")
@@ -206,7 +235,15 @@ async def cb_manual_reject_menu(callback: CallbackQuery) -> None:
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
 
+    if _is_processed(callback.message):
+        await callback.answer("Уже обработано", show_alert=True)
+        return
+
     payment_id = int(callback.data.split(":")[1])
+
+    # Lock immediately — removes ✅/❌ buttons, prevents concurrent confirm
+    await _edit_admin_msg(callback.message, "\n\n⏳ Отклонение...")
+
     await callback.message.answer(
         f"❌ Выберите причину отклонения заявки <b>#{payment_id}</b>:",
         parse_mode="HTML",
@@ -247,15 +284,10 @@ async def cb_manual_reject(callback: CallbackQuery, bot: Bot) -> None:
     }
     reason = reason_texts.get(reason_key, reason_key)
 
+    admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
     try:
         await ManualPaymentService.reject_payment(bot, payment_id, reason)
-        admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
-        try:
-            await callback.message.edit_text(
-                callback.message.text + f"\n\n❌ Отклонено @{admin_name}: {reason}"
-            )
-        except Exception:
-            pass
+        await _edit_admin_msg(callback.message, f"\n\n❌ Отклонено @{admin_name}: {reason}")
         await callback.answer(f"❌ Оплата #{payment_id} отклонена")
     except Exception as e:
         logger.error(f"admin reject error: {e}")
