@@ -140,6 +140,19 @@ export type ReferralData = {
   referral_earnings: number;
 };
 
+export type ReferralUser = {
+  telegram_user_id: number;
+  name: string;
+  username?: string | null;
+  joined_at?: string | null;
+  commission_uzs: number;
+  has_paid: boolean;
+};
+
+export type ReferralsListResponse = {
+  referrals: ReferralUser[];
+};
+
 export type UzsTransaction = {
   id: number;
   amount: number;
@@ -265,6 +278,9 @@ export const api = {
 
   getReferral: (telegramId: number) =>
     request<ReferralData>(`/api/users/${telegramId}/referral`),
+
+  getReferrals: (telegramId: number) =>
+    request<ReferralsListResponse>(`/api/users/${telegramId}/referrals`),
 
   getJobs: (telegramId: number, limit = 20) =>
     request<GenerationJobsResponse>(`/api/jobs/telegram/${telegramId}?limit=${limit}`),

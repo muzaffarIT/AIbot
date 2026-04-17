@@ -46,11 +46,17 @@ function formatDate(d?: string | null) {
 }
 
 export default function HomePage() {
-  const { telegramUser: tgUser, backendUser: userData, loading, error, language } = useMiniAppUser();
+  const { telegramUser: tgUser, backendUser: userData, loading, error, language, syncUser } = useMiniAppUser();
   const [jobs, setJobs] = useState<GenerationJob[]>([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
 
   const uz = language === "uz";
+
+  // Refresh balance every time home page mounts (catches admin-confirmed payments)
+  useEffect(() => {
+    void syncUser();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!userData?.telegram_user_id) return;
