@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
-import { ArrowLeft, Copy, Share2, Check, Users, Zap, TrendingUp } from "lucide-react";
+import { ArrowLeft, Copy, Share2, Check, Users, Zap, TrendingUp, UserCircle2 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
-import { api } from "@/lib/api";
+import { api, type ReferralUser } from "@/lib/api";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -22,16 +22,21 @@ export default function ReferralPage() {
   const [stats, setStats] = useState({ count: 0, earned: 0 });
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [referralUsers, setReferralUsers] = useState<ReferralUser[]>([]);
 
   useEffect(() => {
     const id = userData?.telegram_user_id ?? tgUser?.id;
     if (!id) { setLoading(false); return; }
-    api.getReferral(id)
-      .then((data) => {
+    Promise.all([
+      api.getReferral(id),
+      api.getReferrals(id),
+    ])
+      .then(([data, listData]) => {
         if (data.referral_code) {
           setRefLink(`https://t.me/harfai_bot?start=ref_${data.referral_code}`);
         }
         setStats({ count: data.referral_count ?? 0, earned: data.referral_earnings ?? 0 });
+        setReferralUsers(listData.referrals ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -243,6 +248,46 @@ export default function ReferralPage() {
             ))}
           </div>
         </motion.div>
+
+        {/* Invited users list */}
+        {referralUsers.length > 0 && (
+          <motion.div variants={itemVariants} className="space-y-3">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-white/40 px-1">
+              {language === "uz" ? "Taklif qilinganlar" : "Приглашённые"}
+            </h2>
+            <div className="glass-card divide-y divide-white/5">
+              {referralUsers.map((ru) => (
+                <div key={ru.telegram_user_id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center shrink-0">
+                    <UserCircle2 size={18} className="text-white/40" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{ru.name}</p>
+                    {ru.username && (
+                      <p className="text-xs text-white/35 truncate">@{ru.username}</p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    {ru.commission_uzs > 0 ? (
+                      <p className="text-sm font-bold text-green-400">
+                        +{ru.commission_uzs.toLocaleString("ru-RU")} {language === "uz" ? "so'm" : "сум"}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-white/25">
+                        {language === "uz" ? "Hali to'lamagan" : "Ещё не платил"}
+                      </p>
+                    )}
+                    {ru.joined_at && (
+                      <p className="text-[10px] text-white/25">
+                        {new Date(ru.joined_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Also earns */}
         <motion.div variants={itemVariants}>

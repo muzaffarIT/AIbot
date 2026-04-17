@@ -126,8 +126,8 @@ export default function PlansPage() {
       setLoadingPlan(`balance_${planId}`);
       setBuyError("");
       const result = await api.payFromBalance(userData.telegram_user_id, planId);
-      // Refresh global user state so all pages show the updated balance immediately
-      void syncUser();
+      // Await sync so balance is fresh before success screen shows
+      await syncUser();
       setSuccessPlan({ name: result.plan_name, credits: result.credits_added });
     } catch (e: any) {
       setBuyError(e?.message ?? (uz ? "Xatolik yuz berdi" : "Ошибка оплаты с баланса"));
