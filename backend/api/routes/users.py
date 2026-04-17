@@ -228,3 +228,47 @@ async def get_referral(telegram_id: int, db: Session = Depends(get_db)):
         }
     finally:
         db.close()
+
+
+@router.get("/{telegram_id}/referrals")
+async def get_referrals_list(telegram_id: int, db: Session = Depends(get_db)):
+    """Return list of users invited by this user with per-user earnings."""
+    try:
+        from sqlalchemy import func as sqlfunc, text as sqtext
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(telegram_id)
+        if not user:
+            return {"referrals": []}
+
+        referred = db.query(User).filter(
+            User.referred_by_telegram_id == user.telegram_user_id
+        ).order_by(User.created_at.desc()).all()
+
+        result = []
+        for ref in referred:
+            # Sum confirmed payments for this referred user
+            row = db.execute(
+                sqtext(
+                    "SELECT COALESCE(SUM(p.amount), 0) as total "
+                    "FROM payments p "
+                    "JOIN orders o ON p.order_id = o.id "
+                    "WHERE o.user_id = :uid AND p.status = 'confirmed'"
+                ),
+                {"uid": ref.id},
+            ).fetchone()
+            total_paid = float(row.total) if row else 0.0
+            commission = int(total_paid * 0.10) if total_paid > 0 else 0
+
+            name = ref.first_name or ref.username or f"User#{ref.telegram_user_id}"
+            result.append({
+                "telegram_user_id": ref.telegram_user_id,
+                "name": name,
+                "username": ref.username,
+                "joined_at": ref.created_at.isoformat() if ref.created_at else None,
+                "commission_uzs": commission,
+                "has_paid": total_paid > 0,
+            })
+
+        return {"referrals": result}
+    finally:
+        db.close()
