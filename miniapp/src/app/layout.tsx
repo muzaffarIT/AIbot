@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Inter } from "next/font/google";
 import { BottomNav } from "@/components/BottomNav";
+import { ClientProviders } from "@/components/ClientProviders";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"], variable: "--font-inter" });
 
@@ -26,8 +27,10 @@ export default function RootLayout({
         />
       </head>
       <body className="font-inter antialiased">
-        {children}
-        <BottomNav />
+        <ClientProviders>
+          {children}
+          <BottomNav />
+        </ClientProviders>
       </body>
     </html>
   );

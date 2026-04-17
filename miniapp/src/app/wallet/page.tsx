@@ -54,7 +54,7 @@ function humanizeUzsComment(comment: string | null | undefined, lang: "ru" | "uz
 
 export default function WalletPage() {
   const router = useRouter();
-  const { backendUser: userData, telegramUser: tgUser, loading, language } = useMiniAppUser();
+  const { backendUser: userData, telegramUser: tgUser, loading, language, syncUser } = useMiniAppUser();
   const [history, setHistory] = useState<BalanceHistoryResponse | null>(null);
   const [uzsHistory, setUzsHistory] = useState<UzsHistoryResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -96,7 +96,7 @@ export default function WalletPage() {
     const id = userData?.telegram_user_id ?? tgUser?.id;
     if (!id || refreshing) return;
     setRefreshing(true);
-    await Promise.all([loadHistory(id), loadUzsHistory(id)]);
+    await Promise.all([loadHistory(id), loadUzsHistory(id), syncUser()]);
     setRefreshing(false);
   };
 

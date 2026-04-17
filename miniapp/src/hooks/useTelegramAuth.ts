@@ -160,5 +160,16 @@ export function useTelegramAuth() {
     }
   }, [tgUser]);
 
+  // Re-sync balance when user returns to the tab (switches pages in Telegram)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refresh();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [refresh]);
+
   return { tgUser, userData, loading, error, refresh };
 }

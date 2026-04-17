@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTelegramAuth } from "@/hooks/useTelegramAuth";
+import { useUserContext } from "@/contexts/UserContext";
 import { updateLanguage, type BackendUser } from "@/lib/api";
 import { normalizeLanguage, type MiniAppLanguage } from "@/lib/miniapp-i18n";
 
@@ -24,7 +24,7 @@ function loadCachedLanguage(): MiniAppLanguage {
 }
 
 export function useMiniAppUser() {
-  const { tgUser, userData, loading, error, refresh } = useTelegramAuth();
+  const { tgUser, userData, loading, error, refresh } = useUserContext();
   const [language, setLanguage] = useState<MiniAppLanguage>(loadCachedLanguage);
 
   // Синхронизируем язык из backend

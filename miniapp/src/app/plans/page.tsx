@@ -83,7 +83,7 @@ function fmtUzs(n: number, lang: string) {
 }
 
 export default function PlansPage() {
-  const { language, backendUser: userData } = useMiniAppUser();
+  const { language, backendUser: userData, syncUser } = useMiniAppUser();
   const router = useRouter();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [buyError, setBuyError] = useState("");
@@ -126,6 +126,8 @@ export default function PlansPage() {
       setLoadingPlan(`balance_${planId}`);
       setBuyError("");
       const result = await api.payFromBalance(userData.telegram_user_id, planId);
+      // Refresh global user state so all pages show the updated balance immediately
+      void syncUser();
       setSuccessPlan({ name: result.plan_name, credits: result.credits_added });
     } catch (e: any) {
       setBuyError(e?.message ?? (uz ? "Xatolik yuz berdi" : "Ошибка оплаты с баланса"));
