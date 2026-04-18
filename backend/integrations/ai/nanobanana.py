@@ -22,14 +22,24 @@ class NanoBananaProvider(BaseAIProvider):
         input_payload: dict[str, Any] = {
             "prompt": prompt,
             "output_format": "png",
-            "image_size": "1:1",
+            "image_size": "1024x1024",
         }
+
+        # Extract quality-specific model override before merging into API payload
+        nano_model_override: str | None = None
         if job_payload:
-            input_payload.update(job_payload)
+            payload_copy = dict(job_payload)
+            nano_model_override = payload_copy.pop("_nano_model", None)
+            input_payload.update(payload_copy)
+
         if source_image_url:
             input_payload["image_urls"] = [source_image_url]
+            model = "nano-banana-edit"
+        elif nano_model_override:
+            model = nano_model_override
+        else:
+            model = "nano-banana-pro"  # safe default
 
-        model = "google/nano-banana-edit" if source_image_url else "google/nano-banana"
         task_id = client.create_market_task(
             model=model,
             input_payload=input_payload,
