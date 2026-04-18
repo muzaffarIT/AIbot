@@ -246,18 +246,31 @@ async def get_referrals_list(telegram_id: int, db: Session = Depends(get_db)):
 
         result = []
         for ref in referred:
-            # Sum confirmed payments for this referred user
+            # Sum confirmed plan payments (card/balance purchases)
             row = db.execute(
                 sqtext(
                     "SELECT COALESCE(SUM(p.amount), 0) as total "
                     "FROM payments p "
                     "JOIN orders o ON p.order_id = o.id "
-                    "WHERE o.user_id = :uid AND p.status = 'confirmed'"
+                    "WHERE o.user_id = :uid AND p.status = 'paid'"
                 ),
                 {"uid": ref.id},
             ).fetchone()
             total_paid = float(row.total) if row else 0.0
-            commission = int(total_paid * 0.10) if total_paid > 0 else 0
+
+            # Also sum UZS topups (direct balance top-ups)
+            topup_row = db.execute(
+                sqtext(
+                    "SELECT COALESCE(SUM(amount), 0) as total "
+                    "FROM uzs_transactions "
+                    "WHERE user_id = :uid AND type = 'topup'"
+                ),
+                {"uid": ref.id},
+            ).fetchone()
+            total_topup = float(topup_row.total) if topup_row else 0.0
+
+            grand_total = total_paid + total_topup
+            commission = ref.referral_earnings or 0  # use actual credited amount from DB
 
             name = ref.first_name or ref.username or f"User#{ref.telegram_user_id}"
             result.append({
@@ -266,7 +279,7 @@ async def get_referrals_list(telegram_id: int, db: Session = Depends(get_db)):
                 "username": ref.username,
                 "joined_at": ref.created_at.isoformat() if ref.created_at else None,
                 "commission_uzs": commission,
-                "has_paid": total_paid > 0,
+                "has_paid": grand_total > 0,
             })
 
         return {"referrals": result}

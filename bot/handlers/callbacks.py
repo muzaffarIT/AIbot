@@ -604,6 +604,25 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
             db.commit()
         except Exception:
             pass
+
+        # Referral commission: 10% of UZS topup credited to referrer's wallet
+        _referrer_tg_id = None
+        _commission_uzs = 0
+        _referrer_lang = "ru"
+        _referrer_earnings = 0
+        if user.referred_by_telegram_id:
+            try:
+                referrer = user_service.get_user_by_telegram_id(user.referred_by_telegram_id)
+                if referrer:
+                    _commission_uzs = max(100, int(amount * 0.10))
+                    referrer.referral_earnings = (referrer.referral_earnings or 0) + _commission_uzs
+                    referrer.uzs_balance = (getattr(referrer, "uzs_balance", 0) or 0) + _commission_uzs
+                    db.commit()
+                    _referrer_tg_id = referrer.telegram_user_id
+                    _referrer_lang = referrer.language_code or "ru"
+                    _referrer_earnings = referrer.referral_earnings
+            except Exception as _re:
+                logger.warning(f"[Referral] commission error on UZS topup: {_re}")
     finally:
         db.close()
 
@@ -617,6 +636,29 @@ async def process_uzs_confirm(callback: CallbackQuery, bot: Bot) -> None:
         )
     except Exception as _se:
         logger.warning(f"[SHEETS] uzs topup log failed: {_se}")
+
+    # Notify referrer about commission
+    if _referrer_tg_id and _commission_uzs:
+        try:
+            commission_fmt = f"{_commission_uzs:,}".replace(",", " ")
+            total_fmt = f"{_referrer_earnings:,}".replace(",", " ")
+            if _referrer_lang == "uz":
+                ref_text = (
+                    f"💰 <b>Referal komissiyasi!</b>\n\n"
+                    f"Referalingiz so'm balansini to'ldirdi.\n"
+                    f"Sizning so'm balansingizga: <b>+{commission_fmt} so'm</b> qo'shildi 🎁\n\n"
+                    f"Jami so'm balansi: <b>{total_fmt} so'm</b>"
+                )
+            else:
+                ref_text = (
+                    f"💰 <b>Реферальная комиссия!</b>\n\n"
+                    f"Ваш реферал пополнил денежный баланс.\n"
+                    f"На ваш денежный баланс: <b>+{commission_fmt} сум</b> 🎁\n\n"
+                    f"Итого на балансе: <b>{total_fmt} сум</b>"
+                )
+            await bot.send_message(_referrer_tg_id, ref_text, parse_mode="HTML")
+        except Exception:
+            pass
 
     admin_name = callback.from_user.username or callback.from_user.first_name or "Admin"
     try:
