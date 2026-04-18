@@ -281,16 +281,15 @@ class ManualPaymentService:
                 except Exception as e:
                     logger.error(f"Achievement check error after payment: {e}")
 
-            # 10% referral commission — 10% of payment amount in UZS added to referrer's money balance
+            # Referral commission is credited in backend PaymentService.confirm_payment().
+            # Here we only send the Telegram notification to the referrer.
             if user and user.referred_by_telegram_id:
                 try:
+                    db.refresh(user)  # refresh to get latest state after backend commit
                     referrer = user_service.get_user_by_telegram_id(user.referred_by_telegram_id)
                     if referrer:
-                        # 10% of actual payment amount in UZS
+                        db.refresh(referrer)
                         uzs_commission = max(100, int(float(payment.amount) * 0.10))
-                        referrer.referral_earnings = (referrer.referral_earnings or 0) + uzs_commission  # stats tracker
-                        referrer.uzs_balance = (getattr(referrer, "uzs_balance", 0) or 0) + uzs_commission  # spendable wallet
-                        db.commit()
                         try:
                             from bot.services.sheets import log_referral_commission
                             log_referral_commission(
@@ -324,7 +323,7 @@ class ManualPaymentService:
                         except Exception:
                             pass
                 except Exception as ref_err:
-                    logger.error(f"Referral commission error: {ref_err}")
+                    logger.error(f"Referral notification error: {ref_err}")
 
             # Log to Google Sheets
             if user and plan:

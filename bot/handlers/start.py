@@ -46,8 +46,9 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext) -> None:
         )
         lang = user.language_code or "ru"
 
-        # Apply referral if new user and valid code
-        if is_new and ref_code:
+        # Apply referral if user has no referrer yet and a valid code was provided
+        # (works for both brand-new users and existing users who never used a ref link)
+        if ref_code and not user.referred_by_telegram_id:
             referrer = user_service.get_user_by_referral_code(ref_code)
             if referrer and referrer.telegram_user_id != user.telegram_user_id:
                 user_service.set_referred_by(user.id, referrer.telegram_user_id)
