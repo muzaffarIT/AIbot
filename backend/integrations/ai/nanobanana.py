@@ -34,11 +34,12 @@ class NanoBananaProvider(BaseAIProvider):
 
         if source_image_url:
             input_payload["image_urls"] = [source_image_url]
-            model = "nano-banana-edit"
+            model = "google/nano-banana-edit"
         elif nano_model_override:
-            model = nano_model_override
+            # Ensure google/ prefix is present
+            model = nano_model_override if nano_model_override.startswith("google/") else f"google/{nano_model_override}"
         else:
-            model = "nano-banana-pro"  # safe default
+            model = "google/nano-banana-pro"  # safe default
 
         task_id = client.create_market_task(
             model=model,
