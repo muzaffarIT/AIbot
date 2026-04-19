@@ -320,10 +320,19 @@ def run_generation_job(self, job_id: int) -> dict | None:
         else:
             if job.provider == AIProvider.NANO_BANANA:
                 url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
-                aspect_ratio = job.job_payload.get("aspect_ratio", "1:1")
-                resolution = job.job_payload.get("resolution", "1K")
+                # job_payload comes from bot/keyboards/quality_menu.QUALITY_DATA:
+                #   image_size       → aspect_ratio ("1:1")
+                #   image_resolution → resolution ("2K" / "4K"), only for nano-banana-2
+                #   _nano_model      → kie.ai model name ("nano-banana" / "nano-banana-2")
+                jp = job.job_payload or {}
+                aspect_ratio = jp.get("image_size") or jp.get("aspect_ratio") or "1:1"
+                resolution = jp.get("image_resolution") or jp.get("resolution") or "1K"
+                nano_model = jp.get("_nano_model") or "nano-banana"
+                # Edit mode (source image) requires the edit model
+                if job.source_image_url:
+                    nano_model = "nano-banana-edit"
                 payload = {
-                    "model": "nano-banana-pro",
+                    "model": nano_model,
                     "input": {
                         "prompt": job.prompt,
                         "aspect_ratio": aspect_ratio,
