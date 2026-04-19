@@ -22,7 +22,7 @@ class NanoBananaProvider(BaseAIProvider):
         input_payload: dict[str, Any] = {
             "prompt": prompt,
             "output_format": "png",
-            "image_size": "1024x1024",
+            "image_size": "1:1",
         }
 
         # Extract quality-specific model override before merging into API payload
@@ -36,11 +36,10 @@ class NanoBananaProvider(BaseAIProvider):
             input_payload["image_urls"] = [source_image_url]
             model = "google/nano-banana-edit"
         elif nano_model_override:
-            # Ensure google/ prefix is present
-            model = nano_model_override if nano_model_override.startswith("google/") else f"google/{nano_model_override}"
+            # Pass through model name as provided by quality_menu (kie.ai accepts bare names)
+            model = nano_model_override
         else:
-            model = "google/nano-banana-pro"  # safe default
-
+            model = "google/nano-banana"  # safe default — cheapest model
         task_id = client.create_market_task(
             model=model,
             input_payload=input_payload,
