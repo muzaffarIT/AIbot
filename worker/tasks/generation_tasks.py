@@ -331,6 +331,9 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 # Edit mode (source image) requires the edit model
                 if job.source_image_url:
                     nano_model = "nano-banana-edit"
+                # kie.ai market API requires google/ prefix for Nano Banana family
+                if not nano_model.startswith("google/"):
+                    nano_model = f"google/{nano_model}"
                 payload = {
                     "model": nano_model,
                     "input": {
