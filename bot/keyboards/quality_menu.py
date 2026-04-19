@@ -30,14 +30,20 @@ def get_quality_keyboard(provider: str, lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 QUALITY_DATA = {
-    "nano:std": {"cost": 5, "payload": {"image_size": "1:1"}},
-    "nano:hd": {"cost": 10, "payload": {"image_size": "1536x1536"}},
-    "nano:4k": {"cost": 20, "payload": {"image_size": "2048x2048"}}, # Adjusted cost to 20
-    
-    "veo:fast": {"cost": 30, "payload": {"model": "veo3_fast"}},
-    "veo:quality": {"cost": 80, "payload": {"model": "veo3_quality"}}, # Adjusted cost to 80
-    
-    "kling:std5": {"cost": 40, "payload": {"mode": "std", "duration": "5"}},
-    "kling:pro5": {"cost": 70, "payload": {"mode": "pro", "duration": "5"}},
+    # Nano Banana — kie.ai uses bare model names (no google/ prefix in logs):
+    # nano-banana    = base model, ~4 kie credits ($0.02) → Standard 1K
+    # nano-banana-2  = supports image_resolution param (1K/2K/4K), ~8/12/18 kie credits
+    # See https://kie.ai/ru/nano-banana-2
+    "nano:std": {"cost": 5,  "payload": {"image_size": "1:1", "_nano_model": "nano-banana"}},
+    "nano:hd":  {"cost": 10, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-2", "image_resolution": "2K"}},
+    "nano:4k":  {"cost": 20, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-2", "image_resolution": "4K"}},
+
+    # Veo 3 — veo3_fast=80 kie credits ($0.40), veo3_quality=400 kie credits ($2.00)
+    "veo:fast":    {"cost": 30, "payload": {"model": "veo3_fast"}},
+    "veo:quality": {"cost": 80, "payload": {"model": "veo3_quality"}},
+
+    # Kling 3.0 — std=14 kie cr/s, pro=18 kie cr/s
+    "kling:std5":  {"cost": 40,  "payload": {"mode": "std", "duration": "5"}},
+    "kling:pro5":  {"cost": 70,  "payload": {"mode": "pro", "duration": "5"}},
     "kling:pro10": {"cost": 120, "payload": {"mode": "pro", "duration": "10"}},
 }
