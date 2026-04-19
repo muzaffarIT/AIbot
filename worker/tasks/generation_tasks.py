@@ -331,18 +331,34 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 # Edit mode (source image) requires the edit model
                 if job.source_image_url:
                     nano_model = "nano-banana-edit"
-                # kie.ai market API requires google/ prefix for Nano Banana family
-                if not nano_model.startswith("google/"):
-                    nano_model = f"google/{nano_model}"
-                payload = {
-                    "model": nano_model,
-                    "input": {
+                # kie.ai model-ID rules (verified via docs.kie.ai):
+                #   google/nano-banana        → v1 text-to-image, 1K only (aspect_ratio via image_size)
+                #   google/nano-banana-edit   → v1 image-to-image edit
+                #   nano-banana-pro           → NO prefix; supports resolution 1K/2K/4K
+                #   nano-banana-2             → NO prefix; supports resolution 1K/2K/4K
+                base = nano_model.split("/", 1)[-1]  # strip any "google/" the caller added
+                if base in ("nano-banana", "nano-banana-edit"):
+                    api_model = f"google/{base}"
+                    # v1 uses image_size for aspect ratio; no resolution knob
+                    input_block = {
+                        "prompt": job.prompt,
+                        "image_size": aspect_ratio,
+                        "output_format": "png",
+                        "image_input": [job.source_image_url] if job.source_image_url else [],
+                    }
+                else:
+                    # nano-banana-pro / nano-banana-2
+                    api_model = base
+                    input_block = {
                         "prompt": job.prompt,
                         "aspect_ratio": aspect_ratio,
                         "resolution": resolution,
                         "output_format": "png",
-                        "image_input": [job.source_image_url] if job.source_image_url else []
+                        "image_input": [job.source_image_url] if job.source_image_url else [],
                     }
+                payload = {
+                    "model": api_model,
+                    "input": input_block,
                 }
                 poll_interval = 5
                 poll_timeout = 120
