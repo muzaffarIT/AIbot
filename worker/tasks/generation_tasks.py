@@ -101,21 +101,31 @@ def poll_task(task_id: str, max_seconds: int = 300,
         f"KIE task {task_id} timeout after {max_seconds}s"
     )
 
-def run_veo3_generation(prompt, quality, source_image_url,
+def run_veo3_generation(prompt, model, source_image_url,
                         kie_api_key, kie_base_url):
-    """Veo 3 использует отдельный endpoint"""
-    
-    model = "veo3_fast" if quality == "fast" else "veo3_quality"
-    
+    """Veo 3 использует отдельный endpoint.
+
+    model — full kie.ai model id: 'veo3_fast' or 'veo3_quality'
+            (used to come in as 'fast'/'quality' but quality_menu now
+             stores the real model id in job_payload['model'])
+    """
+    # Safety — accept legacy 'fast' / 'quality' aliases too
+    if model in ("fast", None, ""):
+        model = "veo3_fast"
+    elif model == "quality":
+        model = "veo3_quality"
+
     payload = {
         "prompt": prompt,
         "model": model,
         "aspect_ratio": "16:9",
-        "enableTranslation": True
+        "enableTranslation": True,
     }
-    
+
     if source_image_url:
-        payload["generationType"] = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+        # Single reference image — NOT first/last frame interpolation.
+        # REFERENCE_2_VIDEO animates one image using the prompt.
+        payload["generationType"] = "REFERENCE_2_VIDEO"
         payload["imageUrls"] = [source_image_url]
     else:
         payload["generationType"] = "TEXT_2_VIDEO"
@@ -402,9 +412,16 @@ def run_generation_job(self, job_id: int) -> dict | None:
 
         # Setup provider specific configs
         if job.provider == AIProvider.VEO:
+            _jp = job.job_payload or {}
+            # quality_menu stores real model id in 'model';
+            # legacy jobs may still use 'quality': 'fast'/'quality'.
+            veo_model = (
+                _jp.get("model")
+                or ("veo3_quality" if _jp.get("quality") == "quality" else "veo3_fast")
+            )
             task_id = run_veo3_generation(
                 prompt=job.prompt,
-                quality=job.job_payload.get("quality", "fast"),
+                model=veo_model,
                 source_image_url=job.source_image_url,
                 kie_api_key=settings.kie_api_key,
                 kie_base_url=settings.kie_base_url
@@ -436,23 +453,25 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 base = nano_model.split("/", 1)[-1]  # strip any "google/" the caller added
                 if base in ("nano-banana", "nano-banana-edit"):
                     api_model = f"google/{base}"
-                    # v1 uses image_size for aspect ratio; no resolution knob
+                    # v1 uses image_size for aspect ratio + image_urls (plural) for edit input
                     input_block = {
                         "prompt": job.prompt,
                         "image_size": aspect_ratio,
                         "output_format": "png",
-                        "image_input": [job.source_image_url] if job.source_image_url else [],
                     }
+                    if job.source_image_url:
+                        input_block["image_urls"] = [job.source_image_url]
                 else:
-                    # nano-banana-pro / nano-banana-2
+                    # nano-banana-pro / nano-banana-2: aspect_ratio + resolution + image_input
                     api_model = base
                     input_block = {
                         "prompt": job.prompt,
                         "aspect_ratio": aspect_ratio,
                         "resolution": resolution,
                         "output_format": "png",
-                        "image_input": [job.source_image_url] if job.source_image_url else [],
                     }
+                    if job.source_image_url:
+                        input_block["image_input"] = [job.source_image_url]
                 payload = {
                     "model": api_model,
                     "input": input_block,
