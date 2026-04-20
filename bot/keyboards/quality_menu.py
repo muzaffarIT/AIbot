@@ -17,6 +17,7 @@ def get_quality_keyboard(provider: str, lang: str) -> InlineKeyboardMarkup:
         buttons = [
             [InlineKeyboardButton(text=i18n.t(lang, "quality.veo.fast"), callback_data="q:veo:fast")],
             [InlineKeyboardButton(text=i18n.t(lang, "quality.veo.quality"), callback_data="q:veo:quality")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.veo.4k"), callback_data="q:veo:4k")],
         ]
     elif provider == "kling":
         buttons = [
@@ -38,9 +39,12 @@ QUALITY_DATA = {
     "nano:hd":  {"cost": 20, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-2",   "image_resolution": "2K"}},
     "nano:4k":  {"cost": 50, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-pro", "image_resolution": "4K"}},
 
-    # Veo 3 — veo3_fast=80 kie credits ($0.40), veo3_quality=400 kie credits ($2.00)
+    # Veo 3 — veo3_fast ≈ 60-80 kie cr ($0.30-0.40), veo3_quality = 400 kie cr ($2.00)
+    # 4K tier = veo3_fast generation + 4K upscale endpoint (~160 kie cr extra)
+    #          total kie cost ≈ $1.20 → 90 user cr = 4.2× margin
     "veo:fast":    {"cost": 30, "payload": {"model": "veo3_fast"}},
     "veo:quality": {"cost": 80, "payload": {"model": "veo3_quality"}},
+    "veo:4k":      {"cost": 90, "payload": {"model": "veo3_fast", "upscale_4k": True}},
 
     # Kling 3.0 — std=14 kie cr/s, pro=18 kie cr/s
     "kling:std5":  {"cost": 40,  "payload": {"mode": "std", "duration": "5"}},

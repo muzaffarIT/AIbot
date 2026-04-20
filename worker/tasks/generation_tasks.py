@@ -154,6 +154,36 @@ def run_veo3_generation(prompt, model, source_image_url,
     logger.info(f"[VEO3] Task created: {task_id}")
     return task_id
 
+def run_veo3_4k_upscale(source_task_id, kie_api_key, kie_base_url):
+    """Kick off the 4K upscale for a previously-generated Veo 3 video.
+
+    Endpoint: POST /api/v1/veo/get-4k-video  body: {"taskId": "<id>"}
+    Returns a NEW taskId; poll it with poll_veo3_task (same response shape).
+    """
+    headers = {
+        "Authorization": f"Bearer {kie_api_key}",
+        "Content-Type": "application/json",
+    }
+    url = f"{kie_base_url}/api/v1/veo/get-4k-video"
+    payload = {"taskId": source_task_id}
+    logger.info(f"[VEO3 4K] POST {url} payload={payload}")
+
+    r = requests.post(url, json=payload, headers=headers, timeout=30)
+    resp = r.json()
+    logger.info(f"[VEO3 4K] Response: {resp}")
+
+    code = resp.get("code", 0)
+    if code != 200:
+        raise ValueError(f"VEO3 4K error {code}: {resp.get('msg')}")
+
+    new_task_id = resp.get("data", {}).get("taskId")
+    if not new_task_id:
+        raise ValueError(f"VEO3 4K: no taskId returned: {resp}")
+
+    logger.info(f"[VEO3 4K] upscale task created: {new_task_id}")
+    return new_task_id
+
+
 def poll_veo3_task(task_id, kie_api_key, kie_base_url,
                   max_seconds=300, interval=5):
     """Polling для Veo 3 — отдельный endpoint с другой структурой"""
@@ -419,6 +449,7 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 _jp.get("model")
                 or ("veo3_quality" if _jp.get("quality") == "quality" else "veo3_fast")
             )
+            want_4k = bool(_jp.get("upscale_4k"))
             task_id = run_veo3_generation(
                 prompt=job.prompt,
                 model=veo_model,
@@ -426,11 +457,42 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 kie_api_key=settings.kie_api_key,
                 kie_base_url=settings.kie_base_url
             )
-            final_result_url = poll_veo3_task(
+            # Stage 1: base generation (720p or 1080p depending on model)
+            base_url = poll_veo3_task(
                 task_id=task_id,
                 kie_api_key=settings.kie_api_key,
-                kie_base_url=settings.kie_base_url
+                kie_base_url=settings.kie_base_url,
+                max_seconds=600,  # quality model can take longer
             )
+
+            if want_4k:
+                # Stage 2: chain a 4K upscale on top of the base taskId.
+                # kie.ai /get-4k-video returns a new taskId; poll same as gen.
+                logger.info(f"[VEO3 4K] starting upscale for base_task={task_id}")
+                try:
+                    upscale_task_id = run_veo3_4k_upscale(
+                        source_task_id=task_id,
+                        kie_api_key=settings.kie_api_key,
+                        kie_base_url=settings.kie_base_url,
+                    )
+                    final_result_url = poll_veo3_task(
+                        task_id=upscale_task_id,
+                        kie_api_key=settings.kie_api_key,
+                        kie_base_url=settings.kie_base_url,
+                        max_seconds=900,   # upscale ~5-10 min
+                        interval=10,
+                    )
+                    logger.info(f"[VEO3 4K] ✅ upscale done: {final_result_url[:80]}")
+                except Exception as upscale_err:
+                    # Upscale failed — gracefully fall back to 720p video so
+                    # the user still gets a result; log for investigation.
+                    logger.error(
+                        f"[VEO3 4K] upscale failed, falling back to base video: "
+                        f"{upscale_err}"
+                    )
+                    final_result_url = base_url
+            else:
+                final_result_url = base_url
         else:
             if job.provider == AIProvider.NANO_BANANA:
                 url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
