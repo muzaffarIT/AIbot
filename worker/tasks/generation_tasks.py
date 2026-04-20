@@ -252,13 +252,25 @@ async def _notify_user(telegram_id: int, url: str,
                     caption=caption, reply_markup=kb,
                 )
 
+        # Download file once — reused by both upload and document paths
+        _file_bytes: bytes | None = None
+
+        async def _fetch_bytes() -> bytes:
+            nonlocal _file_bytes
+            if _file_bytes is None:
+                import requests as _rq
+                r = _rq.get(url, timeout=120)
+                r.raise_for_status()
+                _file_bytes = r.content
+                logger.info(f"[NOTIFY] fetched {len(_file_bytes)} bytes")
+            return _file_bytes
+
         async def _send_by_upload():
-            # Fallback: fetch file ourselves, upload as multipart
-            import requests as _rq
-            r = _rq.get(url, timeout=60)
-            r.raise_for_status()
+            # Try send_photo/send_video with uploaded bytes
+            # (Telegram photo limit ≈10 MB upload; bigger files will 400)
+            data = await _fetch_bytes()
             ext = ".mp4" if is_video else ".png"
-            file = BufferedInputFile(r.content, filename=f"result{ext}")
+            file = BufferedInputFile(data, filename=f"result{ext}")
             if is_video:
                 await bot.send_video(
                     chat_id=telegram_id, video=file,
@@ -270,8 +282,21 @@ async def _notify_user(telegram_id: int, url: str,
                     caption=caption, reply_markup=kb,
                 )
 
+        async def _send_as_document():
+            # Bigger size budget (~50 MB). Keeps FULL original quality
+            # — perfect for 4K PNGs that blow past the send_photo limit.
+            data = await _fetch_bytes()
+            ext = ".mp4" if is_video else ".png"
+            file = BufferedInputFile(data, filename=f"HARF_result{ext}")
+            await bot.send_document(
+                chat_id=telegram_id,
+                document=file,
+                caption=caption,
+                reply_markup=kb,
+            )
+
         async def _send_as_text():
-            # Last resort — user must see SOMETHING
+            # Absolute last resort — user must see SOMETHING
             await bot.send_message(
                 chat_id=telegram_id,
                 text=f"{caption}\n\n🔗 {url}",
@@ -279,31 +304,37 @@ async def _notify_user(telegram_id: int, url: str,
                 disable_web_page_preview=False,
             )
 
+        async def _try_fallback_chain(reason: str):
+            logger.warning(f"[NOTIFY] by_url failed ({reason}) — trying upload…")
+            try:
+                await _send_by_upload()
+                logger.info(f"[NOTIFY] ✅ by_upload {telegram_id}")
+                return
+            except Exception as e2:
+                logger.warning(
+                    f"[NOTIFY] by_upload failed ({e2}) — trying document…"
+                )
+            try:
+                await _send_as_document()
+                logger.info(f"[NOTIFY] ✅ as_document {telegram_id}")
+                return
+            except Exception as e3:
+                logger.error(
+                    f"[NOTIFY] as_document failed ({e3}) — falling back to text"
+                )
+            try:
+                await _send_as_text()
+                logger.info(f"[NOTIFY] ✅ as_text {telegram_id}")
+            except Exception as e4:
+                logger.error(f"[NOTIFY] ALL paths failed: {e4}")
+
         try:
             await _send_by_url()
             logger.info(f"[NOTIFY] ✅ by_url {telegram_id}")
         except TelegramBadRequest as e:
-            logger.warning(f"[NOTIFY] by_url rejected ({e}), trying upload…")
-            try:
-                await _send_by_upload()
-                logger.info(f"[NOTIFY] ✅ by_upload {telegram_id}")
-            except Exception as e2:
-                logger.error(f"[NOTIFY] by_upload failed ({e2}), falling back to text")
-                await _send_as_text()
-                logger.info(f"[NOTIFY] ✅ as_text {telegram_id}")
+            await _try_fallback_chain(str(e))
         except Exception as e:
-            # Network / aiogram / other — still try upload then text
-            logger.warning(f"[NOTIFY] by_url error ({e}), trying upload…")
-            try:
-                await _send_by_upload()
-                logger.info(f"[NOTIFY] ✅ by_upload {telegram_id}")
-            except Exception as e2:
-                logger.error(f"[NOTIFY] by_upload failed ({e2}), falling back to text")
-                try:
-                    await _send_as_text()
-                    logger.info(f"[NOTIFY] ✅ as_text {telegram_id}")
-                except Exception as e3:
-                    logger.error(f"[NOTIFY] ALL paths failed: {e3}")
+            await _try_fallback_chain(str(e))
     except TelegramForbiddenError:
         logger.warning(f"[NOTIFY] {telegram_id} заблокировал бота")
     except Exception as e:
