@@ -65,7 +65,7 @@ async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
             credits=cost,
         )
         msg = await message.answer(
-            f"⏳ <b>Nano Banana</b> — задача #{job.id} принята.\n\n"
+            "⏳ <b>Nano Banana</b> — задача принята.\n\n"
             f"💰 Списано: {cost} кр.\n🔄 Готовим результат... (~1–2 мин)",
             parse_mode="HTML",
         )

@@ -75,7 +75,7 @@ async def create_kling_job(message: Message, state: FSMContext) -> None:
             credits=cost,
         )
         msg = await message.answer(
-            f"⏳ <b>Kling Motion</b> — задача #{job.id} принята.\n\n"
+            "⏳ <b>Kling Motion</b> — задача принята.\n\n"
             f"💰 Списано: {cost} кр.\n🔄 Готовим результат... (~3–5 мин)",
             parse_mode="HTML",
         )

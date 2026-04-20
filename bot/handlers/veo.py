@@ -137,7 +137,7 @@ async def _create_veo_job(message: Message, state: FSMContext, prompt: str, sour
             credits=credits_override or state_data.get("cost"),
         )
         msg = await message.answer(
-            f"⏳ <b>Veo 3</b> — задача #{job.id} в очереди.\n\n"
+            "⏳ <b>Veo 3</b> — задача принята.\n\n"
             "🔄 Обычно видео готовится 2-5 минут.\nМы пришлём уведомление когда будет готово!",
             parse_mode="HTML",
         )
@@ -172,7 +172,7 @@ async def _create_kling_job(message: Message, state: FSMContext, prompt: str, so
             credits=state_data.get("cost"),
         )
         msg = await message.answer(
-            f"⏳ <b>Kling Motion</b> — задача #{job.id} в очереди.\n\n"
+            "⏳ <b>Kling Motion</b> — задача принята.\n\n"
             "🔄 Анимация обычно готовится 3-7 минут.",
             parse_mode="HTML",
         )

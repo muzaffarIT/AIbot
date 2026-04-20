@@ -197,12 +197,23 @@ def poll_veo3_task(task_id, kie_api_key, kie_base_url,
 async def _notify_user(telegram_id: int, url: str,
                        provider: str, prompt: str,
                        credits: int, bot_token: str):
+    """Deliver generation result to user with robust fallback:
+    1. Try sending as photo/video by direct URL (fastest path)
+    2. If Telegram rejects the URL, download bytes and upload as file
+    3. If all else fails, send the URL as a plain text message so user still gets it.
+    """
     if not bot_token:
         logger.error("[NOTIFY] BOT_TOKEN не задан!")
         return
     from aiogram import Bot
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    from aiogram.exceptions import TelegramForbiddenError
+    from aiogram.types import (
+        InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
+    )
+    from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+
+    # Normalize provider to string value (accept enum / enum-like / str)
+    provider_str = getattr(provider, "value", None) or str(provider or "").lower()
+
     bot = Bot(token=bot_token)
     try:
         caption = (
@@ -213,35 +224,90 @@ async def _notify_user(telegram_id: int, url: str,
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
                 text="🔄 Ещё раз",
-                callback_data=f"gen_again:{provider}"
+                callback_data=f"gen_again:{provider_str}"
             ),
             InlineKeyboardButton(
                 text="🏠 Меню",
                 callback_data="start_menu"
             )
         ]])
-        is_video = provider in (
-            "veo", "veo-3", "kling", "kling-3.0/video"
+        is_video = any(
+            token in provider_str
+            for token in ("veo", "kling")
         )
-        if is_video:
-            await bot.send_video(
+        logger.info(
+            f"[NOTIFY] telegram_id={telegram_id} provider={provider_str} "
+            f"is_video={is_video} url={url[:120]}"
+        )
+
+        async def _send_by_url():
+            if is_video:
+                await bot.send_video(
+                    chat_id=telegram_id, video=url,
+                    caption=caption, reply_markup=kb,
+                )
+            else:
+                await bot.send_photo(
+                    chat_id=telegram_id, photo=url,
+                    caption=caption, reply_markup=kb,
+                )
+
+        async def _send_by_upload():
+            # Fallback: fetch file ourselves, upload as multipart
+            import requests as _rq
+            r = _rq.get(url, timeout=60)
+            r.raise_for_status()
+            ext = ".mp4" if is_video else ".png"
+            file = BufferedInputFile(r.content, filename=f"result{ext}")
+            if is_video:
+                await bot.send_video(
+                    chat_id=telegram_id, video=file,
+                    caption=caption, reply_markup=kb,
+                )
+            else:
+                await bot.send_photo(
+                    chat_id=telegram_id, photo=file,
+                    caption=caption, reply_markup=kb,
+                )
+
+        async def _send_as_text():
+            # Last resort — user must see SOMETHING
+            await bot.send_message(
                 chat_id=telegram_id,
-                video=url,
-                caption=caption,
-                reply_markup=kb
+                text=f"{caption}\n\n🔗 {url}",
+                reply_markup=kb,
+                disable_web_page_preview=False,
             )
-        else:
-            await bot.send_photo(
-                chat_id=telegram_id,
-                photo=url,
-                caption=caption,
-                reply_markup=kb
-            )
-        logger.info(f"[NOTIFY] ✅ Отправлено {telegram_id}")
+
+        try:
+            await _send_by_url()
+            logger.info(f"[NOTIFY] ✅ by_url {telegram_id}")
+        except TelegramBadRequest as e:
+            logger.warning(f"[NOTIFY] by_url rejected ({e}), trying upload…")
+            try:
+                await _send_by_upload()
+                logger.info(f"[NOTIFY] ✅ by_upload {telegram_id}")
+            except Exception as e2:
+                logger.error(f"[NOTIFY] by_upload failed ({e2}), falling back to text")
+                await _send_as_text()
+                logger.info(f"[NOTIFY] ✅ as_text {telegram_id}")
+        except Exception as e:
+            # Network / aiogram / other — still try upload then text
+            logger.warning(f"[NOTIFY] by_url error ({e}), trying upload…")
+            try:
+                await _send_by_upload()
+                logger.info(f"[NOTIFY] ✅ by_upload {telegram_id}")
+            except Exception as e2:
+                logger.error(f"[NOTIFY] by_upload failed ({e2}), falling back to text")
+                try:
+                    await _send_as_text()
+                    logger.info(f"[NOTIFY] ✅ as_text {telegram_id}")
+                except Exception as e3:
+                    logger.error(f"[NOTIFY] ALL paths failed: {e3}")
     except TelegramForbiddenError:
         logger.warning(f"[NOTIFY] {telegram_id} заблокировал бота")
     except Exception as e:
-        logger.error(f"[NOTIFY] Ошибка: {e}")
+        logger.error(f"[NOTIFY] Unexpected: {e}", exc_info=True)
     finally:
         await bot.session.close()
 

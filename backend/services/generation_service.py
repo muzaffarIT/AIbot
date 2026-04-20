@@ -68,29 +68,7 @@ class GenerationService:
         if not user:
             raise ValueError("User not found")
 
-        # Daily generation limit check
-        now = datetime.now(timezone.utc)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        # Check if user is premium (has at least one completed order)
-        has_purchased = self.db.query(Order).filter(
-            Order.user_id == user.id,
-            Order.status == "completed"
-        ).first() is not None
-        
-        limit_key = "max_premium_gens_per_day" if has_purchased else "max_free_gens_per_day"
-        default_limit = 50 if has_purchased else settings.max_free_gens_per_day
-        limit = self.settings_service.get_int(limit_key, default_limit)
-        
-        daily_count = self.db.query(func.count(GenerationJob.id)).filter(
-            GenerationJob.user_id == user.id,
-            GenerationJob.created_at >= today_start,
-            GenerationJob.status != JobStatus.FAILED
-        ).scalar() or 0
-        
-        if daily_count >= limit:
-            raise ValueError(f"Daily generation limit reached ({limit}). Try again tomorrow.")
-
+        # Daily generation limit removed — credits alone gate usage.
         is_admin = user.telegram_user_id in settings.admin_ids_list
 
         logger.info(

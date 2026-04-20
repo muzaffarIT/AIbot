@@ -110,7 +110,7 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
         status_text = (
             "⚡ Задача принята.\n👑 Режим администратора — кредиты не списываются."
             if is_admin else
-            f"⏳ <b>{mode_text}</b> — задача #{job.id} принята.\n\n"
+            f"⏳ <b>{mode_text}</b> — задача принята.\n\n"
             f"💰 Списано: {cost} кр.\n🔄 Готовим результат..."
         )
         await callback.message.edit_text(status_text, parse_mode="HTML")
