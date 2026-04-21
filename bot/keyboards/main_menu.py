@@ -59,21 +59,34 @@ def main_inline_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
 
 
 def create_submenu_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
-    """Submenu for choosing AI provider — bilingual."""
+    """Submenu for choosing AI provider — bilingual.
+
+    Image tiers are flat ("tier:..." callback): one tap = pick model + quality,
+    then bot asks for prompt. Video providers keep a nested quality submenu
+    ("gen_start:..." callback) because duration/resolution choice is load-bearing.
+    """
     if lang == "uz":
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="🍌 Nano Banana — rasm (5 kr.)", callback_data="gen_start:nano_banana")],
-                [InlineKeyboardButton(text="🎬 Veo 3 — video 8s Google (30 kr.)", callback_data="gen_start:veo")],
-                [InlineKeyboardButton(text="🎥 Kling Motion — video (40 kr.)", callback_data="gen_start:kling")],
+                [InlineKeyboardButton(text="🍌 Nano Banana · 1K · 10 kr.", callback_data="tier:nano:std")],
+                [InlineKeyboardButton(text="✨ Nano Banana 2 · 2K · 20 kr.", callback_data="tier:nano:hd")],
+                [InlineKeyboardButton(text="⭐ Nano Banana Pro 2K · 30 kr.", callback_data="tier:nano:pro_hd")],
+                [InlineKeyboardButton(text="👑 Nano Banana Pro 4K · 50 kr.", callback_data="tier:nano:4k")],
+                [InlineKeyboardButton(text="🎨 GPT Image 2 · 30 kr.", callback_data="tier:gpt:std")],
+                [InlineKeyboardButton(text="🎬 Veo 3 — video (30–90 kr.)", callback_data="gen_start:veo")],
+                [InlineKeyboardButton(text="🎥 Kling Motion — video (40–120 kr.)", callback_data="gen_start:kling")],
                 [InlineKeyboardButton(text="← Orqaga", callback_data="start_menu")],
             ]
         )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🍌 Nano Banana — картинка (5 кр.)", callback_data="gen_start:nano_banana")],
-            [InlineKeyboardButton(text="🎬 Veo 3 — видео 8 сек (30 кр.)", callback_data="gen_start:veo")],
-            [InlineKeyboardButton(text="🎥 Kling Motion — видео (40 кр.)", callback_data="gen_start:kling")],
+            [InlineKeyboardButton(text="🍌 Nano Banana · 1K · 10 кр.", callback_data="tier:nano:std")],
+            [InlineKeyboardButton(text="✨ Nano Banana 2 · 2K · 20 кр.", callback_data="tier:nano:hd")],
+            [InlineKeyboardButton(text="⭐ Nano Banana Pro 2K · 30 кр.", callback_data="tier:nano:pro_hd")],
+            [InlineKeyboardButton(text="👑 Nano Banana Pro 4K · 50 кр.", callback_data="tier:nano:4k")],
+            [InlineKeyboardButton(text="🎨 GPT Image 2 · 30 кр.", callback_data="tier:gpt:std")],
+            [InlineKeyboardButton(text="🎬 Veo 3 — видео (30–90 кр.)", callback_data="gen_start:veo")],
+            [InlineKeyboardButton(text="🎥 Kling Motion — видео (40–120 кр.)", callback_data="gen_start:kling")],
             [InlineKeyboardButton(text="← Назад", callback_data="start_menu")],
         ]
     )

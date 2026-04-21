@@ -28,6 +28,7 @@ PHOTO_ACTION_KEYBOARD = InlineKeyboardMarkup(
         [InlineKeyboardButton(text="🎬 Оживить через Veo 3", callback_data="photo:veo3")],
         [InlineKeyboardButton(text="🎥 Оживить через Kling", callback_data="photo:kling")],
         [InlineKeyboardButton(text="🍌 Image-to-Image Nano Banana", callback_data="photo:nano_banana")],
+        [InlineKeyboardButton(text="🎨 Image-to-Image GPT Image 2", callback_data="photo:gpt_image")],
         [InlineKeyboardButton(text="❌ Отмена", callback_data="start_menu")],
     ]
 )
@@ -69,17 +70,18 @@ async def handle_photo_action(callback, state: FSMContext) -> None:
         "veo3": (VeoStates.waiting_for_prompt, "🎬 Veo 3 выбран. Напиши промпт для анимации этого фото:"),
         "kling": (KlingStates.waiting_for_prompt, "🎥 Kling Motion выбран. Напиши промпт для анимации:"),
         "nano_banana": (NanoBananaStates.waiting_for_prompt, "🍌 Nano Banana выбран. Напиши промпт для Image-to-Image:"),
+        # GPT Image 2 reuses NanoBananaStates — image handler routes by state_data["provider"]
+        "gpt_image": (NanoBananaStates.waiting_for_prompt, "🎨 GPT Image 2 выбран. Напиши промпт для Image-to-Image:"),
     }
-    state_cls, text = state_map[action]
-    await state.set_state(state_cls)
-
     if action not in state_map:
         await callback.answer("Неизвестное действие.")
         return
 
     state_cls, text = state_map[action]
+    # Record provider for downstream handlers (nanobanana handler reads this)
+    await state.update_data(provider=action)
     await state.set_state(state_cls)
-    
+
     state_data = await state.get_data()
     if state_data.get("prompt"):
         # We already have a prompt from caption! Go to quality selection.
@@ -97,14 +99,34 @@ async def _show_provider_quality(message: Message, state: FSMContext, provider: 
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(message.chat.id)
         lang = user.language_code or "ru"
-        
+
+        # GPT Image 2 has a single tier — skip quality menu, create job directly.
+        if provider == "gpt_image":
+            from bot.keyboards.quality_menu import QUALITY_DATA as _QD
+            tier = _QD["gpt:std"]
+            await state.update_data(quality_cost=tier["cost"], quality_payload=tier["payload"])
+            await state.set_state(NanoBananaStates.waiting_for_prompt)
+            # Re-trigger the prompt handler by sending the saved prompt back through the bot
+            from bot.handlers.nanobanana import handle_nanobanana_prompt
+            state_data = await state.get_data()
+            saved_prompt = state_data.get("prompt") or ""
+            if saved_prompt:
+                class _Fake:
+                    text = saved_prompt
+                    chat = message.chat
+                    from_user = message.from_user
+                    bot = message.bot
+                    async def answer(self, *a, **kw): return await message.answer(*a, **kw)
+                await handle_nanobanana_prompt(_Fake(), state)
+            return
+
         # Map action keys to quality keyboard keys
         kb_key = "nano_banana" if provider == "nano_banana" else provider
-        
+
         # Set specific quality waiting state
         if provider == "veo3": await state.set_state(VeoStates.waiting_for_quality)
         elif provider == "kling": await state.set_state(KlingStates.waiting_for_quality)
-        elif provider == "nano_banana": 
+        elif provider == "nano_banana":
             await state.set_state(NanoBananaStates.waiting_for_quality)
 
         await message.answer(
