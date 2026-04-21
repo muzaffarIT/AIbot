@@ -541,6 +541,21 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 poll_interval = 5
                 poll_timeout = 120
 
+            elif job.provider == AIProvider.GPT_IMAGE:
+                # GPT Image 2 (OpenAI via kie.ai) — $0.06/gen, supports t2i + i2i
+                url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
+                jp = job.job_payload or {}
+                gpt_model = jp.get("_gpt_model") or "gpt-image-2"
+                input_block = {
+                    "prompt": job.prompt,
+                    "output_format": "png",
+                }
+                if job.source_image_url:
+                    input_block["image_urls"] = [job.source_image_url]
+                payload = {"model": gpt_model, "input": input_block}
+                poll_interval = 5
+                poll_timeout = 180
+
             elif job.provider == AIProvider.KLING:
                 url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
                 mode = job.job_payload.get("mode", "std")

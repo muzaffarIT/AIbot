@@ -11,7 +11,12 @@ def get_quality_keyboard(provider: str, lang: str) -> InlineKeyboardMarkup:
         buttons = [
             [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.standard"), callback_data="q:nano:std")],
             [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.hd"), callback_data="q:nano:hd")],
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.pro_hd"), callback_data="q:nano:pro_hd")],
             [InlineKeyboardButton(text=i18n.t(lang, "quality.nano.4k"), callback_data="q:nano:4k")],
+        ]
+    elif provider == "gpt_image":
+        buttons = [
+            [InlineKeyboardButton(text=i18n.t(lang, "quality.gpt.std"), callback_data="q:gpt:std")],
         ]
     elif provider == "veo":
         buttons = [
@@ -30,14 +35,22 @@ def get_quality_keyboard(provider: str, lang: str) -> InlineKeyboardMarkup:
     buttons.append([InlineKeyboardButton(text=back_text, callback_data="menu_create")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+# Margin note: 1 user credit ≈ $0.056 (PACKAGES: ~705 UZS/cr, ~12 500 UZS/$).
+# All margins below comfortably clear provider + Telegram/infra overhead.
 QUALITY_DATA = {
-    # Nano Banana — 3-tier pricing matched to 3 different kie.ai models:
-    # google/nano-banana   = Gemini 2.5 Flash,  4 kie cr 1K       → Standard  (fastest, cheapest)
-    # nano-banana-2        = Gemini 3.1 Flash, 12 kie cr 2K       → HD        (modern quality, no prefix)
-    # nano-banana-pro      = Gemini 3.0 Pro,   24 kie cr 4K       → Pro 4K    (best text/photoreal, no prefix)
-    "nano:std": {"cost": 10, "payload": {"image_size": "1:1", "_nano_model": "nano-banana"}},
-    "nano:hd":  {"cost": 20, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-2",   "image_resolution": "2K"}},
-    "nano:4k":  {"cost": 50, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-pro", "image_resolution": "4K"}},
+    # Nano Banana — 4 tiers, 3 kie.ai models:
+    # google/nano-banana  (Gemini 2.5 Flash) ≈ $0.02   → 10 cr  · 28× margin
+    # nano-banana-2       (Gemini 3.1 Flash) ≈ $0.06   → 20 cr  · 18× margin
+    # nano-banana-pro@2K  (Gemini 3.0 Pro)   ≈ $0.12   → 30 cr  · 14× margin
+    # nano-banana-pro@4K  (Gemini 3.0 Pro)   ≈ $0.12   → 50 cr  · 23× margin
+    "nano:std":    {"cost": 10, "payload": {"image_size": "1:1", "_nano_model": "nano-banana"}},
+    "nano:hd":     {"cost": 20, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-2",   "image_resolution": "2K"}},
+    "nano:pro_hd": {"cost": 30, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-pro", "image_resolution": "2K"}},
+    "nano:4k":     {"cost": 50, "payload": {"image_size": "1:1", "_nano_model": "nano-banana-pro", "image_resolution": "4K"}},
+
+    # GPT Image 2 (OpenAI via kie.ai) — $0.06/gen (t2i and i2i same price)
+    # 30 cr = $1.68 → 28× margin
+    "gpt:std": {"cost": 30, "payload": {"_gpt_model": "gpt-image-2"}},
 
     # Veo 3 — veo3_fast ≈ 60-80 kie cr ($0.30-0.40), veo3_quality = 400 kie cr ($2.00)
     # 4K tier = veo3_fast generation + 4K upscale endpoint (~160 kie cr extra)

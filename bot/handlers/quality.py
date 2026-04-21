@@ -19,6 +19,74 @@ logger = logging.getLogger(__name__)
 router = Router()
 i18n = I18n()
 
+
+# Mapping used by both "q:" and "tier:" callbacks
+_PROVIDER_SHORT_TO_STR = {
+    "nano": "nano_banana",
+    "gpt":  "gpt_image",
+    "veo":  "veo",
+    "kling": "kling",
+}
+_PROVIDER_STR_TO_ENUM = {
+    "nano_banana": AIProvider.NANO_BANANA,
+    "gpt_image":   AIProvider.GPT_IMAGE,
+    "veo":         AIProvider.VEO,
+    "kling":       AIProvider.KLING,
+}
+
+
+@router.callback_query(F.data.startswith("tier:"))
+async def handle_tier_selection(callback: CallbackQuery, state: FSMContext) -> None:
+    """Flat main-menu tier button: pick provider+quality in one tap, skip submenu.
+
+    Used for image providers (Nano Banana variants, GPT Image). Video providers
+    still go through `gen_start:` → nested quality submenu.
+    """
+    try:
+        _, provider_short, tier = callback.data.split(":", 2)
+    except ValueError:
+        await callback.answer("Ошибка формата", show_alert=True)
+        return
+
+    key = f"{provider_short}:{tier}"
+    data = QUALITY_DATA.get(key)
+    provider_str = _PROVIDER_SHORT_TO_STR.get(provider_short)
+    if not data or not provider_str:
+        await callback.answer("Неизвестный тариф", show_alert=True)
+        return
+
+    db = get_db_session()
+    try:
+        user = UserService(db).get_user_by_telegram_id(callback.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+    finally:
+        db.close()
+
+    await state.update_data(
+        provider=provider_str,
+        lang=lang,
+        quality_cost=data["cost"],
+        quality_payload=data["payload"],
+    )
+    # Image tiers (nano + gpt) share the same waiting_for_prompt flow
+    await state.set_state(NanoBananaStates.waiting_for_prompt)
+
+    if provider_str == "gpt_image":
+        prompt_text = (
+            "🎨 <b>GPT Image 2</b>\n\nОпиши, что нарисовать (или пришли фото — сделаю image-to-image)."
+            if lang != "uz" else
+            "🎨 <b>GPT Image 2</b>\n\nNima chizish kerakligini yozing (yoki rasm yuboring — image-to-image qilaman)."
+        )
+    else:
+        prompt_text = i18n.t(lang, "gen.prompt.nano")
+
+    try:
+        await callback.message.edit_text(prompt_text, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(prompt_text, parse_mode="HTML")
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("q:"))
 async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     _, provider_short, quality_tier = callback.data.split(":")

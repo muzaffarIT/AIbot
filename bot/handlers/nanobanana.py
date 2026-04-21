@@ -43,6 +43,9 @@ async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
         state_data = await state.get_data()
         cost    = state_data.get("quality_cost")
         payload = state_data.get("quality_payload")
+        provider_str = state_data.get("provider", "nano_banana")
+        provider_enum = AIProvider.GPT_IMAGE if provider_str == "gpt_image" else AIProvider.NANO_BANANA
+        provider_label = "GPT Image 2" if provider_str == "gpt_image" else "Nano Banana"
 
         if cost is None:
             # Fallback (photo flow): show quality keyboard
@@ -50,14 +53,14 @@ async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
             await state.set_state(NanoBananaStates.waiting_for_quality)
             await message.answer(
                 i18n.t(lang, "quality.select"),
-                reply_markup=get_quality_keyboard("nano_banana", lang)
+                reply_markup=get_quality_keyboard(provider_str, lang)
             )
             return
 
         # Quality already selected → create job immediately
         job = GenerationService(db).create_job_for_user(
             telegram_user_id=user.telegram_user_id,
-            provider=AIProvider.NANO_BANANA,
+            provider=provider_enum,
             prompt=translated,
             original_prompt=prompt,
             source_image_url=state_data.get("source_image_url"),
@@ -65,7 +68,7 @@ async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
             credits=cost,
         )
         msg = await message.answer(
-            "⏳ <b>Nano Banana</b> — задача принята.\n\n"
+            f"⏳ <b>{provider_label}</b> — задача принята.\n\n"
             f"💰 Списано: {cost} кр.\n🔄 Готовим результат... (~1–2 мин)",
             parse_mode="HTML",
         )
