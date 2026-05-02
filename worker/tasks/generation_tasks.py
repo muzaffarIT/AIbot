@@ -497,15 +497,20 @@ def run_generation_job(self, job_id: int) -> dict | None:
             if job.provider == AIProvider.NANO_BANANA:
                 url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
                 # job_payload comes from bot/keyboards/quality_menu.QUALITY_DATA:
-                #   image_size       → aspect_ratio ("1:1")
-                #   image_resolution → resolution ("2K" / "4K"), only for nano-banana-2
-                #   _nano_model      → kie.ai model name ("nano-banana" / "nano-banana-2")
+                #   image_size          → aspect_ratio ("1:1")
+                #   image_resolution    → resolution ("2K" / "4K"), only for nano-banana-2
+                #   _nano_model         → kie.ai model name ("nano-banana" / "nano-banana-2")
+                #   source_image_urls   → list of all photos user sent (multi-reference)
                 jp = job.job_payload or {}
                 aspect_ratio = jp.get("image_size") or jp.get("aspect_ratio") or "1:1"
                 resolution = jp.get("image_resolution") or jp.get("resolution") or "1K"
                 nano_model = jp.get("_nano_model") or "nano-banana"
-                # Edit mode (source image) requires the edit model
-                if job.source_image_url:
+                # Multi-image input: prefer payload list, fall back to legacy single column
+                src_urls = list(jp.get("source_image_urls") or [])
+                if not src_urls and job.source_image_url:
+                    src_urls = [job.source_image_url]
+                # Edit mode (any source image) requires the edit model
+                if src_urls:
                     nano_model = "nano-banana-edit"
                 # kie.ai model-ID rules (verified via docs.kie.ai):
                 #   google/nano-banana        → v1 text-to-image, 1K only (aspect_ratio via image_size)
@@ -521,8 +526,8 @@ def run_generation_job(self, job_id: int) -> dict | None:
                         "image_size": aspect_ratio,
                         "output_format": "png",
                     }
-                    if job.source_image_url:
-                        input_block["image_urls"] = [job.source_image_url]
+                    if src_urls:
+                        input_block["image_urls"] = src_urls
                 else:
                     # nano-banana-pro / nano-banana-2: aspect_ratio + resolution + image_input
                     api_model = base
@@ -532,8 +537,8 @@ def run_generation_job(self, job_id: int) -> dict | None:
                         "resolution": resolution,
                         "output_format": "png",
                     }
-                    if job.source_image_url:
-                        input_block["image_input"] = [job.source_image_url]
+                    if src_urls:
+                        input_block["image_input"] = src_urls
                 payload = {
                     "model": api_model,
                     "input": input_block,
@@ -545,12 +550,17 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 # GPT Image 2 (OpenAI via kie.ai) — $0.06/gen, t2i + i2i
                 # Per docs.kie.ai: t2i and i2i are SEPARATE model slugs, and i2i
                 # expects `input_urls` (not image_urls). nsfw_checker defaults false.
+                # Multi-image: i2i accepts a list of input_urls for multi-reference.
                 url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
-                if job.source_image_url:
+                _jp = job.job_payload or {}
+                gpt_src_urls = list(_jp.get("source_image_urls") or [])
+                if not gpt_src_urls and job.source_image_url:
+                    gpt_src_urls = [job.source_image_url]
+                if gpt_src_urls:
                     api_model = "gpt-image-2-image-to-image"
                     input_block = {
                         "prompt": job.prompt,
-                        "input_urls": [job.source_image_url],
+                        "input_urls": gpt_src_urls,
                     }
                 else:
                     api_model = "gpt-image-2-text-to-image"
