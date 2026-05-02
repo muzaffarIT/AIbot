@@ -57,19 +57,31 @@ async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
             )
             return
 
+        # Multi-image collection: list of all photos the user sent before
+        # picking a provider. Worker uses the full list for Nano Banana edit
+        # and GPT Image 2 i2i (both support multi-reference).
+        img_urls: list[str] = list(state_data.get("source_image_urls") or [])
+        primary_img = img_urls[0] if img_urls else state_data.get("source_image_url")
+
+        merged_payload = dict(payload or {})
+        if img_urls:
+            merged_payload["source_image_urls"] = img_urls
+
         # Quality already selected → create job immediately
         job = GenerationService(db).create_job_for_user(
             telegram_user_id=user.telegram_user_id,
             provider=provider_enum,
             prompt=translated,
             original_prompt=prompt,
-            source_image_url=state_data.get("source_image_url"),
-            job_payload=payload,
+            source_image_url=primary_img,
+            job_payload=merged_payload,
             credits=cost,
         )
+        n_imgs = len(img_urls) if img_urls else (1 if primary_img else 0)
+        imgs_line = f"🖼 Фото в задаче: {n_imgs}\n" if n_imgs > 1 else ""
         msg = await message.answer(
             f"⏳ <b>{provider_label}</b> — задача принята.\n\n"
-            f"💰 Списано: {cost} кр.\n🔄 Готовим результат... (~1–2 мин)",
+            f"{imgs_line}💰 Списано: {cost} кр.\n🔄 Готовим результат... (~1–2 мин)",
             parse_mode="HTML",
         )
         asyncio.create_task(
