@@ -185,6 +185,11 @@ async def cmd_admin(message: Message) -> None:
             "  ━━━━━━━━━━━━━━━",
             f"  Прибыль сегодня:   <b>${profit_today:.2f}</b>",
             f"  Прибыль за месяц:  <b>${profit_month:.2f}</b>",
+            "",
+            "🛠 <b>Админ-команды</b>",
+            "  /broadcast — рассылка всем",
+            "  /broadcast_ru — только русскоязычным",
+            "  /broadcast_uz — только узбекоязычным",
         ]
         if alert:
             lines.append(alert)
