@@ -28,6 +28,7 @@ from bot.handlers.jobs import router as jobs_router
 from bot.handlers.balance import router as balance_router
 from bot.handlers.history import router as history_router
 from bot.handlers.admin import router as admin_router
+from bot.handlers.broadcast import router as broadcast_router
 from bot.handlers.cabinet import router as cabinet_router
 from bot.handlers.language import router as language_router
 from bot.middlewares.rate_limit import GenerationRateLimitMiddleware
@@ -64,6 +65,9 @@ async def main() -> None:
     dp.message.middleware(GenerationRateLimitMiddleware(limit=3, interval=60))
 
     dp.include_router(payments_router)     # 1. payments (Critical: first)
+    dp.include_router(broadcast_router)    # 1b. admin broadcast (FSM-stated, must
+    #                                            run before reply/FSM routers so the
+    #                                            BroadcastStates filter is honoured)
     dp.include_router(onboarding_router)   # 2. onboarding (Block 2)
     dp.include_router(start_router)        # 3. start
     dp.include_router(reply_router)        # 4. reply keyboard buttons — MUST be before FSM routers
