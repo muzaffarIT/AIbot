@@ -570,20 +570,52 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 poll_timeout = 180
 
             elif job.provider == AIProvider.KLING:
+                # KIE.ai Kling routing:
+                #   - With source image  → `kling-2.6/image-to-video` (dedicated
+                #     I2V model, simpler payload, more reliable for animation).
+                #   - Text-only          → `kling-3.0/video` (supports t2v + mode
+                #     tiers std/pro/4K, but requires `multi_shots` boolean).
+                # Docs:
+                #   https://docs.kie.ai/market/kling/image-to-video
+                #   https://docs.kie.ai/market/kling/kling-3-0
                 url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
-                mode = job.job_payload.get("mode", "std")
-                duration = int(job.job_payload.get("duration", 5))
-                payload = {
-                    "model": "kling-3.0/video",
-                    "input": {
-                        "prompt": job.prompt,
-                        "duration": str(duration),
-                        "mode": mode,
-                        "aspect_ratio": "16:9",
-                        "sound": False,
-                        "image_urls": [job.source_image_url] if job.source_image_url else []
+                _kp = job.job_payload or {}
+                kling_src_urls = list(_kp.get("source_image_urls") or [])
+                if not kling_src_urls and job.source_image_url:
+                    kling_src_urls = [job.source_image_url]
+
+                mode = _kp.get("mode", "std")
+                duration = int(_kp.get("duration", 5))
+
+                if kling_src_urls:
+                    # Image-to-video — Kling 2.6 dedicated I2V model.
+                    # Required: prompt, image_urls (array), sound (bool),
+                    # duration ("5" or "10"). NO mode / aspect_ratio fields.
+                    api_duration = "10" if duration >= 10 else "5"
+                    payload = {
+                        "model": "kling-2.6/image-to-video",
+                        "input": {
+                            "prompt": job.prompt,
+                            "image_urls": kling_src_urls[:1],  # I2V takes a single ref
+                            "sound": False,
+                            "duration": api_duration,
+                        },
                     }
-                }
+                else:
+                    # Text-to-video — Kling 3.0. Required: prompt, sound,
+                    # duration, aspect_ratio, mode, multi_shots.
+                    payload = {
+                        "model": "kling-3.0/video",
+                        "input": {
+                            "prompt": job.prompt,
+                            "duration": str(duration),
+                            "mode": mode,
+                            "aspect_ratio": "16:9",
+                            "sound": False,
+                            "multi_shots": False,
+                        },
+                    }
+
                 if duration == 15:
                     poll_interval = 25
                     poll_timeout = 900
