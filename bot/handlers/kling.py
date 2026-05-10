@@ -62,6 +62,15 @@ async def create_kling_job(message: Message, state: FSMContext) -> None:
             )
             return
 
+        # Multi-image collection — first URL becomes legacy source_image_url
+        # (DB column), full list is passed via job_payload for the worker.
+        img_urls: list[str] = list(state_data.get("source_image_urls") or [])
+        primary_img = img_urls[0] if img_urls else state_data.get("source_image_url")
+
+        merged_payload = dict(payload or {})
+        if img_urls:
+            merged_payload["source_image_urls"] = img_urls
+
         # Quality already selected → create job immediately
         from backend.services.generation_service import GenerationService
         from bot.services.progress import track_generation_progress
@@ -70,8 +79,8 @@ async def create_kling_job(message: Message, state: FSMContext) -> None:
             provider=AIProvider.KLING,
             prompt=translated,
             original_prompt=prompt,
-            source_image_url=state_data.get("source_image_url"),
-            job_payload=payload,
+            source_image_url=primary_img,
+            job_payload=merged_payload,
             credits=cost,
         )
         msg = await message.answer(
