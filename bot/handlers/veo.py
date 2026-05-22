@@ -147,8 +147,9 @@ async def handle_photo_action(callback, state: FSMContext) -> None:
 
     state_data = await state.get_data()
     if state_data.get("prompt"):
-        # We already have a prompt from caption! Go to quality selection.
-        await _show_provider_quality(callback.message, state, action)
+        # We already have a prompt from the photo's caption!
+        # Go straight to quality selection (or skip it for single-tier providers).
+        await _show_provider_quality(callback, state, action)
         await callback.answer()
         return
 
@@ -156,31 +157,79 @@ async def handle_photo_action(callback, state: FSMContext) -> None:
     await callback.answer()
 
 
-async def _show_provider_quality(message: Message, state: FSMContext, provider: str) -> None:
+async def _show_provider_quality(callback, state: FSMContext, provider: str) -> None:
+    """Show quality keyboard (or skip it for GPT Image 2 single-tier).
+
+    Receives the original CallbackQuery so we have access to the real user
+    (callback.from_user) — `callback.message.from_user` is the bot itself
+    and can't be used for user lookups.
+    """
+    message = callback.message
+    user_tg_id = callback.from_user.id
+
     db = get_db_session()
     try:
         user_service = UserService(db)
-        user = user_service.get_user_by_telegram_id(message.chat.id)
-        lang = user.language_code or "ru"
+        user = user_service.get_user_by_telegram_id(user_tg_id)
+        lang = (user.language_code if user else None) or "ru"
 
-        # GPT Image 2 has a single tier — skip quality menu, create job directly.
+        # GPT Image 2 has a single tier — skip quality menu, create job directly
+        # using the prompt already in state (from the photo's caption).
         if provider == "gpt_image":
             from bot.keyboards.quality_menu import QUALITY_DATA as _QD
             tier = _QD["gpt:std"]
             await state.update_data(quality_cost=tier["cost"], quality_payload=tier["payload"])
-            await state.set_state(NanoBananaStates.waiting_for_prompt)
-            # Re-trigger the prompt handler by sending the saved prompt back through the bot
-            from bot.handlers.nanobanana import handle_nanobanana_prompt
+
             state_data = await state.get_data()
             saved_prompt = state_data.get("prompt") or ""
-            if saved_prompt:
-                class _Fake:
-                    text = saved_prompt
-                    chat = message.chat
-                    from_user = message.from_user
-                    bot = message.bot
-                    async def answer(self, *a, **kw): return await message.answer(*a, **kw)
-                await handle_nanobanana_prompt(_Fake(), state)
+            saved_original = state_data.get("original_prompt") or saved_prompt
+            if not saved_prompt:
+                # Shouldn't happen (caller only invokes this when prompt is set),
+                # but fall back to asking for one.
+                await state.set_state(NanoBananaStates.waiting_for_prompt)
+                await message.answer("🎨 GPT Image 2 выбран. Напиши промпт для Image-to-Image:")
+                return
+
+            img_urls: list[str] = list(state_data.get("source_image_urls") or [])
+            primary_img = img_urls[0] if img_urls else state_data.get("source_image_url")
+            merged_payload = dict(tier["payload"])
+            if img_urls:
+                merged_payload["source_image_urls"] = img_urls
+
+            # Ensure user exists (so balance / job links work)
+            user = user_service.get_or_create_user(
+                telegram_user_id=callback.from_user.id,
+                username=callback.from_user.username,
+                first_name=callback.from_user.first_name,
+                last_name=callback.from_user.last_name,
+            )
+            try:
+                job = GenerationService(db).create_job_for_user(
+                    telegram_user_id=user.telegram_user_id,
+                    provider=AIProvider.GPT_IMAGE,
+                    prompt=saved_prompt,
+                    original_prompt=saved_original,
+                    source_image_url=primary_img,
+                    job_payload=merged_payload,
+                    credits=tier["cost"],
+                )
+            except ValueError as exc:
+                await message.answer(f"❌ {exc}")
+                await state.clear()
+                return
+
+            n_imgs = len(img_urls) if img_urls else (1 if primary_img else 0)
+            imgs_line = f"🖼 Фото в задаче: {n_imgs}\n" if n_imgs > 1 else ""
+            msg = await message.answer(
+                "⏳ <b>GPT Image 2</b> — задача принята.\n\n"
+                f"{imgs_line}💰 Списано: {tier['cost']} кр.\n"
+                "🔄 Готовим результат... (~1–2 мин)",
+                parse_mode="HTML",
+            )
+            asyncio.create_task(
+                track_generation_progress(message.bot, message.chat.id, msg.message_id, job.id)
+            )
+            await state.clear()
             return
 
         # Map action keys to quality keyboard keys
