@@ -32,8 +32,8 @@ async def ask_for_prompt(message: Message, state: FSMContext) -> None:
 async def create_kling_job(message: Message, state: FSMContext) -> None:
     prompt = message.text or ""
     logger.info(f"[KLING] Got prompt: {prompt[:50]}")
-    if len(prompt) < 3 or len(prompt) > 500:
-        await message.answer("❌ Длина промпта должна быть от 3 до 500 символов.")
+    if len(prompt) < 3 or len(prompt) > 2000:
+        await message.answer("❌ Длина промпта должна быть от 3 до 2000 символов.")
         return
 
     db = get_db_session()

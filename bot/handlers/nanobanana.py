@@ -27,8 +27,8 @@ from bot.keyboards.quality_menu import get_quality_keyboard
 @router.message(NanoBananaStates.waiting_for_prompt, F.text)
 async def handle_nanobanana_prompt(message: Message, state: FSMContext) -> None:
     prompt = message.text or ""
-    if len(prompt) < 3 or len(prompt) > 500:
-        await message.answer("❌ Длина промпта: от 3 до 500 символов.")
+    if len(prompt) < 3 or len(prompt) > 2000:
+        await message.answer("❌ Длина промпта: от 3 до 2000 символов.")
         return
 
     db = get_db_session()
