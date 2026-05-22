@@ -132,7 +132,13 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
     # ── Legacy / photo flow: prompt already in state → create job ─────────────
 
     original_prompt = state_data.get("original_prompt")
-    source_image_url = state_data.get("source_image_url")
+    # Multi-photo: caller may have collected several images via the photo flow.
+    # Use the full list in job_payload, with first URL kept in the legacy column.
+    img_urls: list[str] = list(state_data.get("source_image_urls") or [])
+    source_image_url = img_urls[0] if img_urls else state_data.get("source_image_url")
+    merged_payload = dict(payload or {})
+    if img_urls:
+        merged_payload["source_image_urls"] = img_urls
 
     db = get_db_session()
     try:
@@ -143,8 +149,9 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
         lang = user.language_code or lang
 
         provider_map = {
-            "nano": AIProvider.NANO_BANANA,
-            "veo":  AIProvider.VEO,
+            "nano":  AIProvider.NANO_BANANA,
+            "gpt":   AIProvider.GPT_IMAGE,
+            "veo":   AIProvider.VEO,
             "kling": AIProvider.KLING,
         }
         provider = provider_map.get(provider_short)
@@ -165,12 +172,13 @@ async def handle_quality_selection(callback: CallbackQuery, state: FSMContext, b
             prompt=prompt,
             original_prompt=original_prompt,
             source_image_url=source_image_url,
-            job_payload=payload,
+            job_payload=merged_payload,
             credits=cost,
         )
 
         mode_text = {
             AIProvider.NANO_BANANA: "Nano Banana",
+            AIProvider.GPT_IMAGE:   "GPT Image 2",
             AIProvider.VEO:         "Veo 3",
             AIProvider.KLING:       "Kling Motion",
         }.get(provider, "AI")
