@@ -64,12 +64,16 @@ class GenerationRateLimitMiddleware(BaseMiddleware):
                 model_type = state_data.get("provider", "nano_banana")
                 lang = state_data.get("lang", "ru")
                 
+                # Unified prompt length cap across all models — 2000 chars.
+                # KIE.ai docs say nano-banana accepts up to ~2000, Veo 3 ~2000,
+                # Kling up to ~2500; 2000 is a safe shared ceiling.
                 PROMPT_LIMITS = {
-                    "nano_banana": 500,
-                    "veo": 2000,
-                    "kling": 2500,
+                    "nano_banana": 2000,
+                    "gpt_image":   2000,
+                    "veo":         2000,
+                    "kling":       2000,
                 }
-                max_len = PROMPT_LIMITS.get(model_type, 500)
+                max_len = PROMPT_LIMITS.get(model_type, 2000)
                 min_len = 3
                 
                 if len(prompt) < min_len:

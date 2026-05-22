@@ -285,8 +285,8 @@ async def _create_kling_job(message: Message, state: FSMContext, prompt: str, so
 @router.message(VeoStates.waiting_for_prompt, F.text)
 async def handle_veo_prompt_msg(message: Message, state: FSMContext) -> None:
     prompt = message.text or ""
-    if len(prompt) < 3 or len(prompt) > 500:
-        await message.answer("❌ Длина промпта: от 3 до 500 символов.")
+    if len(prompt) < 3 or len(prompt) > 2000:
+        await message.answer("❌ Длина промпта: от 3 до 2000 символов.")
         return
 
     db = get_db_session()
