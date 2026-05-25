@@ -2,10 +2,13 @@
 Extended /admin dashboard — Block 12.
 Only accessible to users listed in ADMIN_IDS env var.
 """
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -14,7 +17,13 @@ from bot.services.db_session import get_db_session
 from backend.models.user import User
 from backend.models.generation_job import GenerationJob
 from backend.models.order import Order
+from backend.models.credit_transaction import CreditTransaction
+from backend.services.balance_service import BalanceService
+from shared.enums.credit_transaction_type import CreditTransactionType
+from shared.enums.job_status import JobStatus
 from backend.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -190,10 +199,127 @@ async def cmd_admin(message: Message) -> None:
             "  /broadcast — рассылка всем",
             "  /broadcast_ru — только русскоязычным",
             "  /broadcast_uz — только узбекоязычным",
+            "  /reset_queue — обнулить очередь (всем юзерам refund)",
         ]
         if alert:
             lines.append(alert)
 
         await message.answer("\n".join(lines), parse_mode="HTML")
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /reset_queue — mark all stuck pending/processing jobs as FAILED + refund.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.message(Command("reset_queue"))
+async def cmd_reset_queue(message: Message, bot: Bot) -> None:
+    """Reset the global generation queue.
+
+    Marks every job in PENDING or PROCESSING status as FAILED, refunds the
+    reserved credits to each affected user (idempotently — won't double-
+    refund if a REFUND transaction already exists for the job), and pings
+    each affected user so they know their stuck task was cancelled.
+    """
+    if message.from_user is None:
+        return
+    admin_ids = _get_admin_ids()
+    if message.from_user.id not in admin_ids:
+        return  # silent — non-admin
+
+    db: Session = get_db_session()
+    try:
+        stuck = (
+            db.query(GenerationJob)
+            .filter(GenerationJob.status.in_([JobStatus.PENDING, JobStatus.PROCESSING]))
+            .all()
+        )
+        total = len(stuck)
+        if total == 0:
+            await message.answer("✅ Очередь пуста — нечего обнулять.")
+            return
+
+        await message.answer(
+            f"⏳ Обнуляю очередь: <b>{total}</b> задач...",
+            parse_mode="HTML",
+        )
+
+        balance_service = BalanceService(db)
+        refunded_users: dict[int, int] = {}  # telegram_user_id -> credits refunded
+        refunded = 0
+        skipped_refund = 0
+        failed = 0
+
+        for job in stuck:
+            try:
+                job.status = JobStatus.FAILED
+                job.error_message = "Очередь сброшена администратором"
+
+                # Refund — idempotent
+                already_refunded = (
+                    db.query(CreditTransaction)
+                    .filter(
+                        CreditTransaction.reference_type == "generation_job",
+                        CreditTransaction.reference_id == str(job.id),
+                        CreditTransaction.transaction_type == CreditTransactionType.REFUND,
+                    )
+                    .first()
+                )
+                if not already_refunded and (job.credits_reserved or 0) > 0:
+                    balance_service.add_credits(
+                        user_id=job.user_id,
+                        amount=job.credits_reserved,
+                        transaction_type=CreditTransactionType.REFUND,
+                        reference_type="generation_job",
+                        reference_id=str(job.id),
+                        comment="Reset queue: admin refund",
+                    )
+                    refunded += 1
+                    # Track per-user totals for the notification ping
+                    user = db.query(User).filter(User.id == job.user_id).first()
+                    if user:
+                        refunded_users[user.telegram_user_id] = (
+                            refunded_users.get(user.telegram_user_id, 0)
+                            + job.credits_reserved
+                        )
+                else:
+                    skipped_refund += 1
+            except Exception as e:
+                failed += 1
+                logger.exception(f"[RESET_QUEUE] job {job.id} failed: {e}")
+
+        db.commit()
+
+        # Notify each affected user
+        notified = 0
+        for tg_id, credits in refunded_users.items():
+            try:
+                await bot.send_message(
+                    chat_id=tg_id,
+                    text=(
+                        "⚠️ Ваша задача была отменена администратором "
+                        "(очередь сброшена из-за сбоя).\n"
+                        f"✅ Возвращено <b>{credits}</b> кр. на баланс."
+                    ),
+                    parse_mode="HTML",
+                )
+                notified += 1
+            except TelegramForbiddenError:
+                pass  # user blocked the bot
+            except TelegramBadRequest:
+                pass
+            except Exception as e:
+                logger.warning(f"[RESET_QUEUE] notify {tg_id} failed: {e}")
+
+        await message.answer(
+            "✅ <b>Очередь обнулена</b>\n\n"
+            f"📋 Задач помечено FAILED: <b>{total}</b>\n"
+            f"💰 Refund-транзакций создано: <b>{refunded}</b>\n"
+            f"⏭ Уже было refund / 0 кр: <b>{skipped_refund}</b>\n"
+            f"⚠️ Ошибок: <b>{failed}</b>\n"
+            f"📨 Юзеров уведомлено: <b>{notified}</b>",
+            parse_mode="HTML",
+        )
     finally:
         db.close()

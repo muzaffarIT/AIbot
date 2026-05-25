@@ -75,12 +75,22 @@ async def handle_photo_input(message: Message, state: FSMContext, bot: Bot) -> N
         source_image_url=urls[0],  # back-compat for single-image consumers
     )
 
-    # If a provider is already chosen and we're past selection, just acknowledge
-    # silently (user is in waiting_for_prompt / waiting_for_quality state — they
-    # changed their mind and added another photo). The accumulated list will be
-    # used when the prompt / quality is finalised.
+    # Provider already chosen — we're inside one of the *States.
     current_state = await state.get_state()
-    if current_state and "waiting_for" in current_state:
+    if current_state and "waiting_for_prompt" in current_state:
+        # Edge case the user actually hits a lot: they tap a tier from the
+        # main menu first (e.g. "🍌 Nano Banana") which puts them into
+        # waiting_for_prompt, and then send a photo WITH a caption. The
+        # caption IS the prompt — create the job immediately instead of
+        # silently absorbing the photo.
+        if caption.strip():
+            provider_str = (await state.get_data()).get("provider") or "nano_banana"
+            await _create_job_from_caption(message, state, provider_str, caption.strip())
+            return
+        await message.answer(f"📸 Добавлено. Всего фото: {len(urls)}\nТеперь напиши промпт текстом.")
+        return
+    if current_state and "waiting_for_quality" in current_state:
+        # Quality keyboard is showing — just accumulate, user will pick a tier.
         await message.answer(f"📸 Добавлено. Всего фото: {len(urls)}")
         return
 
@@ -245,6 +255,117 @@ async def _show_provider_quality(callback, state: FSMContext, provider: str) -> 
             i18n.t(lang, "quality.select"),
             reply_markup=get_quality_keyboard(kb_key, lang)
         )
+    finally:
+        db.close()
+
+
+_PROVIDER_STR_TO_ENUM = {
+    "nano_banana": AIProvider.NANO_BANANA,
+    "gpt_image":   AIProvider.GPT_IMAGE,
+    "veo":         AIProvider.VEO,
+    "kling":       AIProvider.KLING,
+    # backward-compat for old callback keys
+    "veo3":        AIProvider.VEO,
+}
+_PROVIDER_STR_TO_LABEL = {
+    "nano_banana": "Nano Banana",
+    "gpt_image":   "GPT Image 2",
+    "veo":         "Veo 3",
+    "veo3":        "Veo 3",
+    "kling":       "Kling Motion",
+}
+
+
+async def _create_job_from_caption(
+    message: Message,
+    state: FSMContext,
+    provider_str: str,
+    caption: str,
+) -> None:
+    """Create a generation job for a user already in `waiting_for_prompt` state
+    who sent a photo whose caption IS the prompt.
+
+    Quality must have been selected beforehand (cost+payload in state). If not,
+    falls back to asking the user to pick a tier.
+    """
+    state_data = await state.get_data()
+    cost = state_data.get("quality_cost")
+    payload = state_data.get("quality_payload")
+
+    db = get_db_session()
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user_by_telegram_id(message.from_user.id)
+        lang = (user.language_code if user else None) or "ru"
+
+        if cost is None:
+            # No quality picked yet — show the keyboard for this provider.
+            kb_key = "nano_banana" if provider_str == "nano_banana" else (
+                "veo" if provider_str in ("veo", "veo3") else provider_str
+            )
+            quality_state_map = {
+                "nano_banana": NanoBananaStates.waiting_for_quality,
+                "veo":         VeoStates.waiting_for_quality,
+                "veo3":        VeoStates.waiting_for_quality,
+                "kling":       KlingStates.waiting_for_quality,
+            }
+            next_state = quality_state_map.get(provider_str)
+            if next_state:
+                await state.set_state(next_state)
+            await state.update_data(prompt=None)  # caption will be re-saved below
+            from bot.services.translator import translate_prompt
+            translated = translate_prompt(caption)
+            await state.update_data(prompt=translated, original_prompt=caption)
+            await message.answer(
+                i18n.t(lang, "quality.select"),
+                reply_markup=get_quality_keyboard(kb_key, lang),
+            )
+            return
+
+        from bot.services.translator import translate_prompt
+        translated = translate_prompt(caption)
+
+        img_urls: list[str] = list(state_data.get("source_image_urls") or [])
+        primary_img = img_urls[0] if img_urls else state_data.get("source_image_url")
+        merged_payload = dict(payload or {})
+        if img_urls:
+            merged_payload["source_image_urls"] = img_urls
+
+        provider_enum = _PROVIDER_STR_TO_ENUM.get(provider_str, AIProvider.NANO_BANANA)
+        label = _PROVIDER_STR_TO_LABEL.get(provider_str, "AI")
+
+        user = user_service.get_or_create_user(
+            telegram_user_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+            last_name=message.from_user.last_name,
+        )
+        try:
+            job = GenerationService(db).create_job_for_user(
+                telegram_user_id=user.telegram_user_id,
+                provider=provider_enum,
+                prompt=translated,
+                original_prompt=caption,
+                source_image_url=primary_img,
+                job_payload=merged_payload,
+                credits=cost,
+            )
+        except ValueError as exc:
+            await message.answer(f"❌ {exc}")
+            await state.clear()
+            return
+
+        n_imgs = len(img_urls) if img_urls else (1 if primary_img else 0)
+        imgs_line = f"🖼 Фото в задаче: {n_imgs}\n" if n_imgs > 1 else ""
+        sent = await message.answer(
+            f"⏳ <b>{label}</b> — задача принята.\n\n"
+            f"{imgs_line}💰 Списано: {cost} кр.\n🔄 Готовим результат...",
+            parse_mode="HTML",
+        )
+        asyncio.create_task(
+            track_generation_progress(message.bot, message.chat.id, sent.message_id, job.id)
+        )
+        await state.clear()
     finally:
         db.close()
 
