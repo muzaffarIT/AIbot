@@ -863,7 +863,7 @@ def cleanup_stale_jobs_task() -> None:
     try:
         service = GenerationService(db)
         balance_service = BalanceService(db)
-        stale_jobs = service.cleanup_stale_jobs(minutes=30)
+        stale_jobs = service.cleanup_stale_jobs(minutes=15)
         
         if stale_jobs:
             logger.info(f"[Cleanup] Found {len(stale_jobs)} stale jobs")

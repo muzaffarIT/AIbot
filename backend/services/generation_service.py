@@ -121,10 +121,58 @@ class GenerationService:
 
 
         should_process_now = settings.generation_process_now if process_now is None else process_now
+        # GPT Image 2 is only implemented in the Celery worker path
+        # (worker/tasks/generation_tasks.py). The legacy inline `process_job`
+        # has no GPT client and would raise "Unsupported AI provider" AFTER
+        # credits were already deducted. Force-enqueue these to the worker.
+        if provider == AIProvider.GPT_IMAGE:
+            should_process_now = False
+
         if should_process_now:
-            return self.process_job(job.id)
+            try:
+                return self.process_job(job.id)
+            except Exception as exc:
+                # If the legacy inline path blows up for any reason (e.g.
+                # unsupported provider), make sure the user gets their
+                # credits back instead of being silently charged. The job
+                # row is marked FAILED so the bot's progress tracker stops
+                # ticking the "in progress" bubble.
+                logger.exception(f"[INLINE] process_job failed for {job.id}: {exc}")
+                self._refund_and_fail(job.id, str(exc))
+                # Re-raise as ValueError so bot handler shows friendly message
+                raise ValueError(str(exc))
         self.enqueue_job(job.id)
         return job
+
+    def _refund_and_fail(self, job_id: int, error_msg: str) -> None:
+        """Mark job FAILED and refund reserved credits idempotently."""
+        from backend.models.credit_transaction import CreditTransaction
+        job = self.repo.get_by_id(job_id)
+        if not job:
+            return
+        already_refunded = self.db.query(CreditTransaction).filter(
+            CreditTransaction.reference_type == "generation_job",
+            CreditTransaction.reference_id == str(job.id),
+            CreditTransaction.transaction_type == CreditTransactionType.REFUND,
+        ).first()
+        if not already_refunded and (job.credits_reserved or 0) > 0:
+            try:
+                self.balance_service.add_credits(
+                    user_id=job.user_id,
+                    amount=job.credits_reserved,
+                    transaction_type=CreditTransactionType.REFUND,
+                    reference_type="generation_job",
+                    reference_id=str(job.id),
+                    comment=f"Refund after inline failure: {error_msg[:200]}",
+                )
+            except Exception as re:
+                logger.error(f"[INLINE] refund failed for job {job.id}: {re}")
+        self.repo.update_job(
+            job,
+            status=JobStatus.FAILED,
+            error_message=error_msg[:500],
+            completed=True,
+        )
 
     def enqueue_job(self, job_id: int) -> None:
         from worker.tasks.generation_tasks import run_generation_job
@@ -200,14 +248,19 @@ class GenerationService:
             raise ValueError("User not found")
         return self.repo.get_by_user_id(user.id, limit=limit)
 
-    def cleanup_stale_jobs(self, minutes: int = 30):
-        """Finds jobs in PENDING for > 30 mins, fails them and refunds credits."""
+    def cleanup_stale_jobs(self, minutes: int = 15):
+        """Find jobs stuck in PENDING or PROCESSING for > `minutes` and fail them.
+
+        Covers BOTH states so a worker crash mid-flight (job left in
+        PROCESSING with no one polling KIE) doesn't strand the user
+        indefinitely.
+        """
         from datetime import datetime, timedelta, timezone
         threshold = datetime.now(timezone.utc) - timedelta(minutes=minutes)
-        
+
         stale_jobs = self.repo.session.query(self.repo.model).filter(
-            self.repo.model.status == JobStatus.PENDING,
-            self.repo.model.created_at <= threshold
+            self.repo.model.status.in_([JobStatus.PENDING, JobStatus.PROCESSING]),
+            self.repo.model.created_at <= threshold,
         ).all()
         
         from backend.models.credit_transaction import CreditTransaction
