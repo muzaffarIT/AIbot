@@ -21,7 +21,14 @@ class Settings(BaseSettings):
     secret_key: str
     default_language: str = "ru"
     ai_mock_mode: bool = False
-    generation_process_now: bool = True
+    # Route generation jobs through the Celery worker (recommended).
+    # When True, the bot's asyncio loop blocks for the entire generation —
+    # any provider hang freezes the bot AND bypasses worker/tasks/
+    # generation_tasks.py (where all the up-to-date provider routing,
+    # multi-image support, and KIE slug fixes live). Default is now False
+    # so jobs are enqueued; the worker service handles them. Override with
+    # GENERATION_PROCESS_NOW=true in env only for local debugging.
+    generation_process_now: bool = False
     celery_task_always_eager: bool = False
     generation_poll_interval_seconds: int = 2
     generation_poll_attempts: int = 90

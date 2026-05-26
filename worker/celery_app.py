@@ -23,9 +23,13 @@ celery_app.conf.beat_schedule = {
         "task": "worker.tasks.monitoring_tasks.financial_monitor_task",
         "schedule": crontab(minute=0, hour=0),
     },
+    # Run stale-job sweeper every 10 minutes (was daily at midnight). Picks
+    # up jobs stuck in PENDING/PROCESSING > 15 min, marks them FAILED and
+    # refunds credits. Critical for catching worker crashes or KIE hangs
+    # before they sit on the user for hours.
     "cleanup-stale-jobs": {
         "task": "worker.tasks.generation_tasks.cleanup_stale_jobs_task",
-        "schedule": crontab(minute=0, hour=0),
+        "schedule": crontab(minute="*/10"),
     },
     "daily-bonus-reminder": {
         "task": "worker.tasks.notification_tasks.daily_reminder_task",
