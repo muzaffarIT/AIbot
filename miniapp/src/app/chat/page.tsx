@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, Sparkles, ChevronDown, Check, Coins, Brain, Plus, AlertCircle,
-  MessageSquare, ImageIcon, Video, Loader2,
+  MessageSquare, ImageIcon, Video, Loader2, Clock, X,
 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import {
-  api, type ChatModelInfo, type MediaTier, ApiError,
+  api, type ChatModelInfo, type MediaTier, type ChatConversation, ApiError,
 } from "@/lib/api";
 
 type MediaKind = "image" | "video";
@@ -52,6 +52,11 @@ export default function ChatPage() {
   const [mode, setMode] = useState<Mode>("text");
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Conversation history
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [input, setInput] = useState("");
@@ -94,6 +99,49 @@ export default function ChatPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  const refreshConversations = useCallback(() => {
+    const tid = backendUser?.telegram_user_id;
+    if (!tid) return;
+    api.getChatConversations(tid).then((res) => setConversations(res.conversations)).catch(() => {});
+  }, [backendUser?.telegram_user_id]);
+
+  const loadConversation = useCallback(
+    async (convId: number) => {
+      const tid = backendUser?.telegram_user_id;
+      if (!tid) return;
+      try {
+        const res = await api.getChatMessages(tid, convId);
+        const msgs: UiMessage[] = res.messages
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+        setMessages(msgs);
+        setConversationId(convId);
+        setMode("text");
+        setHistoryOpen(false);
+      } catch {
+        /* ignore — leave current view */
+      }
+    },
+    [backendUser?.telegram_user_id],
+  );
+
+  // Load conversation list once, and auto-restore the most recent chat so the
+  // user continues where they left off (like Suzma). "New chat" starts fresh.
+  useEffect(() => {
+    const tid = backendUser?.telegram_user_id;
+    if (!tid || historyLoaded) return;
+    setHistoryLoaded(true);
+    api.getChatConversations(tid)
+      .then((res) => {
+        setConversations(res.conversations);
+        if (res.conversations.length && messages.length === 0) {
+          void loadConversation(res.conversations[0].id);
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backendUser?.telegram_user_id]);
+
   // ── Text chat ──
   const sendText = useCallback(
     async (text: string) => {
@@ -110,6 +158,7 @@ export default function ChatPage() {
           message: text,
           conversation_id: conversationId,
         });
+        const wasNew = conversationId === null;
         setConversationId(res.conversation_id);
         setMessages((prev) => {
           const next = [...prev];
@@ -117,12 +166,13 @@ export default function ChatPage() {
           return next;
         });
         void syncUser();
+        if (wasNew) refreshConversations();
       } catch (e) {
         setMessages((prev) => prev.slice(0, -1));
         setError(e instanceof ApiError ? e.message : uz ? "Xatolik" : "Ошибка");
       }
     },
-    [modelId, backendUser?.telegram_user_id, conversationId, syncUser, uz],
+    [modelId, backendUser?.telegram_user_id, conversationId, syncUser, uz, refreshConversations],
   );
 
   // ── Image / video generation ──
@@ -250,6 +300,13 @@ export default function ChatPage() {
               <span className="text-sm font-bold text-white tabular-nums">{credits}</span>
             </div>
             <button
+              onClick={() => { setHistoryOpen((v) => !v); setPickerOpen(false); }}
+              aria-label={uz ? "Tarix" : "История"}
+              className="w-9 h-9 grid place-items-center rounded-xl bg-white/5 border border-white/10 active:scale-95 transition"
+            >
+              <Clock size={17} className="text-white/80" />
+            </button>
+            <button
               onClick={newChat}
               aria-label={uz ? "Yangi suhbat" : "Новый чат"}
               className="w-9 h-9 grid place-items-center rounded-xl bg-white/5 border border-white/10 active:scale-95 transition"
@@ -258,6 +315,49 @@ export default function ChatPage() {
             </button>
           </div>
         </div>
+
+        {/* History dropdown */}
+        <AnimatePresence>
+          {historyOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="max-w-md mx-auto px-4 pb-3"
+            >
+              <div className="glass-card p-1.5 max-h-[60vh] overflow-y-auto">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/40">
+                    {uz ? "Suhbatlar" : "История чатов"}
+                  </span>
+                  <button onClick={() => setHistoryOpen(false)} className="text-white/40 hover:text-white/70">
+                    <X size={15} />
+                  </button>
+                </div>
+                {conversations.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-white/40 text-center">
+                    {uz ? "Hali suhbatlar yo'q" : "Пока нет диалогов"}
+                  </p>
+                ) : (
+                  conversations.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => loadConversation(c.id)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-2xl text-left transition ${
+                        c.id === conversationId ? "bg-brand-primary/20" : "hover:bg-white/5"
+                      }`}
+                    >
+                      <MessageSquare size={15} className="text-brand-cyan shrink-0" />
+                      <span className="text-sm text-white truncate flex-1">
+                        {c.title || (uz ? "Suhbat" : "Диалог")} #{c.id}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Picker dropdown: text models OR media tiers */}
         <AnimatePresence>
@@ -305,7 +405,7 @@ export default function ChatPage() {
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto pt-16 pb-48 px-4"
-        onClick={() => pickerOpen && setPickerOpen(false)}
+        onClick={() => { if (pickerOpen) setPickerOpen(false); if (historyOpen) setHistoryOpen(false); }}
       >
         <div className="max-w-md mx-auto">
           {messages.length === 0 ? (
