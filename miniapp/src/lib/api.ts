@@ -69,7 +69,21 @@ export type OrdersResponse = {
   orders: OrderSummary[];
 };
 
-export type GenerationProvider = "nano_banana" | "kling" | "veo";
+export type GenerationProvider = "nano_banana" | "kling" | "veo" | "gpt_image";
+
+export type MediaTier = {
+  key: string;
+  label: string;
+  kind: "image" | "video";
+  provider: GenerationProvider;
+  cost: number;
+  emoji: string;
+  note: string;
+};
+
+export type GenerateOptions = {
+  tiers: { image: MediaTier[]; video: MediaTier[] };
+};
 
 export type GenerationJob = {
   id: number;
@@ -323,6 +337,22 @@ export const api = {
 
   getJobs: (telegramId: number, limit = 20) =>
     request<GenerationJobsResponse>(`/api/jobs/telegram/${telegramId}?limit=${limit}`),
+
+  // ── Media generation (image/video) ──
+  getGenerateOptions: () => request<GenerateOptions>("/api/jobs/options"),
+
+  getJob: (jobId: number) => request<GenerationJob>(`/api/jobs/${jobId}`),
+
+  createGeneration: (data: {
+    telegram_user_id: number;
+    quality_key: string;
+    prompt: string;
+    source_image_url?: string | null;
+  }) =>
+    request<GenerationJob>("/api/jobs/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   getPlans: () => request<Plan[]>("/api/plans"),
 

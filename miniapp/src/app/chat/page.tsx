@@ -4,11 +4,24 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, Sparkles, ChevronDown, Check, Coins, Brain, Plus, AlertCircle,
+  MessageSquare, ImageIcon, Video, Loader2,
 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
-import { api, type ChatModelInfo, type ChatMessageDTO, ApiError } from "@/lib/api";
+import {
+  api, type ChatModelInfo, type MediaTier, ApiError,
+} from "@/lib/api";
 
-type UiMessage = { role: "user" | "assistant"; content: string; pending?: boolean };
+type MediaKind = "image" | "video";
+type Mode = "text" | MediaKind;
+
+type UiMessage = {
+  role: "user" | "assistant";
+  content: string;
+  pending?: boolean;
+  pendingKind?: MediaKind;
+  media?: { kind: MediaKind; url: string };
+  isError?: boolean;
+};
 
 const SUGGESTIONS_RU = [
   "Придумай идею для видео в Instagram",
@@ -21,12 +34,22 @@ const SUGGESTIONS_UZ = [
   "Neyrosetlar nima — oddiy tilda tushuntir",
 ];
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export default function ChatPage() {
   const { telegramUser: tgUser, backendUser, language, syncUser } = useMiniAppUser();
   const uz = language === "uz";
 
+  // Text models
   const [models, setModels] = useState<ChatModelInfo[]>([]);
   const [modelId, setModelId] = useState<string>("");
+
+  // Media tiers
+  const [tiers, setTiers] = useState<{ image: MediaTier[]; video: MediaTier[] } | null>(null);
+  const [imageTierKey, setImageTierKey] = useState<string>("");
+  const [videoTierKey, setVideoTierKey] = useState<string>("");
+
+  const [mode, setMode] = useState<Mode>("text");
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [messages, setMessages] = useState<UiMessage[]>([]);
@@ -37,9 +60,13 @@ export default function ChatPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const credits = backendUser?.credits_balance ?? 0;
-  const activeModel = models.find((m) => m.id === modelId);
 
-  // Load available models
+  const activeModel = models.find((m) => m.id === modelId);
+  const activeTierKey = mode === "image" ? imageTierKey : videoTierKey;
+  const activeTier =
+    mode !== "text" && tiers ? tiers[mode].find((t) => t.key === activeTierKey) : undefined;
+
+  // Load text models on mount
   useEffect(() => {
     api.getChatModels()
       .then((res) => {
@@ -50,23 +77,32 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Autoscroll to newest message
+  // Lazily load media tiers the first time a media mode is opened
+  useEffect(() => {
+    if (mode === "text" || tiers) return;
+    api.getGenerateOptions()
+      .then((res) => {
+        setTiers(res.tiers);
+        if (res.tiers.image.length) setImageTierKey((p) => p || res.tiers.image[0].key);
+        if (res.tiers.video.length) setVideoTierKey((p) => p || res.tiers.video[0].key);
+      })
+      .catch(() => setError(uz ? "Rejimlarni yuklab bo'lmadi" : "Не удалось загрузить режимы"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const send = useCallback(
-    async (raw: string) => {
-      const text = raw.trim();
-      if (!text || sending || !modelId || !backendUser?.telegram_user_id) return;
-      setError("");
-      setInput("");
+  // ── Text chat ──
+  const sendText = useCallback(
+    async (text: string) => {
+      if (!modelId || !backendUser?.telegram_user_id) return;
       setMessages((prev) => [
         ...prev,
         { role: "user", content: text },
         { role: "assistant", content: "", pending: true },
       ]);
-      setSending(true);
       try {
         const res = await api.sendChat({
           telegram_user_id: backendUser.telegram_user_id,
@@ -77,20 +113,87 @@ export default function ChatPage() {
         setConversationId(res.conversation_id);
         setMessages((prev) => {
           const next = [...prev];
-          // replace the trailing pending bubble
           next[next.length - 1] = { role: "assistant", content: res.reply };
           return next;
         });
-        void syncUser(); // refresh credit balance
+        void syncUser();
       } catch (e) {
-        const msg = e instanceof ApiError ? e.message : uz ? "Xatolik yuz berdi" : "Произошла ошибка";
-        setMessages((prev) => prev.slice(0, -1)); // drop pending bubble
-        setError(msg);
+        setMessages((prev) => prev.slice(0, -1));
+        setError(e instanceof ApiError ? e.message : uz ? "Xatolik" : "Ошибка");
+      }
+    },
+    [modelId, backendUser?.telegram_user_id, conversationId, syncUser, uz],
+  );
+
+  // ── Image / video generation ──
+  const sendGeneration = useCallback(
+    async (text: string, kind: MediaKind, tierKey: string) => {
+      if (!tierKey || !backendUser?.telegram_user_id) return;
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: text },
+        { role: "assistant", content: "", pending: true, pendingKind: kind },
+      ]);
+      try {
+        const job = await api.createGeneration({
+          telegram_user_id: backendUser.telegram_user_id,
+          quality_key: tierKey,
+          prompt: text,
+        });
+        void syncUser(); // credits are reserved on creation
+
+        // Poll until the worker finishes (video can take a few minutes)
+        let done = job;
+        for (let i = 0; i < 120; i++) {
+          if (done.status === "completed" || done.status === "failed") break;
+          await sleep(3000);
+          done = await api.getJob(job.id);
+        }
+
+        setMessages((prev) => {
+          const next = [...prev];
+          if (done.status === "completed" && done.result_url) {
+            next[next.length - 1] = { role: "assistant", content: "", media: { kind, url: done.result_url } };
+          } else if (done.status === "failed") {
+            next[next.length - 1] = {
+              role: "assistant",
+              content: (uz ? "Generatsiya xato: " : "Генерация не удалась: ") + (done.error_message || "—") + (uz ? " · Kreditlar qaytarildi" : " · Кредиты возвращены"),
+              isError: true,
+            };
+          } else {
+            next[next.length - 1] = {
+              role: "assistant",
+              content: uz
+                ? "Hali tayyorlanmoqda — «Ishlar» bo'limida ko'ring."
+                : "Всё ещё генерируется — результат появится в разделе «Работы».",
+            };
+          }
+          return next;
+        });
+        void syncUser();
+      } catch (e) {
+        setMessages((prev) => prev.slice(0, -1));
+        setError(e instanceof ApiError ? e.message : uz ? "Xatolik" : "Ошибка");
+      }
+    },
+    [backendUser?.telegram_user_id, syncUser, uz],
+  );
+
+  const send = useCallback(
+    async (raw: string) => {
+      const text = raw.trim();
+      if (!text || sending) return;
+      setError("");
+      setInput("");
+      setSending(true);
+      try {
+        if (mode === "text") await sendText(text);
+        else await sendGeneration(text, mode, mode === "image" ? imageTierKey : videoTierKey);
       } finally {
         setSending(false);
       }
     },
-    [sending, modelId, backendUser?.telegram_user_id, conversationId, syncUser, uz],
+    [sending, mode, imageTierKey, videoTierKey, sendText, sendGeneration],
   );
 
   function newChat() {
@@ -102,9 +205,29 @@ export default function ChatPage() {
   const displayName = tgUser?.first_name || (uz ? "Ijodkor" : "Творец");
   const suggestions = uz ? SUGGESTIONS_UZ : SUGGESTIONS_RU;
 
+  const modes: { id: Mode; icon: typeof MessageSquare; labelRu: string; labelUz: string }[] = [
+    { id: "text", icon: MessageSquare, labelRu: "Текст", labelUz: "Matn" },
+    { id: "image", icon: ImageIcon, labelRu: "Фото", labelUz: "Rasm" },
+    { id: "video", icon: Video, labelRu: "Видео", labelUz: "Video" },
+  ];
+
+  const pickerLabel =
+    mode === "text"
+      ? activeModel?.label ?? (uz ? "Модель" : "Модель")
+      : activeTier
+        ? `${activeTier.emoji} ${activeTier.label}`
+        : uz ? "Rejim" : "Режим";
+
+  const placeholder =
+    mode === "text"
+      ? uz ? "Xabar yozing…" : "Напишите сообщение…"
+      : mode === "image"
+        ? uz ? "Rasmni tasvirlab bering…" : "Опишите изображение…"
+        : uz ? "Videoni tasvirlab bering…" : "Опишите видео…";
+
   return (
     <main className="min-h-screen flex flex-col">
-      {/* ── Header: model selector + balance ── */}
+      {/* ── Header: model/tier selector + balance ── */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-brand-900/80 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between gap-3">
           <button
@@ -112,9 +235,12 @@ export default function ChatPage() {
             className="flex items-center gap-2 min-w-0 px-3 py-2 rounded-xl bg-white/5 border border-white/10 active:scale-95 transition"
           >
             <Sparkles size={16} className="text-brand-cyan shrink-0" />
-            <span className="text-sm font-semibold text-white truncate">
-              {activeModel?.label ?? (uz ? "Model" : "Модель")}
-            </span>
+            <span className="text-sm font-semibold text-white truncate">{pickerLabel}</span>
+            {mode !== "text" && activeTier && (
+              <span className="text-[11px] font-bold text-brand-accent flex items-center gap-0.5 shrink-0">
+                <Coins size={10} />{activeTier.cost}
+              </span>
+            )}
             <ChevronDown size={15} className={`text-white/50 shrink-0 transition ${pickerOpen ? "rotate-180" : ""}`} />
           </button>
 
@@ -133,7 +259,7 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Model picker dropdown */}
+        {/* Picker dropdown: text models OR media tiers */}
         <AnimatePresence>
           {pickerOpen && (
             <motion.div
@@ -143,30 +269,32 @@ export default function ChatPage() {
               className="max-w-md mx-auto px-4 pb-3"
             >
               <div className="glass-card p-1.5 max-h-[60vh] overflow-y-auto">
-                {models.map((m) => {
-                  const active = m.id === modelId;
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => { setModelId(m.id); setPickerOpen(false); }}
-                      className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition ${active ? "bg-brand-primary/20" : "hover:bg-white/5"}`}
-                    >
-                      <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-brand-primary to-brand-cyan grid place-items-center">
-                        {m.reasoning ? <Brain size={16} className="text-white" /> : <Sparkles size={16} className="text-white" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-white">{m.label}</span>
-                          {active && <Check size={14} className="text-brand-cyan shrink-0" />}
-                        </div>
-                        <p className="text-xs text-white/45 leading-snug mt-0.5">{m.description}</p>
-                      </div>
-                      <span className="shrink-0 text-[11px] font-bold text-brand-accent flex items-center gap-1 mt-0.5">
-                        <Coins size={11} />{m.cost}
-                      </span>
-                    </button>
-                  );
-                })}
+                {mode === "text"
+                  ? models.map((m) => (
+                      <PickerRow
+                        key={m.id}
+                        active={m.id === modelId}
+                        icon={m.reasoning ? <Brain size={16} className="text-white" /> : <Sparkles size={16} className="text-white" />}
+                        title={m.label}
+                        subtitle={m.description}
+                        cost={m.cost}
+                        onClick={() => { setModelId(m.id); setPickerOpen(false); }}
+                      />
+                    ))
+                  : (tiers?.[mode] ?? []).map((t) => (
+                      <PickerRow
+                        key={t.key}
+                        active={t.key === activeTierKey}
+                        icon={<span className="text-base leading-none">{t.emoji}</span>}
+                        title={t.label}
+                        subtitle={t.note}
+                        cost={t.cost}
+                        onClick={() => {
+                          if (mode === "image") setImageTierKey(t.key); else setVideoTierKey(t.key);
+                          setPickerOpen(false);
+                        }}
+                      />
+                    ))}
               </div>
             </motion.div>
           )}
@@ -176,7 +304,7 @@ export default function ChatPage() {
       {/* ── Messages ── */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto pt-16 pb-40 px-4"
+        className="flex-1 overflow-y-auto pt-16 pb-48 px-4"
         onClick={() => pickerOpen && setPickerOpen(false)}
       >
         <div className="max-w-md mx-auto">
@@ -189,24 +317,30 @@ export default function ChatPage() {
                 {uz ? `Salom, ${displayName}!` : `Привет, ${displayName}!`}
               </h1>
               <p className="text-sm text-white/50 mb-8">
-                {uz ? "Nima haqida gaplashamiz?" : "О чём поговорим?"}
+                {mode === "text"
+                  ? uz ? "Nima haqida gaplashamiz?" : "О чём поговорим?"
+                  : mode === "image"
+                    ? uz ? "Qanday rasm yarataylik?" : "Какое изображение создать?"
+                    : uz ? "Qanday video yarataylik?" : "Какое видео создать?"}
               </p>
-              <div className="w-full space-y-2">
-                {suggestions.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => send(s)}
-                    className="w-full glass-panel p-3.5 text-left text-sm text-white/80 hover:bg-white/5 transition active:scale-[0.99]"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              {mode === "text" && (
+                <div className="w-full space-y-2">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => send(s)}
+                      className="w-full glass-panel p-3.5 text-left text-sm text-white/80 hover:bg-white/5 transition active:scale-[0.99]"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3 pt-2">
               {messages.map((m, i) => (
-                <MessageBubble key={i} role={m.role} content={m.content} pending={m.pending} />
+                <MessageBubble key={i} msg={m} uz={uz} />
               ))}
             </div>
           )}
@@ -222,33 +356,101 @@ export default function ChatPage() {
 
       {/* ── Input bar (sits above the bottom nav) ── */}
       <div className="fixed bottom-16 left-0 right-0 z-40 bg-brand-900/85 backdrop-blur-xl border-t border-white/10 pb-2 pt-2">
-        <div className="max-w-md mx-auto px-3 flex items-end gap-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(input); }
-            }}
-            rows={1}
-            placeholder={uz ? "Xabar yozing…" : "Напишите сообщение…"}
-            className="flex-1 resize-none max-h-32 bg-brand-800/80 border border-white/10 rounded-2xl text-white placeholder-white/35 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition"
-          />
-          <button
-            onClick={() => void send(input)}
-            disabled={sending || !input.trim()}
-            aria-label={uz ? "Yuborish" : "Отправить"}
-            className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-gradient-to-br from-brand-primary to-brand-cyan text-white shadow-lg shadow-brand-primary/30 disabled:opacity-40 disabled:shadow-none active:scale-95 transition"
-          >
-            <Send size={18} />
-          </button>
+        <div className="max-w-md mx-auto px-3 space-y-2">
+          {/* Mode toggle */}
+          <div className="flex items-center gap-1.5">
+            {modes.map(({ id, icon: Icon, labelRu, labelUz }) => {
+              const active = mode === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => { setMode(id); setPickerOpen(false); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+                    active
+                      ? "bg-gradient-to-r from-brand-primary to-brand-cyan text-white"
+                      : "bg-white/5 text-white/50 border border-white/10"
+                  }`}
+                >
+                  <Icon size={13} />
+                  {uz ? labelUz : labelRu}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-end gap-2">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(input); }
+              }}
+              rows={1}
+              placeholder={placeholder}
+              disabled={sending}
+              className="flex-1 resize-none max-h-32 bg-brand-800/80 border border-white/10 rounded-2xl text-white placeholder-white/35 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition disabled:opacity-60"
+            />
+            <button
+              onClick={() => void send(input)}
+              disabled={sending || !input.trim()}
+              aria-label={uz ? "Yuborish" : "Отправить"}
+              className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-gradient-to-br from-brand-primary to-brand-cyan text-white shadow-lg shadow-brand-primary/30 disabled:opacity-40 disabled:shadow-none active:scale-95 transition"
+            >
+              {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+            </button>
+          </div>
         </div>
       </div>
     </main>
   );
 }
 
-function MessageBubble({ role, content, pending }: { role: "user" | "assistant"; content: string; pending?: boolean }) {
-  const isUser = role === "user";
+function PickerRow({
+  active, icon, title, subtitle, cost, onClick,
+}: {
+  active: boolean; icon: React.ReactNode; title: string; subtitle: string; cost: number; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left transition ${active ? "bg-brand-primary/20" : "hover:bg-white/5"}`}
+    >
+      <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-brand-primary to-brand-cyan grid place-items-center">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-white">{title}</span>
+          {active && <Check size={14} className="text-brand-cyan shrink-0" />}
+        </div>
+        {subtitle && <p className="text-xs text-white/45 leading-snug mt-0.5">{subtitle}</p>}
+      </div>
+      <span className="shrink-0 text-[11px] font-bold text-brand-accent flex items-center gap-1 mt-0.5">
+        <Coins size={11} />{cost}
+      </span>
+    </button>
+  );
+}
+
+function MessageBubble({ msg, uz }: { msg: UiMessage; uz: boolean }) {
+  const isUser = msg.role === "user";
+
+  // Media result bubble (image / video)
+  if (msg.media) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
+        <div className="max-w-[85%] rounded-2xl rounded-bl-md overflow-hidden glass-panel p-1">
+          {msg.media.kind === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={msg.media.url} alt="result" className="rounded-xl w-full h-auto" />
+          ) : (
+            <video src={msg.media.url} controls playsInline className="rounded-xl w-full h-auto" />
+          )}
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -259,12 +461,31 @@ function MessageBubble({ role, content, pending }: { role: "user" | "assistant";
         className={`max-w-[85%] px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
           isUser
             ? "bg-gradient-to-br from-brand-primary to-brand-primary/80 text-white rounded-2xl rounded-br-md"
-            : "glass-panel text-white/90 rounded-2xl rounded-bl-md"
+            : msg.isError
+              ? "bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl rounded-bl-md"
+              : "glass-panel text-white/90 rounded-2xl rounded-bl-md"
         }`}
       >
-        {pending ? <TypingDots /> : content}
+        {msg.pending
+          ? msg.pendingKind
+            ? <GeneratingLabel kind={msg.pendingKind} uz={uz} />
+            : <TypingDots />
+          : msg.content}
       </div>
     </motion.div>
+  );
+}
+
+function GeneratingLabel({ kind, uz }: { kind: MediaKind; uz: boolean }) {
+  const label =
+    kind === "image"
+      ? uz ? "Rasm tayyorlanmoqda…" : "Генерирую изображение…"
+      : uz ? "Video tayyorlanmoqda…" : "Генерирую видео…";
+  return (
+    <span className="inline-flex items-center gap-2 py-0.5 text-white/70">
+      <Loader2 size={15} className="animate-spin text-brand-cyan" />
+      {label}
+    </span>
   );
 }
 

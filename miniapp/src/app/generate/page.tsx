@@ -43,6 +43,13 @@ const AI_LIST: AIOption[] = [
     type: "image",
   },
   {
+    id: "gpt_image",
+    label: "🎨 GPT Image 2",
+    descriptionRu: "Изображения от OpenAI — точные детали и текст",
+    descriptionUz: "OpenAI'dan rasmlar — aniq detallar va matn",
+    type: "image",
+  },
+  {
     id: "veo",
     label: "🎬 Veo 3",
     descriptionRu: "Видео от Google — плавное и реалистичное",
@@ -58,20 +65,26 @@ const AI_LIST: AIOption[] = [
   },
 ];
 
+// Costs mirror the backend canonical registry (backend/integrations/ai/media_tiers.py).
 const MODES: Record<GenerationProvider, ModeOption[]> = {
   nano_banana: [
-    { key: "nano:std", labelRu: "Стандарт 1K",  labelUz: "Standart 1K",  detailRu: "1024×1024 · быстро",    detailUz: "1024×1024 · tez",       cost: 5  },
-    { key: "nano:hd",  labelRu: "HD 2K",         labelUz: "HD 2K",        detailRu: "1536×1536 · высокое",   detailUz: "1536×1536 · yuqori",    cost: 10 },
-    { key: "nano:4k",  labelRu: "4K Ultra",       labelUz: "4K Ultra",     detailRu: "2048×2048 · максимум",  detailUz: "2048×2048 · maksimal",  cost: 20 },
+    { key: "nano:std",    labelRu: "Nano Banana",       labelUz: "Nano Banana",       detailRu: "1K · быстро",     detailUz: "1K · tez",        cost: 10 },
+    { key: "nano:hd",     labelRu: "Nano Banana 2",     labelUz: "Nano Banana 2",     detailRu: "2K",              detailUz: "2K",              cost: 20 },
+    { key: "nano:pro_hd", labelRu: "Nano Banana Pro",   labelUz: "Nano Banana Pro",   detailRu: "2K · Pro",        detailUz: "2K · Pro",        cost: 30 },
+    { key: "nano:4k",     labelRu: "Nano Banana Pro 4K", labelUz: "Nano Banana Pro 4K", detailRu: "4K",            detailUz: "4K",              cost: 50 },
+  ],
+  gpt_image: [
+    { key: "gpt:std", labelRu: "GPT Image 2", labelUz: "GPT Image 2", detailRu: "OpenAI · высокое качество", detailUz: "OpenAI · yuqori sifat", cost: 30 },
   ],
   veo: [
-    { key: "veo:fast",    labelRu: "Fast 720p",    labelUz: "Fast 720p",    detailRu: "720p · 8 сек · быстро",     detailUz: "720p · 8 son · tez",       cost: 30 },
-    { key: "veo:quality", labelRu: "Quality 1080p", labelUz: "Quality 1080p", detailRu: "1080p · 8 сек · качество", detailUz: "1080p · 8 son · sifatli",  cost: 80 },
+    { key: "veo:fast",    labelRu: "Veo 3 Fast",     labelUz: "Veo 3 Fast",     detailRu: "720p · быстро",       detailUz: "720p · tez",         cost: 30 },
+    { key: "veo:quality", labelRu: "Veo 3 Quality",  labelUz: "Veo 3 Quality",  detailRu: "1080p · качество",    detailUz: "1080p · sifatli",    cost: 80 },
+    { key: "veo:4k",      labelRu: "Veo 3 · 4K",     labelUz: "Veo 3 · 4K",     detailRu: "4K · апскейл",        detailUz: "4K · apskeyl",       cost: 90 },
   ],
   kling: [
-    { key: "kling:std5",  labelRu: "Стандарт 5 сек", labelUz: "Standart 5 son", detailRu: "Стандарт · 5 секунд",  detailUz: "Standart · 5 soniya",  cost: 40  },
-    { key: "kling:pro5",  labelRu: "Pro 5 сек",       labelUz: "Pro 5 son",      detailRu: "Pro · 5 секунд",       detailUz: "Pro · 5 soniya",       cost: 70  },
-    { key: "kling:pro10", labelRu: "Pro 10 сек",      labelUz: "Pro 10 son",     detailRu: "Pro · 10 секунд",      detailUz: "Pro · 10 soniya",      cost: 120 },
+    { key: "kling:std5",  labelRu: "Kling · 5 сек",   labelUz: "Kling · 5 son",   detailRu: "Стандарт · 5 секунд", detailUz: "Standart · 5 soniya", cost: 40  },
+    { key: "kling:pro5",  labelRu: "Kling Pro · 5 сек", labelUz: "Kling Pro · 5 son", detailRu: "Pro · 5 секунд",   detailUz: "Pro · 5 soniya",     cost: 70  },
+    { key: "kling:pro10", labelRu: "Kling Pro · 10 сек", labelUz: "Kling Pro · 10 son", detailRu: "Pro · 10 секунд", detailUz: "Pro · 10 soniya",  cost: 120 },
   ],
 };
 

@@ -3,26 +3,15 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.api.deps import get_db
+from backend.integrations.ai import media_tiers
 from backend.services.generation_service import GenerationService
 
 router = APIRouter()
 
 
-QUALITY_PRESETS: dict[str, dict] = {
-    "nano:std":     {"cost": 5,   "payload": {"image_size": "1:1"}},
-    "nano:hd":      {"cost": 10,  "payload": {"image_size": "1536x1536"}},
-    "nano:4k":      {"cost": 20,  "payload": {"image_size": "2048x2048"}},
-    "veo:fast":     {"cost": 30,  "payload": {"model": "veo3_fast"}},
-    "veo:quality":  {"cost": 80,  "payload": {"model": "veo3_quality"}},
-    "kling:std5":   {"cost": 40,  "payload": {"mode": "std", "duration": "5"}},
-    "kling:pro5":   {"cost": 70,  "payload": {"mode": "pro", "duration": "5"}},
-    "kling:pro10":  {"cost": 120, "payload": {"mode": "pro", "duration": "10"}},
-}
-
-
 class CreateJobRequest(BaseModel):
     telegram_user_id: int
-    provider: str
+    provider: str | None = None  # derived from the tier when omitted
     quality_key: str | None = None
     prompt: str
     source_image_url: str | None = None
@@ -46,6 +35,12 @@ def serialize_job(job) -> dict:
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "updated_at": job.updated_at.isoformat() if job.updated_at else None,
     }
+
+
+@router.get("/options")
+def get_generation_options() -> dict:
+    """Image + video tiers (key, label, provider, cost) for the mini app."""
+    return {"tiers": media_tiers.tiers_by_kind()}
 
 
 @router.get("/telegram/{telegram_user_id}")
@@ -86,14 +81,25 @@ def create_job(payload: CreateJobRequest, db: Session = Depends(get_db)) -> dict
 
         job_payload: dict | None = None
         credits: int | None = None
-        if payload.quality_key and payload.quality_key in QUALITY_PRESETS:
-            preset = QUALITY_PRESETS[payload.quality_key]
-            job_payload = preset["payload"]
-            credits = preset["cost"]
+        provider = payload.provider
+
+        # Resolve the tier canonically — provider + cost + worker payload all
+        # come from the registry so the mini app can't send a stale price or an
+        # incorrect provider for the chosen quality.
+        if payload.quality_key:
+            tier = media_tiers.get_tier(payload.quality_key)
+            if tier is None:
+                raise HTTPException(status_code=400, detail="Unknown quality tier")
+            job_payload = dict(tier.payload)
+            credits = tier.cost
+            provider = tier.provider
+
+        if not provider:
+            raise HTTPException(status_code=400, detail="provider or quality_key required")
 
         job = service.create_job_for_user(
             telegram_user_id=payload.telegram_user_id,
-            provider=payload.provider,
+            provider=provider,
             prompt=payload.prompt,
             source_image_url=payload.source_image_url,
             job_payload=job_payload,
