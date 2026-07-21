@@ -39,6 +39,11 @@ celery_app.conf.beat_schedule = {
         "task": "worker.tasks.notification_tasks.lifecycle_notification_task",
         "schedule": crontab(minute=0, hour=0),
     },
+    # Win-back dormant users once a day at 15:00 Tashkent (good send window).
+    "winback-inactive": {
+        "task": "worker.tasks.notification_tasks.winback_inactive_task",
+        "schedule": crontab(minute=0, hour=15),
+    },
     "daily-sheets-summary": {
         "task": "worker.tasks.monitoring_tasks.daily_sheets_summary",
         "schedule": crontab(hour=23, minute=59),
