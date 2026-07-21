@@ -7,5 +7,6 @@ from backend.models.payment import Payment
 from backend.models.webhook_log import WebhookLog
 from backend.models.generation_job import GenerationJob
 from backend.models.achievement import Achievement
+from backend.models.chat import Conversation, ChatMessage
 
-__all__ = ["User", "Balance", "CreditTransaction", "Plan", "Order", "Payment", "WebhookLog", "GenerationJob", "Achievement"]
+__all__ = ["User", "Balance", "CreditTransaction", "Plan", "Order", "Payment", "WebhookLog", "GenerationJob", "Achievement", "Conversation", "ChatMessage"]

@@ -45,6 +45,23 @@ class Settings(BaseSettings):
     kling_api_key: str | None = None
     veo_api_key: str | None = None
 
+    # ── AI text chat (LLM) ────────────────────────────────────────────────
+    # KIE.ai exposes chat models on two endpoints:
+    #   /api/v1/chat/completions  — OpenAI-compatible (deepseek, most families)
+    #   /codex/v1/responses       — OpenAI "responses" style (GPT-5.6 sol/luna)
+    kie_chat_path: str = "/api/v1/chat/completions"
+    kie_codex_path: str = "/codex/v1/responses"
+    # Default credits charged per assistant reply (per-model cost overrides this
+    # in the model registry). Kept low & configurable — recalc later.
+    chat_default_credit_cost: int = 1
+    # How many previous messages of a conversation to send as context.
+    chat_history_window: int = 20
+    # Cap on generated tokens per reply.
+    chat_max_tokens: int = 1200
+    # Optional comma-separated allow-list of model ids to expose in the UI.
+    # Empty = use the registry's own `enabled` flags.
+    chat_models_enabled: str = ""
+
     cards_provider_key: str | None = None
     cards_provider_secret: str | None = None
 

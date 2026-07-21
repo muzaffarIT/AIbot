@@ -6,6 +6,7 @@ from backend.api.routes.plans import router as plans_router
 from backend.api.routes.orders import router as orders_router
 from backend.api.routes.payments import router as payments_router
 from backend.api.routes.jobs import router as jobs_router
+from backend.api.routes.chat import router as chat_router
 from backend.api.routes.upload import router as upload_router
 from backend.api.routes.cards_webhook import router as cards_webhook_router
 from backend.api.routes.payme_webhook import router as payme_webhook_router
@@ -19,6 +20,7 @@ api_router.include_router(plans_router, prefix="/plans", tags=["plans"])
 api_router.include_router(orders_router, prefix="/orders", tags=["orders"])
 api_router.include_router(payments_router, prefix="/payments", tags=["payments"])
 api_router.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
+api_router.include_router(chat_router, prefix="/chat", tags=["chat"])
 api_router.include_router(upload_router, prefix="/upload", tags=["upload"])
 api_router.include_router(cards_webhook_router, prefix="/webhooks/cards", tags=["webhooks"])
 api_router.include_router(payme_webhook_router, prefix="/webhooks/payme", tags=["webhooks"])

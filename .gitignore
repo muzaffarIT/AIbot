@@ -56,3 +56,6 @@ miniapp/node_modules/
 storage/
 tmp/
 *.db
+
+# ephemeral Claude Code git worktrees (never track)
+.claude/worktrees/

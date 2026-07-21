@@ -2,16 +2,16 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { UserCircle, Package, Users, ClipboardList } from "lucide-react";
+import { MessageCircle, Package, Users, UserCircle } from "lucide-react";
 
 export function BottomNav() {
   const pathname = usePathname();
 
   const items = [
-    { href: "/profile",     icon: UserCircle,    labelRu: "Профиль",   labelUz: "Profil"    },
+    { href: "/chat",        icon: MessageCircle, labelRu: "Чат",       labelUz: "Chat"      },
     { href: "/plans",       icon: Package,       labelRu: "Услуги",    labelUz: "Xizmatlar" },
     { href: "/referral",    icon: Users,         labelRu: "Партнёры",  labelUz: "Hamkorlar" },
-    { href: "/jobs",        icon: ClipboardList, labelRu: "Работы",    labelUz: "Ishlar"    },
+    { href: "/profile",     icon: UserCircle,    labelRu: "Профиль",   labelUz: "Profil"    },
   ] as const;
 
   // Read language from localStorage (set by profile page switcher)

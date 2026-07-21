@@ -169,6 +169,45 @@ export type UzsHistoryResponse = {
   transactions: UzsTransaction[];
 };
 
+// ─── Chat (AI text) ───────────────────────────────────────────────────────────
+
+export type ChatModelInfo = {
+  id: string;
+  label: string;
+  group: string;
+  cost: number;
+  reasoning: boolean;
+  description: string;
+};
+
+export type ChatRole = "user" | "assistant" | "system";
+
+export type ChatMessageDTO = {
+  id: number;
+  role: ChatRole;
+  content: string;
+  model_id?: string | null;
+  credits_charged: number;
+  created_at?: string | null;
+};
+
+export type ChatConversation = {
+  id: number;
+  model_id?: string | null;
+  title?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type SendChatResponse = {
+  conversation_id: number;
+  model_id: string;
+  reply: string;
+  credits_charged: number;
+  credits_balance: number;
+  message_id: number;
+};
+
 // ─── Error class ──────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -286,6 +325,30 @@ export const api = {
     request<GenerationJobsResponse>(`/api/jobs/telegram/${telegramId}?limit=${limit}`),
 
   getPlans: () => request<Plan[]>("/api/plans"),
+
+  // ── Chat ──
+  getChatModels: () => request<{ models: ChatModelInfo[] }>("/api/chat/models"),
+
+  getChatConversations: (telegramId: number, limit = 30) =>
+    request<{ conversations: ChatConversation[] }>(
+      `/api/chat/conversations/${telegramId}?limit=${limit}`
+    ),
+
+  getChatMessages: (telegramId: number, conversationId: number, limit = 100) =>
+    request<{ conversation_id: number; messages: ChatMessageDTO[] }>(
+      `/api/chat/conversations/${telegramId}/${conversationId}/messages?limit=${limit}`
+    ),
+
+  sendChat: (data: {
+    telegram_user_id: number;
+    model_id: string;
+    message: string;
+    conversation_id?: number | null;
+  }) =>
+    request<SendChatResponse>("/api/chat/send", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   getBalanceHistory: (telegramId: number, limit = 20) =>
     request<BalanceHistoryResponse>(
