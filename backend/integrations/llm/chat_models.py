@@ -28,9 +28,26 @@ class ChatModel:
     description: str = ""
 
 
-# Order matters — first enabled model is the default selection.
+# Order matters — first enabled model is the default selection, so keep a
+# currently-working model at the top. Live-status verified against KIE:
+#   • gpt-5-6-luna / sol (codex endpoint) → WORKING
+#   • deepseek-* (chat/completions)       → recognised, intermittently in
+#     maintenance on KIE's side (kept enabled — comes back)
+#   • gemini-* / claude-*                 → slug not yet enabled by KIE
+#     ("Operation not found") → disabled until it goes live; flip enabled=True
 CHAT_MODELS: tuple[ChatModel, ...] = (
-    # ── DeepSeek (confirmed live on KIE /chat/completions) ────────────────
+    # ── OpenAI GPT-5.6 (KIE /codex/v1/responses) — verified working ───────
+    ChatModel(
+        id="gpt-5-6-luna", label="ChatGPT 5.6 Luna", slug="gpt-5-6-luna",
+        adapter="kie_codex", cost=2, group="ChatGPT",
+        description="Быстрый и сбалансированный. Отвечает на любые вопросы.",
+    ),
+    ChatModel(
+        id="gpt-5-6-sol", label="ChatGPT 5.6 Sol", slug="gpt-5-6-sol",
+        adapter="kie_codex", cost=3, group="ChatGPT", reasoning=True,
+        description="Флагман OpenAI — сильный в рассуждениях и коде.",
+    ),
+    # ── DeepSeek (KIE /chat/completions) ──────────────────────────────────
     ChatModel(
         id="deepseek-chat", label="DeepSeek V3", slug="deepseek-chat",
         adapter="kie_chat", cost=1, group="DeepSeek",
@@ -41,26 +58,15 @@ CHAT_MODELS: tuple[ChatModel, ...] = (
         adapter="kie_chat", cost=2, group="DeepSeek", reasoning=True,
         description="Рассуждающая модель — сложные задачи, код, логика.",
     ),
-    # ── OpenAI GPT-5.6 (KIE /codex/v1/responses) ──────────────────────────
-    ChatModel(
-        id="gpt-5-6-sol", label="ChatGPT 5.6 Sol", slug="gpt-5-6-sol",
-        adapter="kie_codex", cost=3, group="ChatGPT",
-        description="Флагман OpenAI — сильный в рассуждениях и коде.",
-    ),
-    ChatModel(
-        id="gpt-5-6-luna", label="ChatGPT 5.6 Luna", slug="gpt-5-6-luna",
-        adapter="kie_codex", cost=2, group="ChatGPT",
-        description="Быстрый и сбалансированный вариант GPT-5.6.",
-    ),
-    # ── Google Gemini (documented on KIE) ─────────────────────────────────
+    # ── Google Gemini (enable when KIE turns the slug on) ─────────────────
     ChatModel(
         id="gemini-2-5-flash", label="Gemini 2.5 Flash", slug="gemini-2-5-flash",
-        adapter="kie_chat", cost=1, group="Gemini",
+        adapter="kie_chat", cost=1, group="Gemini", enabled=False,
         description="Быстрые ответы, длинный контекст.",
     ),
     ChatModel(
         id="gemini-2-5-pro", label="Gemini 2.5 Pro", slug="gemini-2-5-pro",
-        adapter="kie_chat", cost=2, group="Gemini", reasoning=True,
+        adapter="kie_chat", cost=2, group="Gemini", reasoning=True, enabled=False,
         description="Продвинутые рассуждения для сложных промптов.",
     ),
     # ── Anthropic Claude (enable when the KIE slug is confirmed) ───────────
