@@ -341,6 +341,12 @@ export const api = {
   // ── Media generation (image/video) ──
   getGenerateOptions: () => request<GenerateOptions>("/api/jobs/options"),
 
+  uploadImage: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return requestMultipart<{ url: string }>("/api/upload", form);
+  },
+
   getJob: (jobId: number) => request<GenerationJob>(`/api/jobs/${jobId}`),
 
   createGeneration: (data: {

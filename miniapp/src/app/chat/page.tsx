@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, Sparkles, ChevronDown, Check, Coins, Brain, Plus, AlertCircle,
-  MessageSquare, ImageIcon, Video, Loader2, Clock, X,
+  MessageSquare, ImageIcon, Video, Loader2, Clock, X, Paperclip,
 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import {
@@ -62,6 +62,12 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+
+  // Attached reference photo (image-to-image / image-to-video)
+  const [attachPreview, setAttachPreview] = useState<string | null>(null);
+  const [attachUrl, setAttachUrl] = useState<string | null>(null);
+  const [attachUploading, setAttachUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const credits = backendUser?.credits_balance ?? 0;
@@ -177,18 +183,19 @@ export default function ChatPage() {
 
   // ── Image / video generation ──
   const sendGeneration = useCallback(
-    async (text: string, kind: MediaKind, tierKey: string) => {
+    async (text: string, kind: MediaKind, tierKey: string, sourceImageUrl?: string | null) => {
       if (!tierKey || !backendUser?.telegram_user_id) return;
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: text },
-        { role: "assistant", content: "", pending: true, pendingKind: kind },
-      ]);
+      const newMsgs: UiMessage[] = [];
+      if (sourceImageUrl) newMsgs.push({ role: "user", content: "", media: { kind: "image", url: sourceImageUrl } });
+      newMsgs.push({ role: "user", content: text });
+      newMsgs.push({ role: "assistant", content: "", pending: true, pendingKind: kind });
+      setMessages((prev) => [...prev, ...newMsgs]);
       try {
         const job = await api.createGeneration({
           telegram_user_id: backendUser.telegram_user_id,
           quality_key: tierKey,
           prompt: text,
+          source_image_url: sourceImageUrl ?? null,
         });
         void syncUser(); // credits are reserved on creation
 
@@ -232,24 +239,51 @@ export default function ChatPage() {
   const send = useCallback(
     async (raw: string) => {
       const text = raw.trim();
-      if (!text || sending) return;
+      if (!text || sending || attachUploading) return;
       setError("");
       setInput("");
+      const srcUrl = attachUrl;
+      setAttachPreview(null);
+      setAttachUrl(null);
       setSending(true);
       try {
         if (mode === "text") await sendText(text);
-        else await sendGeneration(text, mode, mode === "image" ? imageTierKey : videoTierKey);
+        else await sendGeneration(text, mode, mode === "image" ? imageTierKey : videoTierKey, srcUrl);
       } finally {
         setSending(false);
       }
     },
-    [sending, mode, imageTierKey, videoTierKey, sendText, sendGeneration],
+    [sending, attachUploading, attachUrl, mode, imageTierKey, videoTierKey, sendText, sendGeneration],
   );
+
+  async function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    setError("");
+    setAttachPreview(URL.createObjectURL(file));
+    setAttachUploading(true);
+    try {
+      const res = await api.uploadImage(file);
+      setAttachUrl(res.url);
+    } catch {
+      setError(uz ? "Rasmni yuklab bo'lmadi" : "Не удалось загрузить фото");
+      setAttachPreview(null);
+    } finally {
+      setAttachUploading(false);
+    }
+  }
+
+  function removeAttach() {
+    setAttachPreview(null);
+    setAttachUrl(null);
+  }
 
   function newChat() {
     setMessages([]);
     setConversationId(null);
     setError("");
+    removeAttach();
   }
 
   const displayName = tgUser?.first_name || (uz ? "Ijodkor" : "Творец");
@@ -478,7 +512,41 @@ export default function ChatPage() {
             })}
           </div>
 
+          {/* Attached reference photo chip (media modes) */}
+          {attachPreview && (
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl bg-white/5 border border-white/10 w-fit">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={attachPreview} alt="attach" className="w-10 h-10 rounded-lg object-cover" />
+              <span className="text-xs text-white/60">
+                {attachUploading
+                  ? (uz ? "Yuklanmoqda…" : "Загрузка…")
+                  : (uz ? "Foto biriktirildi" : "Фото прикреплено")}
+              </span>
+              {attachUploading && <Loader2 size={13} className="animate-spin text-brand-cyan" />}
+              <button onClick={removeAttach} aria-label={uz ? "O'chirish" : "Убрать"} className="text-white/40 hover:text-white/80">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onFilePicked}
+              className="hidden"
+            />
+            {mode !== "text" && (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending}
+                aria-label={uz ? "Foto biriktirish" : "Прикрепить фото"}
+                className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-white/5 border border-white/10 text-white/70 disabled:opacity-40 active:scale-95 transition"
+              >
+                <Paperclip size={18} />
+              </button>
+            )}
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -492,7 +560,7 @@ export default function ChatPage() {
             />
             <button
               onClick={() => void send(input)}
-              disabled={sending || !input.trim()}
+              disabled={sending || attachUploading || !input.trim()}
               aria-label={uz ? "Yuborish" : "Отправить"}
               className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-gradient-to-br from-brand-primary to-brand-cyan text-white shadow-lg shadow-brand-primary/30 disabled:opacity-40 disabled:shadow-none active:scale-95 transition"
             >
@@ -535,14 +603,22 @@ function PickerRow({
 function MessageBubble({ msg, uz }: { msg: UiMessage; uz: boolean }) {
   const isUser = msg.role === "user";
 
-  // Media result bubble (image / video)
+  // Media bubble — assistant result OR the user's attached reference photo
   if (msg.media) {
     return (
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
-        <div className="max-w-[85%] rounded-2xl rounded-bl-md overflow-hidden glass-panel p-1">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+      >
+        <div
+          className={`max-w-[70%] overflow-hidden p-1 rounded-2xl ${
+            isUser ? "bg-brand-primary/25 rounded-br-md" : "glass-panel rounded-bl-md"
+          }`}
+        >
           {msg.media.kind === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={msg.media.url} alt="result" className="rounded-xl w-full h-auto" />
+            <img src={msg.media.url} alt={isUser ? "attached" : "result"} className="rounded-xl w-full h-auto" />
           ) : (
             <video src={msg.media.url} controls playsInline className="rounded-xl w-full h-auto" />
           )}
