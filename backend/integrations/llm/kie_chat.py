@@ -101,11 +101,19 @@ class KieChatClient:
         return ChatResult(content=content, usage=_extract_usage(data), raw=data)
 
     def _codex_responses(self, model: ChatModel, messages: list[dict[str, str]]) -> ChatResult:
-        payload = {
+        # The Responses API takes the system prompt via `instructions`, not as a
+        # role in `input`. Without it these GPT-5.6 models default to a "Codex
+        # coding agent" persona — so we must pass our own instructions to get a
+        # general assistant.
+        system_texts = [m["content"] for m in messages if m.get("role") == "system"]
+        convo = [m for m in messages if m.get("role") != "system"]
+        payload: dict[str, Any] = {
             "model": model.slug,
-            "input": [_to_responses_item(m) for m in messages],
+            "input": [_to_responses_item(m) for m in convo],
             "stream": False,
         }
+        if system_texts:
+            payload["instructions"] = "\n\n".join(system_texts)
         data = self._post(settings.kie_codex_path, payload)
         content = _extract_responses_content(data)
         if not content:

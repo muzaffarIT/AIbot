@@ -47,6 +47,11 @@ CHAT_MODELS: tuple[ChatModel, ...] = (
         adapter="kie_codex", cost=3, group="ChatGPT", reasoning=True,
         description="Флагман OpenAI — сильный в рассуждениях и коде.",
     ),
+    ChatModel(
+        id="gpt-5-6-terra", label="ChatGPT 5.6 Terra", slug="gpt-5-6-terra",
+        adapter="kie_codex", cost=3, group="ChatGPT", reasoning=True,
+        description="Мощный вариант GPT-5.6 для сложных задач.",
+    ),
     # ── DeepSeek (KIE /chat/completions) ──────────────────────────────────
     ChatModel(
         id="deepseek-chat", label="DeepSeek V3", slug="deepseek-chat",
