@@ -646,9 +646,49 @@ function MessageBubble({ msg, uz }: { msg: UiMessage; uz: boolean }) {
           ? msg.pendingKind
             ? <GeneratingLabel kind={msg.pendingKind} uz={uz} />
             : <TypingDots />
-          : msg.content}
+          : (!isUser && !msg.isError)
+            ? <MarkdownText text={msg.content} />
+            : msg.content}
       </div>
     </motion.div>
+  );
+}
+
+// ── Minimal, safe markdown renderer (no deps, no HTML injection) ──
+// Handles fenced code blocks, plus inline **bold**, *italic* and `code`.
+// Everything else stays as-is; the bubble's whitespace-pre-wrap keeps
+// line breaks and list layout intact.
+function renderInline(text: string, keyBase: string): React.ReactNode[] {
+  const tokens = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g);
+  return tokens.map((tok, i) => {
+    const key = `${keyBase}-${i}`;
+    if (tok.length > 4 && tok.startsWith("**") && tok.endsWith("**")) {
+      return <strong key={key} className="font-semibold text-white">{tok.slice(2, -2)}</strong>;
+    }
+    if (tok.length > 2 && tok.startsWith("`") && tok.endsWith("`")) {
+      return <code key={key} className="px-1 py-0.5 rounded bg-white/10 text-[0.85em] font-mono">{tok.slice(1, -1)}</code>;
+    }
+    if (tok.length > 2 && tok.startsWith("*") && tok.endsWith("*")) {
+      return <em key={key}>{tok.slice(1, -1)}</em>;
+    }
+    return tok;
+  });
+}
+
+function MarkdownText({ text }: { text: string }) {
+  const parts = text.split("```");
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <pre key={i} className="my-1.5 p-2.5 rounded-lg bg-black/30 overflow-x-auto text-xs font-mono text-white/90 whitespace-pre">
+            <code>{part.replace(/^[\w-]*\n/, "")}</code>
+          </pre>
+        ) : (
+          <span key={i}>{renderInline(part, String(i))}</span>
+        )
+      )}
+    </>
   );
 }
 
