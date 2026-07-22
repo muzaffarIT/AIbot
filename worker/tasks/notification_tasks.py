@@ -23,7 +23,7 @@ def daily_reminder_task():
 
 async def _send_daily_reminders():
     bot = Bot(token=settings.bot_token)
-    db = next(get_db_session())
+    db = get_db_session()
     i18n = I18n()
     
     try:
@@ -68,7 +68,7 @@ def lifecycle_notification_task():
 
 async def _send_lifecycle_notifications():
     bot = Bot(token=settings.bot_token)
-    db = next(get_db_session())
+    db = get_db_session()
     i18n = I18n()
     
     try:
@@ -177,7 +177,7 @@ def winback_inactive_task():
 
 async def _send_winback():
     bot = Bot(token=settings.bot_token)
-    db = next(get_db_session())
+    db = get_db_session()
     try:
         now = datetime.now(timezone.utc)
         cooldown_before = now - timedelta(days=WINBACK_COOLDOWN_DAYS)

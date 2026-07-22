@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     # Empty = use the registry's own `enabled` flags.
     chat_models_enabled: str = ""
 
+    # ── Voice (STT / TTS via KIE ElevenLabs) ──────────────────────────────
+    # Master switch — keep True so a recovered provider lights up with no
+    # deploy; set VOICE_ENABLED=false to hush voice replies entirely.
+    voice_enabled: bool = True
+    kie_stt_model: str = "elevenlabs/speech-to-text"
+    kie_tts_model: str = "elevenlabs/text-to-speech-multilingual-v2"
+    kie_tts_voice: str = "Rachel"
+    # Reply with a spoken (TTS) answer in addition to text.
+    voice_reply_with_audio: bool = False
+
     cards_provider_key: str | None = None
     cards_provider_secret: str | None = None
 
