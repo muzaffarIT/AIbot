@@ -20,25 +20,43 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_FILE_AGE_SECONDS = 3600  # 1 hour
 
 
+def _store(content: bytes, filename_hint: str, default_ext: str) -> str:
+    ext = Path(filename_hint or "").suffix or default_ext
+    filename = f"{uuid.uuid4()}{ext}"
+    (UPLOAD_DIR / filename).write_bytes(content)
+    base_url = (settings.backend_base_url or "").rstrip("/")
+    return f"{base_url}/api/upload/{filename}"
+
+
 @router.post("")
 async def upload_image(file: UploadFile, background_tasks: BackgroundTasks) -> dict:
     """Accept an image and return a URL accessible by KIE.ai."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are accepted.")
 
-    ext = Path(file.filename or "").suffix or ".jpg"
-    filename = f"{uuid.uuid4()}{ext}"
-    filepath = UPLOAD_DIR / filename
-
     content = await file.read()
-    filepath.write_bytes(content)
+    url = _store(content, file.filename or "", ".jpg")
 
     # Schedule cleanup in background
     background_tasks.add_task(_cleanup_old_files)
+    return {"url": url}
 
-    base_url = (settings.backend_base_url or "").rstrip("/")
-    file_url = f"{base_url}/api/upload/{filename}"
-    return {"url": file_url}
+
+@router.post("/audio")
+async def upload_audio(file: UploadFile, background_tasks: BackgroundTasks) -> dict:
+    """Accept a recorded audio clip (voice input) and return a public URL."""
+    ctype = file.content_type or ""
+    if not (ctype.startswith("audio/") or ctype.startswith("video/webm")):
+        raise HTTPException(status_code=400, detail="Only audio files are accepted.")
+
+    content = await file.read()
+    # Browser MediaRecorder usually produces webm/ogg; keep the extension so
+    # the provider can sniff the codec.
+    default_ext = ".webm" if "webm" in ctype else ".ogg" if "ogg" in ctype else ".mp3"
+    url = _store(content, file.filename or "", default_ext)
+
+    background_tasks.add_task(_cleanup_old_files)
+    return {"url": url}
 
 
 

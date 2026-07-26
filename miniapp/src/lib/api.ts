@@ -339,7 +339,8 @@ export const api = {
     request<GenerationJobsResponse>(`/api/jobs/telegram/${telegramId}?limit=${limit}`),
 
   // ── Media generation (image/video) ──
-  getGenerateOptions: () => request<GenerateOptions>("/api/jobs/options"),
+  getGenerateOptions: (lang = "ru") =>
+    request<GenerateOptions>(`/api/jobs/options?lang=${lang}`),
 
   uploadImage: (file: File) => {
     const form = new FormData();
@@ -363,7 +364,8 @@ export const api = {
   getPlans: () => request<Plan[]>("/api/plans"),
 
   // ── Chat ──
-  getChatModels: () => request<{ models: ChatModelInfo[] }>("/api/chat/models"),
+  getChatModels: (lang = "ru") =>
+    request<{ models: ChatModelInfo[] }>(`/api/chat/models?lang=${lang}`),
 
   getChatConversations: (telegramId: number, limit = 30) =>
     request<{ conversations: ChatConversation[] }>(
@@ -374,6 +376,18 @@ export const api = {
     request<{ conversation_id: number; messages: ChatMessageDTO[] }>(
       `/api/chat/conversations/${telegramId}/${conversationId}/messages?limit=${limit}`
     ),
+
+  uploadAudio: (blob: Blob, filename = "voice.webm") => {
+    const form = new FormData();
+    form.append("file", new File([blob], filename, { type: blob.type || "audio/webm" }));
+    return requestMultipart<{ url: string }>("/api/upload/audio", form);
+  },
+
+  transcribe: (audio_url: string, lang?: string) =>
+    request<{ text: string }>("/api/chat/transcribe", {
+      method: "POST",
+      body: JSON.stringify({ audio_url, lang }),
+    }),
 
   sendChat: (data: {
     telegram_user_id: number;

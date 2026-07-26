@@ -19,9 +19,9 @@ class SendMessageRequest(BaseModel):
 
 
 @router.get("/models")
-def list_models(db: Session = Depends(get_db)) -> dict:
+def list_models(lang: str = Query(default="ru"), db: Session = Depends(get_db)) -> dict:
     try:
-        return {"models": ChatService(db).list_models()}
+        return {"models": ChatService(db).list_models(lang)}
     finally:
         db.close()
 
@@ -52,6 +52,28 @@ def get_messages(
         raise HTTPException(status_code=404, detail=str(exc))
     finally:
         db.close()
+
+
+class TranscribeRequest(BaseModel):
+    audio_url: str
+    lang: str | None = None
+
+
+@router.post("/transcribe")
+def transcribe(payload: TranscribeRequest) -> dict:
+    """Speech → text for the mini-app microphone."""
+    from backend.core.config import settings
+    from backend.integrations.voice.kie_voice import KieVoiceClient, VoiceError
+
+    if not settings.voice_enabled:
+        raise HTTPException(status_code=503, detail="Голос временно отключён.")
+    try:
+        text = KieVoiceClient().transcribe(payload.audio_url, language_code=payload.lang)
+    except VoiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="Не удалось распознать речь.")
+    return {"text": text}
 
 
 @router.post("/send")

@@ -28,6 +28,7 @@ function StatusIcon({ status }: { status: string }) {
 
 function providerLabel(provider: string) {
   if (provider === "nano_banana") return "🍌 Nano Banana";
+  if (provider === "gpt_image") return "🎨 GPT Image 2";
   if (provider === "veo") return "🎬 Veo 3";
   if (provider === "kling") return "🎥 Kling";
   return provider;
@@ -42,15 +43,16 @@ function statusLabel(status: string, lang: string) {
   return status;
 }
 
-function formatDate(d?: string | null) {
+function formatDate(d?: string | null, lang = "ru") {
   if (!d) return "";
-  return new Date(d).toLocaleDateString("ru-RU", {
+  return new Date(d).toLocaleDateString(lang === "uz" ? "uz-UZ" : "ru-RU", {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
 }
 
 function isImageProvider(provider: string) {
-  return provider === "nano_banana";
+  // Both image providers — without gpt_image the result rendered as a video.
+  return provider === "nano_banana" || provider === "gpt_image";
 }
 
 /** Download a file using Telegram WebApp API (v8+) or fallback to <a> */
@@ -255,7 +257,7 @@ export default function JobsPage() {
                           {((job as any).original_prompt || job.prompt || "").slice(0, 60)}
                         </p>
                       ) : null}
-                      <p className="text-[11px] text-white/30 mt-1">{formatDate(job.created_at)}</p>
+                      <p className="text-[11px] text-white/30 mt-1">{formatDate(job.created_at, language)}</p>
                     </div>
 
                     <div className="shrink-0 flex flex-col items-end justify-between">

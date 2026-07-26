@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, Sparkles, ChevronDown, Check, Coins, Brain, Plus, AlertCircle,
   MessageSquare, ImageIcon, Video, Loader2, Clock, X, Paperclip,
+  Download, ExternalLink, Mic, Square,
 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import {
@@ -15,6 +16,7 @@ type MediaKind = "image" | "video";
 type Mode = "text" | MediaKind;
 
 type UiMessage = {
+  id: string;
   role: "user" | "assistant";
   content: string;
   pending?: boolean;
@@ -22,6 +24,9 @@ type UiMessage = {
   media?: { kind: MediaKind; url: string };
   isError?: boolean;
 };
+
+let msgSeq = 0;
+const nextId = () => `m${++msgSeq}`;
 
 const SUGGESTIONS_RU = [
   "Придумай идею для видео в Instagram",
@@ -35,6 +40,36 @@ const SUGGESTIONS_UZ = [
 ];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Save a result. Long-press "save" is unreliable in the Telegram WebView,
+ *  so prefer Telegram's own downloadFile (Bot API 8+), then a blob download,
+ *  then simply opening the file. */
+async function downloadMedia(url: string, kind: MediaKind) {
+  const name = `harf-ai-${Date.now()}.${kind === "image" ? "jpg" : "mp4"}`;
+
+  const tg = (window as unknown as { Telegram?: { WebApp?: { downloadFile?: (p: { url: string; file_name: string }) => void } } })
+    .Telegram?.WebApp;
+  if (tg?.downloadFile) {
+    tg.downloadFile({ url, file_name: name });
+    return;
+  }
+
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+  } catch {
+    // CORS or offline — fall back to opening the file in a new tab
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
 
 export default function ChatPage() {
   const { telegramUser: tgUser, backendUser, language, syncUser } = useMiniAppUser();
@@ -69,6 +104,12 @@ export default function ChatPage() {
   const [attachUploading, setAttachUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Voice input
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const credits = backendUser?.credits_balance ?? 0;
 
@@ -77,21 +118,21 @@ export default function ChatPage() {
   const activeTier =
     mode !== "text" && tiers ? tiers[mode].find((t) => t.key === activeTierKey) : undefined;
 
-  // Load text models on mount
+  // Load text models — refetched when the UI language changes so model
+  // descriptions come back localized.
   useEffect(() => {
-    api.getChatModels()
+    api.getChatModels(language)
       .then((res) => {
         setModels(res.models);
         if (res.models.length) setModelId((prev) => prev || res.models[0].id);
       })
       .catch(() => setError(uz ? "Modellarni yuklab bo'lmadi" : "Не удалось загрузить модели"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [language]);
 
-  // Lazily load media tiers the first time a media mode is opened
+  // Media tiers — also language-aware (notes like "5 сек" / "5 soniya").
   useEffect(() => {
-    if (mode === "text" || tiers) return;
-    api.getGenerateOptions()
+    api.getGenerateOptions(language)
       .then((res) => {
         setTiers(res.tiers);
         if (res.tiers.image.length) setImageTierKey((p) => p || res.tiers.image[0].key);
@@ -99,7 +140,7 @@ export default function ChatPage() {
       })
       .catch(() => setError(uz ? "Rejimlarni yuklab bo'lmadi" : "Не удалось загрузить режимы"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [language]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -119,7 +160,7 @@ export default function ChatPage() {
         const res = await api.getChatMessages(tid, convId);
         const msgs: UiMessage[] = res.messages
           .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+          .map((m) => ({ id: nextId(), role: m.role as "user" | "assistant", content: m.content }));
         setMessages(msgs);
         setConversationId(convId);
         setMode("text");
@@ -152,10 +193,11 @@ export default function ChatPage() {
   const sendText = useCallback(
     async (text: string) => {
       if (!modelId || !backendUser?.telegram_user_id) return;
+      const pendingId = nextId();
       setMessages((prev) => [
         ...prev,
-        { role: "user", content: text },
-        { role: "assistant", content: "", pending: true },
+        { id: nextId(), role: "user", content: text },
+        { id: pendingId, role: "assistant", content: "", pending: true },
       ]);
       try {
         const res = await api.sendChat({
@@ -166,15 +208,13 @@ export default function ChatPage() {
         });
         const wasNew = conversationId === null;
         setConversationId(res.conversation_id);
-        setMessages((prev) => {
-          const next = [...prev];
-          next[next.length - 1] = { role: "assistant", content: res.reply };
-          return next;
-        });
+        setMessages((prev) =>
+          prev.map((m) => (m.id === pendingId ? { ...m, pending: false, content: res.reply } : m)),
+        );
         void syncUser();
         if (wasNew) refreshConversations();
       } catch (e) {
-        setMessages((prev) => prev.slice(0, -1));
+        setMessages((prev) => prev.filter((m) => m.id !== pendingId));
         setError(e instanceof ApiError ? e.message : uz ? "Xatolik" : "Ошибка");
       }
     },
@@ -185,11 +225,18 @@ export default function ChatPage() {
   const sendGeneration = useCallback(
     async (text: string, kind: MediaKind, tierKey: string, sourceImageUrl?: string | null) => {
       if (!tierKey || !backendUser?.telegram_user_id) return;
+      const pendingId = nextId();
       const newMsgs: UiMessage[] = [];
-      if (sourceImageUrl) newMsgs.push({ role: "user", content: "", media: { kind: "image", url: sourceImageUrl } });
-      newMsgs.push({ role: "user", content: text });
-      newMsgs.push({ role: "assistant", content: "", pending: true, pendingKind: kind });
+      if (sourceImageUrl) {
+        newMsgs.push({ id: nextId(), role: "user", content: "", media: { kind: "image", url: sourceImageUrl } });
+      }
+      newMsgs.push({ id: nextId(), role: "user", content: text });
+      newMsgs.push({ id: pendingId, role: "assistant", content: "", pending: true, pendingKind: kind });
       setMessages((prev) => [...prev, ...newMsgs]);
+
+      const patch = (fields: Partial<UiMessage>) =>
+        setMessages((prev) => prev.map((m) => (m.id === pendingId ? { ...m, ...fields } : m)));
+
       try {
         const job = await api.createGeneration({
           telegram_user_id: backendUser.telegram_user_id,
@@ -199,37 +246,43 @@ export default function ChatPage() {
         });
         void syncUser(); // credits are reserved on creation
 
-        // Poll until the worker finishes (video can take a few minutes)
+        // Poll until the worker finishes (video can take a few minutes).
+        // This runs unblocked, so the user can keep chatting meanwhile.
         let done = job;
         for (let i = 0; i < 120; i++) {
           if (done.status === "completed" || done.status === "failed") break;
           await sleep(3000);
-          done = await api.getJob(job.id);
+          try {
+            done = await api.getJob(job.id);
+          } catch {
+            /* transient network hiccup — keep polling */
+          }
         }
 
-        setMessages((prev) => {
-          const next = [...prev];
-          if (done.status === "completed" && done.result_url) {
-            next[next.length - 1] = { role: "assistant", content: "", media: { kind, url: done.result_url } };
-          } else if (done.status === "failed") {
-            next[next.length - 1] = {
-              role: "assistant",
-              content: (uz ? "Generatsiya xato: " : "Генерация не удалась: ") + (done.error_message || "—") + (uz ? " · Kreditlar qaytarildi" : " · Кредиты возвращены"),
-              isError: true,
-            };
-          } else {
-            next[next.length - 1] = {
-              role: "assistant",
-              content: uz
-                ? "Hali tayyorlanmoqda — «Ishlar» bo'limida ko'ring."
-                : "Всё ещё генерируется — результат появится в разделе «Работы».",
-            };
-          }
-          return next;
-        });
+        if (done.status === "completed" && done.result_url) {
+          patch({ pending: false, pendingKind: undefined, media: { kind, url: done.result_url } });
+        } else if (done.status === "failed") {
+          patch({
+            pending: false,
+            pendingKind: undefined,
+            isError: true,
+            content:
+              (uz ? "Generatsiya xato: " : "Генерация не удалась: ") +
+              (done.error_message || "—") +
+              (uz ? " · Kreditlar qaytarildi" : " · Кредиты возвращены"),
+          });
+        } else {
+          patch({
+            pending: false,
+            pendingKind: undefined,
+            content: uz
+              ? "Hali tayyorlanmoqda — «Ishlar» bo'limida ko'ring."
+              : "Всё ещё генерируется — результат появится в разделе «Работы».",
+          });
+        }
         void syncUser();
       } catch (e) {
-        setMessages((prev) => prev.slice(0, -1));
+        setMessages((prev) => prev.filter((m) => m.id !== pendingId));
         setError(e instanceof ApiError ? e.message : uz ? "Xatolik" : "Ошибка");
       }
     },
@@ -245,10 +298,17 @@ export default function ChatPage() {
       const srcUrl = attachUrl;
       setAttachPreview(null);
       setAttachUrl(null);
+
+      if (mode !== "text") {
+        // Generation can take minutes — fire it off and leave the composer
+        // usable. Progress lives in its own pending bubble.
+        void sendGeneration(text, mode, mode === "image" ? imageTierKey : videoTierKey, srcUrl);
+        return;
+      }
+
       setSending(true);
       try {
-        if (mode === "text") await sendText(text);
-        else await sendGeneration(text, mode, mode === "image" ? imageTierKey : videoTierKey, srcUrl);
+        await sendText(text);
       } finally {
         setSending(false);
       }
@@ -261,6 +321,9 @@ export default function ChatPage() {
     e.target.value = ""; // allow re-picking the same file
     if (!file) return;
     setError("");
+    // A photo only makes sense for generation — jump out of plain text mode
+    // so the prompt is used as an image edit instruction.
+    if (mode === "text") setMode("image");
     setAttachPreview(URL.createObjectURL(file));
     setAttachUploading(true);
     try {
@@ -277,6 +340,47 @@ export default function ChatPage() {
   function removeAttach() {
     setAttachPreview(null);
     setAttachUrl(null);
+  }
+
+  // ── Voice input: record → upload → transcribe → drop into the composer ──
+  async function startRecording() {
+    setError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (ev) => { if (ev.data.size) chunksRef.current.push(ev.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        if (!blob.size) return;
+        setTranscribing(true);
+        try {
+          const { url } = await api.uploadAudio(blob);
+          const { text } = await api.transcribe(url, language);
+          setInput((prev) => (prev ? `${prev} ${text}` : text));
+        } catch (e) {
+          setError(
+            e instanceof ApiError
+              ? e.message
+              : uz ? "Ovozni aniqlab bo'lmadi" : "Не удалось распознать голос",
+          );
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      rec.start();
+      recorderRef.current = rec;
+      setRecording(true);
+    } catch {
+      setError(uz ? "Mikrofonga ruxsat berilmadi" : "Нет доступа к микрофону");
+    }
+  }
+
+  function stopRecording() {
+    recorderRef.current?.stop();
+    recorderRef.current = null;
+    setRecording(false);
   }
 
   function newChat() {
@@ -297,7 +401,7 @@ export default function ChatPage() {
 
   const pickerLabel =
     mode === "text"
-      ? activeModel?.label ?? (uz ? "Модель" : "Модель")
+      ? activeModel?.label ?? (uz ? "Model" : "Модель")
       : activeTier
         ? `${activeTier.emoji} ${activeTier.label}`
         : uz ? "Rejim" : "Режим";
@@ -473,8 +577,8 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="space-y-3 pt-2">
-              {messages.map((m, i) => (
-                <MessageBubble key={i} msg={m} uz={uz} />
+              {messages.map((m) => (
+                <MessageBubble key={m.id} msg={m} uz={uz} />
               ))}
             </div>
           )}
@@ -498,7 +602,7 @@ export default function ChatPage() {
               return (
                 <button
                   key={id}
-                  onClick={() => { setMode(id); setPickerOpen(false); }}
+                  onClick={() => { setMode(id); setPickerOpen(false); setHistoryOpen(false); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition ${
                     active
                       ? "bg-gradient-to-r from-brand-primary to-brand-cyan text-white"
@@ -537,16 +641,14 @@ export default function ChatPage() {
               onChange={onFilePicked}
               className="hidden"
             />
-            {mode !== "text" && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={sending}
-                aria-label={uz ? "Foto biriktirish" : "Прикрепить фото"}
-                className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-white/5 border border-white/10 text-white/70 disabled:opacity-40 active:scale-95 transition"
-              >
-                <Paperclip size={18} />
-              </button>
-            )}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              aria-label={uz ? "Foto biriktirish" : "Прикрепить фото"}
+              className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-white/5 border border-white/10 text-white/70 disabled:opacity-40 active:scale-95 transition"
+            >
+              <Paperclip size={18} />
+            </button>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -558,14 +660,36 @@ export default function ChatPage() {
               disabled={sending}
               className="flex-1 resize-none max-h-32 bg-brand-800/80 border border-white/10 rounded-2xl text-white placeholder-white/35 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition disabled:opacity-60"
             />
-            <button
-              onClick={() => void send(input)}
-              disabled={sending || attachUploading || !input.trim()}
-              aria-label={uz ? "Yuborish" : "Отправить"}
-              className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-gradient-to-br from-brand-primary to-brand-cyan text-white shadow-lg shadow-brand-primary/30 disabled:opacity-40 disabled:shadow-none active:scale-95 transition"
-            >
-              {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-            </button>
+            {/* Mic when there's nothing to send, otherwise the send button */}
+            {!input.trim() && !sending ? (
+              <button
+                onClick={() => (recording ? stopRecording() : void startRecording())}
+                disabled={transcribing}
+                aria-label={
+                  recording
+                    ? (uz ? "To'xtatish" : "Остановить")
+                    : (uz ? "Ovozli xabar" : "Голосовое сообщение")
+                }
+                className={`w-11 h-11 shrink-0 grid place-items-center rounded-2xl border transition active:scale-95 disabled:opacity-40 ${
+                  recording
+                    ? "bg-red-500/20 border-red-500/40 text-red-300 animate-pulse"
+                    : "bg-white/5 border-white/10 text-white/70"
+                }`}
+              >
+                {transcribing
+                  ? <Loader2 size={18} className="animate-spin" />
+                  : recording ? <Square size={16} /> : <Mic size={18} />}
+              </button>
+            ) : (
+              <button
+                onClick={() => void send(input)}
+                disabled={sending || attachUploading || !input.trim()}
+                aria-label={uz ? "Yuborish" : "Отправить"}
+                className="w-11 h-11 shrink-0 grid place-items-center rounded-2xl bg-gradient-to-br from-brand-primary to-brand-cyan text-white shadow-lg shadow-brand-primary/30 disabled:opacity-40 disabled:shadow-none active:scale-95 transition"
+              >
+                {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -605,6 +729,7 @@ function MessageBubble({ msg, uz }: { msg: UiMessage; uz: boolean }) {
 
   // Media bubble — assistant result OR the user's attached reference photo
   if (msg.media) {
+    const media = msg.media;
     return (
       <motion.div
         initial={{ opacity: 0, y: 8 }}
@@ -616,11 +741,33 @@ function MessageBubble({ msg, uz }: { msg: UiMessage; uz: boolean }) {
             isUser ? "bg-brand-primary/25 rounded-br-md" : "glass-panel rounded-bl-md"
           }`}
         >
-          {msg.media.kind === "image" ? (
+          {media.kind === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={msg.media.url} alt={isUser ? "attached" : "result"} className="rounded-xl w-full h-auto" />
+            <img src={media.url} alt={isUser ? "attached" : "result"} className="rounded-xl w-full h-auto" />
           ) : (
-            <video src={msg.media.url} controls playsInline className="rounded-xl w-full h-auto" />
+            <video src={media.url} controls playsInline className="rounded-xl w-full h-auto" />
+          )}
+          {/* Saving via long-press is unreliable inside the Telegram WebView,
+              so results get explicit Save / Open actions. */}
+          {!isUser && (
+            <div className="flex items-center gap-1.5 px-1.5 pt-1.5 pb-0.5">
+              <button
+                onClick={() => downloadMedia(media.url, media.kind)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 text-xs font-semibold text-white/85 active:scale-95 transition"
+              >
+                <Download size={13} />
+                {uz ? "Saqlash" : "Сохранить"}
+              </button>
+              <a
+                href={media.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 text-xs font-semibold text-white/85 active:scale-95 transition"
+              >
+                <ExternalLink size={13} />
+                {uz ? "Ochish" : "Открыть"}
+              </a>
+            </div>
           )}
         </div>
       </motion.div>

@@ -24,6 +24,7 @@ function isActiveJob(status: string) {
 
 function providerLabel(provider: string) {
   if (provider === "nano_banana") return "🍌 Nano Banana";
+  if (provider === "gpt_image") return "🎨 GPT Image 2";
   if (provider === "veo") return "🎬 Veo 3";
   if (provider === "kling") return "🎥 Kling";
   return provider;
@@ -38,9 +39,9 @@ function statusLabel(status: string, lang: string) {
   return status;
 }
 
-function formatDate(d?: string | null) {
+function formatDate(d?: string | null, lang = "ru") {
   if (!d) return "";
-  return new Date(d).toLocaleDateString("ru-RU", {
+  return new Date(d).toLocaleDateString(lang === "uz" ? "uz-UZ" : "ru-RU", {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
 }
@@ -253,7 +254,7 @@ export default function HomePage() {
                         <div className="text-sm font-semibold text-white">
                           {providerLabel(job.provider)}
                         </div>
-                        <div className="text-xs text-white/40">{formatDate(job.created_at)}</div>
+                        <div className="text-xs text-white/40">{formatDate(job.created_at, language)}</div>
                       </div>
                     </div>
                     <div className="text-right">

@@ -20,11 +20,21 @@ from shared.enums.credit_transaction_type import CreditTransactionType
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
+SYSTEM_PROMPT_RU = (
     "Ты — HARF AI, дружелюбный и полезный ассистент внутри Telegram. "
-    "Отвечай на языке пользователя (русский или узбекский), кратко и по делу, "
-    "с markdown-разметкой где уместно."
+    "Отвечай ПО-РУССКИ, кратко и по делу, с markdown-разметкой где уместно. "
+    "Если пользователь пишет на другом языке — отвечай на языке его сообщения."
 )
+
+SYSTEM_PROMPT_UZ = (
+    "Sen — HARF AI, Telegram ichidagi do'stona va foydali yordamchisan. "
+    "O'ZBEK TILIDA, qisqa va aniq javob ber, kerak joyda markdown ishlat. "
+    "Agar foydalanuvchi boshqa tilda yozsa — o'sha til bilan javob ber."
+)
+
+
+def _system_prompt(lang: str | None) -> str:
+    return SYSTEM_PROMPT_UZ if lang == "uz" else SYSTEM_PROMPT_RU
 
 
 class ChatError(Exception):
@@ -39,7 +49,8 @@ class ChatService:
 
     # ── reads ─────────────────────────────────────────────────────────────
 
-    def list_models(self) -> list[dict]:
+    def list_models(self, lang: str = "ru") -> list[dict]:
+        uz = lang == "uz"
         return [
             {
                 "id": m.id,
@@ -47,7 +58,7 @@ class ChatService:
                 "group": m.group,
                 "cost": m.cost,
                 "reasoning": m.reasoning,
-                "description": m.description,
+                "description": (m.description_uz or m.description) if uz else m.description,
             }
             for m in chat_models.available_models()
         ]
@@ -133,7 +144,7 @@ class ChatService:
         self.db.flush()
 
         # Build context window and call the model
-        history = self._build_context(conv.id, model_id=model.id)
+        history = self._build_context(conv.id, model_id=model.id, lang=user.language_code)
         try:
             client = KieChatClient()
             result = client.complete(model=model, messages=history)
@@ -187,7 +198,7 @@ class ChatService:
             .first()
         )
 
-    def _build_context(self, conversation_id: int, *, model_id: str) -> list[dict[str, str]]:
+    def _build_context(self, conversation_id: int, *, model_id: str, lang: str | None = None) -> list[dict[str, str]]:
         window = settings.chat_history_window
         rows = (
             self.db.query(ChatMessage)
@@ -197,7 +208,7 @@ class ChatService:
             .all()
         )
         rows.reverse()  # chronological order
-        messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages: list[dict[str, str]] = [{"role": "system", "content": _system_prompt(lang)}]
         for m in rows:
             messages.append({"role": m.role, "content": m.content})
         return messages

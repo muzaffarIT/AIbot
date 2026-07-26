@@ -38,9 +38,9 @@ def serialize_job(job) -> dict:
 
 
 @router.get("/options")
-def get_generation_options() -> dict:
+def get_generation_options(lang: str = Query(default="ru")) -> dict:
     """Image + video tiers (key, label, provider, cost) for the mini app."""
-    return {"tiers": media_tiers.tiers_by_kind()}
+    return {"tiers": media_tiers.tiers_by_kind(lang)}
 
 
 @router.get("/telegram/{telegram_user_id}")
