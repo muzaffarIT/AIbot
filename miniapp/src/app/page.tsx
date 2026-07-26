@@ -25,6 +25,7 @@ function isActiveJob(status: string) {
 function providerLabel(provider: string) {
   if (provider === "nano_banana") return "🍌 Nano Banana";
   if (provider === "gpt_image") return "🎨 GPT Image 2";
+  if (provider === "kie_image") return "⚡ Z-Image";
   if (provider === "veo") return "🎬 Veo 3";
   if (provider === "kling") return "🎥 Kling";
   return provider;

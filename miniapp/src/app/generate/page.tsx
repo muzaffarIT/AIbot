@@ -50,6 +50,13 @@ const AI_LIST: AIOption[] = [
     type: "image",
   },
   {
+    id: "kie_image",
+    label: "⚡ Z-Image",
+    descriptionRu: "Самая быстрая и дешёвая генерация — 5 кредитов",
+    descriptionUz: "Eng tez va arzon generatsiya — 5 kredit",
+    type: "image",
+  },
+  {
     id: "veo",
     label: "🎬 Veo 3",
     descriptionRu: "Видео от Google — плавное и реалистичное",
@@ -75,6 +82,9 @@ const MODES: Record<GenerationProvider, ModeOption[]> = {
   ],
   gpt_image: [
     { key: "gpt:std", labelRu: "GPT Image 2", labelUz: "GPT Image 2", detailRu: "OpenAI · высокое качество", detailUz: "OpenAI · yuqori sifat", cost: 30 },
+  ],
+  kie_image: [
+    { key: "zimg:std", labelRu: "Z-Image", labelUz: "Z-Image", detailRu: "быстро · дёшево", detailUz: "tez · arzon", cost: 5 },
   ],
   veo: [
     { key: "veo:fast",    labelRu: "Veo 3 Fast",     labelUz: "Veo 3 Fast",     detailRu: "720p · быстро",       detailUz: "720p · tez",         cost: 30 },

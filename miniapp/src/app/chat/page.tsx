@@ -658,7 +658,9 @@ export default function ChatPage() {
               rows={1}
               placeholder={placeholder}
               disabled={sending}
-              className="flex-1 resize-none max-h-32 bg-brand-800/80 border border-white/10 rounded-2xl text-white placeholder-white/35 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition disabled:opacity-60"
+              /* text-base (16px) is required — anything smaller makes iOS
+                 WebView auto-zoom the whole page when the field is focused. */
+              className="flex-1 resize-none max-h-32 bg-brand-800/80 border border-white/10 rounded-2xl text-white placeholder-white/35 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition disabled:opacity-60"
             />
             {/* Mic when there's nothing to send, otherwise the send button */}
             {!input.trim() && !sending ? (

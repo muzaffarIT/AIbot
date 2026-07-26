@@ -569,6 +569,31 @@ def run_generation_job(self, job_id: int) -> dict | None:
                 poll_interval = 5
                 poll_timeout = 180
 
+            elif job.provider == AIProvider.KIE_IMAGE:
+                # Generic KIE market image model. The slug lives in the tier
+                # payload (`_kie_model`), so adding another KIE image model is
+                # a media_tiers.py entry — no worker change needed.
+                url = f"{settings.kie_base_url}/api/v1/jobs/createTask"
+                _jp = dict(job.job_payload or {})
+                api_model = _jp.pop("_kie_model", None)
+                if not api_model:
+                    raise ValueError("KIE image: не указана модель (_kie_model)")
+                src_urls = list(_jp.pop("source_image_urls", []) or [])
+                if not src_urls and job.source_image_url:
+                    src_urls = [job.source_image_url]
+
+                input_block = {"prompt": job.prompt}
+                # Pass through tier options (aspect_ratio, image_size, …)
+                for k, v in _jp.items():
+                    if not k.startswith("_"):
+                        input_block[k] = v
+                if src_urls:
+                    input_block["image_urls"] = src_urls
+
+                payload = {"model": api_model, "input": input_block}
+                poll_interval = 5
+                poll_timeout = 180
+
             elif job.provider == AIProvider.KLING:
                 # KIE.ai Kling routing:
                 #   - With source image  → `kling-2.6/image-to-video` (dedicated

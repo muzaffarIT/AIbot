@@ -69,7 +69,7 @@ export type OrdersResponse = {
   orders: OrderSummary[];
 };
 
-export type GenerationProvider = "nano_banana" | "kling" | "veo" | "gpt_image";
+export type GenerationProvider = "nano_banana" | "kling" | "veo" | "gpt_image" | "kie_image";
 
 export type MediaTier = {
   key: string;

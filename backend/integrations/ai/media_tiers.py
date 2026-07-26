@@ -27,6 +27,12 @@ class MediaTier:
 # Order = display order within each kind. First image + first video are defaults.
 MEDIA_TIERS: tuple[MediaTier, ...] = (
     # ── Images ────────────────────────────────────────────────────────────
+    # Cheapest entry tier — verified working on KIE (0.8 provider credits).
+    MediaTier(
+        key="zimg:std", label="Z-Image", kind="image", provider="kie_image",
+        cost=5, emoji="⚡", note="быстро · дёшево", note_uz="tez · arzon",
+        payload={"_kie_model": "z-image", "image_size": "1:1", "aspect_ratio": "1:1"},
+    ),
     MediaTier(
         key="nano:std", label="Nano Banana", kind="image", provider="nano_banana",
         cost=10, emoji="🍌", note="1K · быстро", note_uz="1K · tez",

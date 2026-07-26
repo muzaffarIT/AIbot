@@ -29,6 +29,7 @@ function StatusIcon({ status }: { status: string }) {
 function providerLabel(provider: string) {
   if (provider === "nano_banana") return "🍌 Nano Banana";
   if (provider === "gpt_image") return "🎨 GPT Image 2";
+  if (provider === "kie_image") return "⚡ Z-Image";
   if (provider === "veo") return "🎬 Veo 3";
   if (provider === "kling") return "🎥 Kling";
   return provider;
@@ -51,8 +52,8 @@ function formatDate(d?: string | null, lang = "ru") {
 }
 
 function isImageProvider(provider: string) {
-  // Both image providers — without gpt_image the result rendered as a video.
-  return provider === "nano_banana" || provider === "gpt_image";
+  // Every image provider — a missing one renders its result as a video.
+  return provider === "nano_banana" || provider === "gpt_image" || provider === "kie_image";
 }
 
 /** Download a file using Telegram WebApp API (v8+) or fallback to <a> */
