@@ -74,18 +74,20 @@ MEDIA_TIERS: tuple[MediaTier, ...] = (
         cost=90, emoji="🎬", note="4K апскейл", note_uz="4K apskeyl",
         payload={"model": "veo3_fast", "upscale_4k": True},
     ),
+    # Labels stay language-neutral ("5s", not "5с"/"5 сек") — the localized
+    # duration lives in note / note_uz.
     MediaTier(
-        key="kling:std5", label="Kling · 5с", kind="video", provider="kling",
+        key="kling:std5", label="Kling · 5s", kind="video", provider="kling",
         cost=40, emoji="🎥", note="5 сек", note_uz="5 soniya",
         payload={"mode": "std", "duration": "5"},
     ),
     MediaTier(
-        key="kling:pro5", label="Kling Pro · 5с", kind="video", provider="kling",
+        key="kling:pro5", label="Kling Pro · 5s", kind="video", provider="kling",
         cost=70, emoji="🎥", note="5 сек · Pro", note_uz="5 soniya · Pro",
         payload={"mode": "pro", "duration": "5"},
     ),
     MediaTier(
-        key="kling:pro10", label="Kling Pro · 10с", kind="video", provider="kling",
+        key="kling:pro10", label="Kling Pro · 10s", kind="video", provider="kling",
         cost=120, emoji="🎥", note="10 сек · Pro", note_uz="10 soniya · Pro",
         payload={"mode": "pro", "duration": "10"},
     ),
