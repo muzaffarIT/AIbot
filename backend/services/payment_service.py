@@ -115,16 +115,24 @@ class PaymentService:
                 comment=f"Credits added after successful payment for plan {plan.code}",
             )
 
-            # Referral commission: 10% of payment amount in UZS credited to referrer's wallet
+            # Referral commission credited to the referrer's UZS wallet. The
+            # rate is no longer a flat 10% — it comes from the partner tier the
+            # referrer has earned (backend/services/partner_tiers.py).
             try:
                 from backend.models.user import User as _User
+                from backend.services.partner_stats import count_paid_referrals
+                from backend.services.partner_tiers import commission_rate
+
                 payer = self.db.query(_User).filter(_User.id == order.user_id).first()
                 if payer and payer.referred_by_telegram_id:
                     referrer = self.db.query(_User).filter(
                         _User.telegram_user_id == payer.referred_by_telegram_id
                     ).first()
                     if referrer:
-                        uzs_commission = max(100, int(float(updated_payment.amount) * 0.10))
+                        rate = commission_rate(
+                            count_paid_referrals(self.db, referrer.telegram_user_id)
+                        )
+                        uzs_commission = max(100, int(float(updated_payment.amount) * rate))
                         referrer.referral_earnings = (referrer.referral_earnings or 0) + uzs_commission
                         referrer.uzs_balance = (getattr(referrer, "uzs_balance", 0) or 0) + uzs_commission
                         self.db.flush()

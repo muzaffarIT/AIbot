@@ -215,16 +215,25 @@ def update_language(payload: LanguageUpdateRequest, db: Session = Depends(get_db
 
 
 @router.get("/{telegram_id}/referral")
-async def get_referral(telegram_id: int, db: Session = Depends(get_db)):
+async def get_referral(telegram_id: int, lang: str = "ru", db: Session = Depends(get_db)):
+    """Referral code + partner standing (tier, commission %, progress)."""
     try:
+        from backend.services.partner_stats import count_paid_referrals
+        from backend.services.partner_tiers import progress
+
         user_service = UserService(db)
         user = user_service.get_user_by_telegram_id(telegram_id)
         if not user:
-            return {"referral_code":"","referral_count":0, "referral_earnings":0}
+            return {
+                "referral_code": "", "referral_count": 0, "referral_earnings": 0,
+                "partner": progress(0, lang),
+            }
+        paid = count_paid_referrals(db, user.telegram_user_id)
         return {
             "referral_code": user.referral_code or "",
             "referral_count": get_referral_count(db, user.telegram_user_id),
-            "referral_earnings": user.referral_earnings or 0
+            "referral_earnings": user.referral_earnings or 0,
+            "partner": progress(paid, lang),
         }
     finally:
         db.close()
@@ -243,6 +252,11 @@ async def get_referrals_list(telegram_id: int, db: Session = Depends(get_db)):
         referred = db.query(User).filter(
             User.referred_by_telegram_id == user.telegram_user_id
         ).order_by(User.created_at.desc()).all()
+
+        # Commission rate from this partner's current tier
+        from backend.services.partner_stats import count_paid_referrals
+        from backend.services.partner_tiers import commission_rate
+        _rate = commission_rate(count_paid_referrals(db, user.telegram_user_id))
 
         result = []
         for ref in referred:
@@ -270,7 +284,10 @@ async def get_referrals_list(telegram_id: int, db: Session = Depends(get_db)):
             total_topup = float(topup_row.total) if topup_row else 0.0
 
             grand_total = total_paid + total_topup
-            commission = ref.referral_earnings or 0  # use actual credited amount from DB
+            # Commission this partner earned FROM this referral. This used to
+            # read `ref.referral_earnings`, which is the REFERRAL's own partner
+            # income — a different number entirely.
+            commission = int(grand_total * _rate) if grand_total > 0 else 0
 
             name = ref.first_name or ref.username or f"User#{ref.telegram_user_id}"
             result.append({

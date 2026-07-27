@@ -148,10 +148,27 @@ export type AchievementItem = {
   earned: boolean;
 };
 
+export type PartnerTierInfo = {
+  key: string;
+  name: string;
+  emoji: string;
+  min_referrals: number;
+  percent: number;
+};
+
+export type PartnerProgress = {
+  paid_referrals: number;
+  current: PartnerTierInfo;
+  next: PartnerTierInfo | null;
+  to_next: number;
+  all_tiers: PartnerTierInfo[];
+};
+
 export type ReferralData = {
   referral_code: string;
   referral_count: number;
   referral_earnings: number;
+  partner?: PartnerProgress;
 };
 
 export type ReferralUser = {
@@ -329,8 +346,8 @@ export const api = {
   getAchievements: (telegramId: number) =>
     request<AchievementItem[]>(`/api/users/${telegramId}/achievements`),
 
-  getReferral: (telegramId: number) =>
-    request<ReferralData>(`/api/users/${telegramId}/referral`),
+  getReferral: (telegramId: number, lang = "ru") =>
+    request<ReferralData>(`/api/users/${telegramId}/referral?lang=${lang}`),
 
   getReferrals: (telegramId: number) =>
     request<ReferralsListResponse>(`/api/users/${telegramId}/referrals`),

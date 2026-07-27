@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, Copy, Share2, Check, Users, Zap, TrendingUp, UserCircle2 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
-import { api, type ReferralUser } from "@/lib/api";
+import { api, type ReferralUser, type PartnerProgress } from "@/lib/api";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -20,6 +20,7 @@ export default function ReferralPage() {
   const { telegramUser: tgUser, backendUser: userData, language } = useMiniAppUser();
   const [refLink, setRefLink] = useState("");
   const [stats, setStats] = useState({ count: 0, earned: 0 });
+  const [partner, setPartner] = useState<PartnerProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [referralUsers, setReferralUsers] = useState<ReferralUser[]>([]);
@@ -28,7 +29,7 @@ export default function ReferralPage() {
     const id = userData?.telegram_user_id ?? tgUser?.id;
     if (!id) { setLoading(false); return; }
     Promise.all([
-      api.getReferral(id),
+      api.getReferral(id, language),
       api.getReferrals(id),
     ])
       .then(([data, listData]) => {
@@ -36,11 +37,26 @@ export default function ReferralPage() {
           setRefLink(`https://t.me/harfai_bot?start=ref_${data.referral_code}`);
         }
         setStats({ count: data.referral_count ?? 0, earned: data.referral_earnings ?? 0 });
+        setPartner(data.partner ?? null);
         setReferralUsers(listData.referrals ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [userData?.telegram_user_id, tgUser?.id]);
+  }, [userData?.telegram_user_id, tgUser?.id, language]);
+
+  const percent = partner?.current.percent ?? 10;
+
+  const promoTemplates = language === "uz"
+    ? [
+        "🤖 HARF AI — Telegram ichidagi sun'iy intellekt.\n\n✍️ Matn yozadi va savollarga javob beradi\n🖼 Ta'rifingiz bo'yicha rasm yaratadi\n🎬 Fotoni videoga aylantiradi\n\nRo'yxatdan o'ting va 5 ta bepul kredit oling 🎁",
+        "Neyrosetlar uchun pul to'lashni bas qiling 💸\n\nHARF AI'da ChatGPT, Nano Banana, Veo va Kling — hammasi bitta Telegram botida.\n\nBepul sinab ko'ring 👇",
+        "Men kontentni shu yerda yarataman 👇\n\nHARF AI — rasm, video va matn uchun AI. Telefondan chiqmasdan, sekundlar ichida.\n\nBirinchi generatsiyalar — bepul 🎁",
+      ]
+    : [
+        "🤖 HARF AI — нейросеть прямо в Telegram.\n\n✍️ Пишет тексты и отвечает на вопросы\n🖼 Рисует картинки по описанию\n🎬 Оживляет фото в видео\n\nРегистрируйся и получи 5 бесплатных кредитов 🎁",
+        "Хватит платить за нейросети по отдельности 💸\n\nВ HARF AI собраны ChatGPT, Nano Banana, Veo и Kling — всё в одном Telegram-боте.\n\nПопробуй бесплатно 👇",
+        "Вот где я делаю контент 👇\n\nHARF AI — нейросеть для картинок, видео и текста. Прямо в телефоне, за секунды.\n\nПервые генерации — бесплатно 🎁",
+      ];
 
   const copyLink = async () => {
     if (!refLink) return;
@@ -76,12 +92,12 @@ export default function ReferralPage() {
     ? [
         { icon: "🔗", title: "Havolani ulashing", desc: "Referal havolangizni do'stlaringizga yuboring — messenjer yoki ijtimoiy tarmoqda" },
         { icon: "👤", title: "Do'stingiz ro'yxatdan o'tadi", desc: "U HARF AI ga qo'shiladi va darhol 5 ta bepul kredit oladi" },
-        { icon: "💰", title: "Siz 10% so'm olasiz", desc: "Do'stingizning har bir to'ldirishidan 10% so'm balansingizga avtomatik tushadi" },
+        { icon: "💰", title: `Siz ${percent}% so'm olasiz`, desc: `Do'stingizning har bir to'ldirishidan ${percent}% so'm balansingizga avtomatik tushadi` },
       ]
     : [
         { icon: "🔗", title: "Поделитесь ссылкой", desc: "Отправьте реферальную ссылку друзьям — в мессенджере или соцсетях" },
         { icon: "👤", title: "Друг регистрируется", desc: "Он присоединяется к HARF AI и сразу получает 5 бесплатных кредитов" },
-        { icon: "💰", title: "Вы получаете 10% в сумах", desc: "С каждого пополнения друга 10% суммы зачисляется на ваш денежный баланс" },
+        { icon: "💰", title: `Вы получаете ${percent}% в сумах`, desc: `С каждого пополнения друга ${percent}% суммы зачисляется на ваш денежный баланс` },
       ];
 
   if (loading) {
@@ -131,23 +147,113 @@ export default function ReferralPage() {
                 className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 text-2xl font-black text-green-400"
                 style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.25)" }}
               >
-                10%
+                {percent}%
               </div>
               <div>
                 <p className="text-lg font-extrabold text-white leading-tight">
                   {language === "uz"
-                    ? "Har bir to'lovdan\n10% so'm oling"
-                    : "Получайте 10% в сумах\nс каждого пополнения друга"}
+                    ? `Har bir to'lovdan\n${percent}% so'm oling`
+                    : `Получайте ${percent}% в сумах\nс каждого пополнения друга`}
                 </p>
                 <p className="text-sm text-white/50 mt-1">
                   {language === "uz"
-                    ? "Do'stingiz 100 000 so'm to'lasa → siz +10 000 so'm olasiz"
-                    : "Друг внёс 100 000 сум → вам +10 000 сум на баланс"}
+                    ? `Do'stingiz 100 000 so'm to'lasa → siz +${(percent * 1000).toLocaleString("uz-UZ")} so'm olasiz`
+                    : `Друг внёс 100 000 сум → вам +${(percent * 1000).toLocaleString("ru-RU")} сум на баланс`}
                 </p>
               </div>
             </div>
           </div>
         </motion.div>
+
+        {/* Partner tier — current level, progress to the next, full ladder */}
+        {partner && (
+          <motion.div variants={itemVariants} className="glass-card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl leading-none">{partner.current.emoji}</span>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-white/40">
+                    {language === "uz" ? "Sizning darajangiz" : "Ваш уровень"}
+                  </p>
+                  <p className="text-lg font-extrabold text-white leading-tight">
+                    {partner.current.name}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-black text-green-400 leading-none">{percent}%</p>
+                <p className="text-[11px] text-white/40 mt-1">
+                  {language === "uz" ? "komissiya" : "комиссия"}
+                </p>
+              </div>
+            </div>
+
+            {partner.next ? (
+              <>
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="text-white/50">
+                      {language === "uz"
+                        ? `${partner.next.emoji} ${partner.next.name} — ${partner.next.percent}%`
+                        : `${partner.next.emoji} ${partner.next.name} — ${partner.next.percent}%`}
+                    </span>
+                    <span className="text-white/40 tabular-nums">
+                      {partner.paid_referrals}/{partner.next.min_referrals}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/8 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-green-500 to-brand-cyan transition-all"
+                      style={{
+                        width: `${Math.min(100, partner.next.min_referrals
+                          ? (partner.paid_referrals / partner.next.min_referrals) * 100
+                          : 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-white/50">
+                  {language === "uz"
+                    ? `Yana ${partner.to_next} ta to'lovchi do'st — va komissiya ${partner.next.percent}% bo'ladi`
+                    : `Ещё ${partner.to_next} платящих друга — и комиссия вырастет до ${partner.next.percent}%`}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-brand-accent font-semibold">
+                {language === "uz"
+                  ? "🎉 Siz eng yuqori darajadasiz — maksimal komissiya!"
+                  : "🎉 Вы на максимальном уровне — самая высокая комиссия!"}
+              </p>
+            )}
+
+            {/* Ladder */}
+            <div className="pt-1 space-y-1.5">
+              {partner.all_tiers.map((t) => {
+                const reached = partner.paid_referrals >= t.min_referrals;
+                const isCurrent = t.key === partner.current.key;
+                return (
+                  <div
+                    key={t.key}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm ${
+                      isCurrent ? "bg-green-500/12 border border-green-500/25" : "bg-white/4"
+                    }`}
+                  >
+                    <span className={reached ? "" : "grayscale opacity-40"}>{t.emoji}</span>
+                    <span className={`flex-1 ${reached ? "text-white/85" : "text-white/35"}`}>
+                      {t.name}
+                    </span>
+                    <span className="text-[11px] text-white/35 tabular-nums">
+                      {t.min_referrals}+
+                    </span>
+                    <span className={`font-bold tabular-nums ${reached ? "text-green-400" : "text-white/30"}`}>
+                      {t.percent}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         {/* Stats */}
         <motion.div variants={itemVariants} className="grid grid-cols-2 gap-3">
@@ -220,6 +326,27 @@ export default function ReferralPage() {
               <Share2 size={16} />
               {language === "uz" ? "Ulashish" : "Поделиться"}
             </button>
+          </div>
+        </motion.div>
+
+        {/* Promo materials — ready-made posts partners can copy and publish */}
+        <motion.div variants={itemVariants} className="space-y-3">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-white/40 px-1">
+            {language === "uz" ? "Tayyor postlar" : "Готовые посты"}
+          </h2>
+          <p className="text-xs text-white/40 px-1 -mt-1">
+            {language === "uz"
+              ? "Nusxalang va kanalingizga joylashtiring — havola avtomatik qo'shiladi"
+              : "Скопируйте и опубликуйте у себя — ссылка подставится автоматически"}
+          </p>
+          <div className="space-y-2">
+            {promoTemplates.map((tpl, i) => (
+              <PromoCard
+                key={i}
+                text={`${tpl}\n\n${refLink}`}
+                uz={language === "uz"}
+              />
+            ))}
           </div>
         </motion.div>
 
@@ -302,5 +429,40 @@ export default function ReferralPage() {
         </motion.div>
       </motion.div>
     </main>
+  );
+}
+
+/** A ready-to-publish promo post with its own copy button. */
+function PromoCard({ text, uz }: { text: string; uz: boolean }) {
+  const [done, setDone] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setDone(true);
+    setTimeout(() => setDone(false), 2000);
+  };
+
+  return (
+    <div className="glass-card p-4 space-y-3">
+      <p className="text-sm text-white/75 whitespace-pre-wrap leading-relaxed">{text}</p>
+      <button
+        onClick={copy}
+        className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+          done ? "bg-green-500 text-white" : "bg-white/8 text-white hover:bg-white/12"
+        }`}
+      >
+        {done ? <Check size={14} /> : <Copy size={14} />}
+        {done ? (uz ? "Nusxalandi!" : "Скопировано!") : (uz ? "Postni nusxalash" : "Скопировать пост")}
+      </button>
+    </div>
   );
 }
