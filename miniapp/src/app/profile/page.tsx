@@ -6,9 +6,12 @@ import { motion, type Variants } from "framer-motion";
 import {
   ArrowLeft, Trophy, Lock, Calendar,
   Globe, Check, Zap, Users, CreditCard, Gift,
+  Wallet, ClipboardList, ChevronDown, LifeBuoy, Sparkles,
 } from "lucide-react";
 import { useMiniAppUser } from "@/lib/use-miniapp-user";
 import { api, type AchievementItem } from "@/lib/api";
+
+const SUPPORT_USERNAME = "khaetov_000";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -27,6 +30,7 @@ const LANG_OPTIONS = [
 export default function ProfilePage() {
   const { telegramUser: tgUser, backendUser: userData, loading, language, changeLanguage } = useMiniAppUser();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [communityOpen, setCommunityOpen] = useState(false);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
 
   useEffect(() => {
@@ -114,42 +118,87 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
-        {/* Avatar + name */}
-        <motion.div variants={itemVariants} className="glass-card p-6 flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-primary to-brand-cyan flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-brand-primary/30">
-            {displayName.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xl font-bold text-white truncate">{displayName}</p>
-            {(tgUser?.username || userData?.username) && (
-              <p className="text-sm text-white/50">@{tgUser?.username || userData?.username}</p>
-            )}
-            {registeredAt && (
-              <p className="text-xs text-white/40 mt-1 flex items-center gap-1">
-                <Calendar size={11} />
-                {language === "uz" ? "Ro'yxatdan o'tgan" : "Зарегистрирован"}:{" "}
-                {formatDate(registeredAt)}
-              </p>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Stats row */}
+        {/* Dashboard — identity + balance on the left, quick actions on the
+            right, so the whole account fits one screenful (Syntx-style). */}
         <motion.section variants={itemVariants} className="grid grid-cols-2 gap-3">
-          <div className="glass-panel p-4 flex flex-col items-center text-center">
-            <Zap size={20} className="mb-1 text-brand-cyan" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-              {language === "uz" ? "Kredit" : "Кредиты"}
-            </span>
-            <span className="text-xl font-bold text-white">{credits}</span>
+          <div className="glass-card p-4 flex flex-col justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-primary to-brand-cyan flex items-center justify-center text-white text-base font-bold shrink-0">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-white truncate">{displayName}</p>
+                {(tgUser?.username || userData?.username) && (
+                  <p className="text-[11px] text-white/40 truncate">
+                    @{tgUser?.username || userData?.username}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl font-black text-white tracking-tight tabular-nums">
+                  {credits}
+                </span>
+                <Zap size={18} className="text-brand-accent" />
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40 mt-0.5">
+                {language === "uz" ? "Kredit balansi" : "Баланс кредитов"}
+              </p>
+            </div>
           </div>
-          <div className="glass-panel p-4 flex flex-col items-center text-center">
-            <Users size={20} className="mb-1 text-brand-primary" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-              {language === "uz" ? "Do'stlar" : "Друзья"}
-            </span>
-            <span className="text-xl font-bold text-white">{referralCount}</span>
+
+          <div className="grid grid-cols-2 gap-3">
+            <QuickTile href="/plans" icon={<CreditCard size={18} />}
+              label={language === "uz" ? "Tariflar" : "Тарифы"} />
+            <QuickTile href="/wallet" icon={<Wallet size={18} />}
+              label={language === "uz" ? "Hamyon" : "Кошелёк"} />
+            <QuickTile href="/referral" icon={<Users size={18} />}
+              label={language === "uz" ? "Hamkorlik" : "Партнёрам"}
+              badge={referralCount || undefined} />
+            <QuickTile href="/jobs" icon={<ClipboardList size={18} />}
+              label={language === "uz" ? "Ishlarim" : "Работы"} />
           </div>
+        </motion.section>
+
+        {/* Community — support + channels, collapsed by default */}
+        <motion.section variants={itemVariants} className="glass-card overflow-hidden">
+          <button
+            onClick={() => setCommunityOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3.5"
+          >
+            <span className="text-sm font-bold text-white">
+              {language === "uz" ? "Jamiyatga qo'shiling" : "Присоединяйтесь"}
+            </span>
+            <ChevronDown
+              size={18}
+              className={`text-white/40 transition-transform ${communityOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+          {communityOpen && (
+            <div className="px-2 pb-2 space-y-1">
+              <a
+                href={`https://t.me/${SUPPORT_USERNAME}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors"
+              >
+                <LifeBuoy size={16} className="text-brand-cyan shrink-0" />
+                <span className="text-sm text-white/80">
+                  {language === "uz" ? "Yordam va qo'llab-quvvatlash" : "Помощь и поддержка"}
+                </span>
+              </a>
+              <Link
+                href="/plans"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors"
+              >
+                <Sparkles size={16} className="text-brand-accent shrink-0" />
+                <span className="text-sm text-white/80">
+                  {language === "uz" ? "Tariflar va imkoniyatlar" : "Тарифы и возможности"}
+                </span>
+              </Link>
+            </div>
+          )}
         </motion.section>
 
         {/* Achievements */}
@@ -224,7 +273,49 @@ export default function ProfilePage() {
             </span>
           </Link>
         </motion.div>
+
+        {/* Support footer — the details support asks for first */}
+        <motion.p
+          variants={itemVariants}
+          className="text-center text-[11px] text-white/25 tabular-nums pt-1"
+        >
+          {registeredAt && (
+            <>
+              <Calendar size={10} className="inline mb-0.5 mr-1" />
+              {language === "uz" ? "Ro'yxatdan o'tgan" : "Регистрация"}: {formatDate(registeredAt)}
+              {" · "}
+            </>
+          )}
+          ID: {userData?.telegram_user_id ?? tgUser?.id ?? "—"}
+        </motion.p>
       </motion.div>
     </main>
+  );
+}
+
+/** Compact square action tile for the profile dashboard. */
+function QuickTile({
+  href, icon, label, badge,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  badge?: number;
+}) {
+  return (
+    <Link
+      href={href}
+      className="glass-panel relative flex flex-col items-center justify-center gap-1.5 aspect-square hover:bg-white/8 transition-colors active:scale-95"
+    >
+      <span className="text-brand-cyan">{icon}</span>
+      <span className="text-[11px] font-semibold text-white/75 text-center leading-tight px-1">
+        {label}
+      </span>
+      {badge !== undefined && badge > 0 && (
+        <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-primary text-[10px] font-bold text-white grid place-items-center tabular-nums">
+          {badge}
+        </span>
+      )}
+    </Link>
   );
 }
