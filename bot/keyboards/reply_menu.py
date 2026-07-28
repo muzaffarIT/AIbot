@@ -3,29 +3,31 @@ from aiogram.types import (ReplyKeyboardMarkup,
 from backend.core.config import settings
 
 def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
+    """Persistent keyboard — the mini app takes the top, full-width row."""
+    miniapp_url = (settings.miniapp_url or "").rstrip("/")
     if lang == "uz":
         return ReplyKeyboardMarkup(
             keyboard=[
-                [KeyboardButton(text="🎨 Yaratish"),
+                [KeyboardButton(
+                    text="✨ HARF AI'ni ochish",
+                    web_app=WebAppInfo(url=miniapp_url),
+                )],
+                [KeyboardButton(text="🎨 Botda yaratish"),
                  KeyboardButton(text="❓ Yordam")],
                 [KeyboardButton(text="🌍 Til")],
-                [KeyboardButton(
-                    text="🌐 Kabinetni ochish",
-                    web_app=WebAppInfo(url=(settings.miniapp_url or "").rstrip("/"))
-                )],
             ],
             resize_keyboard=True,
             persistent=True
         )
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🎨 Создать"),
+            [KeyboardButton(
+                text="✨ Открыть HARF AI",
+                web_app=WebAppInfo(url=miniapp_url),
+            )],
+            [KeyboardButton(text="🎨 Создать в боте"),
              KeyboardButton(text="❓ Помощь")],
             [KeyboardButton(text="🌍 Язык")],
-            [KeyboardButton(
-                text="🌐 Открыть кабинет",
-                web_app=WebAppInfo(url=(settings.miniapp_url or "").rstrip("/"))
-            )],
         ],
         resize_keyboard=True,
         persistent=True
@@ -34,11 +36,15 @@ def main_reply_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
 
 REPLY_BUTTON_ACTIONS = {
     # RU
-    "🎨 Создать":   "menu_create",
-    "❓ Помощь":    "menu_help",
-    "🌍 Язык":      "menu_language",
+    "🎨 Создать в боте": "menu_create",
+    "❓ Помощь":         "menu_help",
+    "🌍 Язык":           "menu_language",
     # UZ
+    "🎨 Botda yaratish": "menu_create",
+    "❓ Yordam":         "menu_help",
+    "🌍 Til":            "menu_language",
+    # Legacy labels — existing users keep a cached keyboard until they press
+    # something that re-sends it, so the old texts must still resolve.
+    "🎨 Создать":   "menu_create",
     "🎨 Yaratish":  "menu_create",
-    "❓ Yordam":    "menu_help",
-    "🌍 Til":       "menu_language",
 }

@@ -19,6 +19,9 @@ SKIP_RATE_LIMIT_TEXTS = {
     "🎨 Yaratish", "💎 Tariflar", "📊 Ishlarim",
     "💰 Balans", "👥 Hamkorlik", "❓ Yordam",
     "☀️ Bonus", "🌐 Kabinet",
+    # Mini-app-first menu labels
+    "✨ Открыть HARF AI", "✨ HARF AI'ni ochish",
+    "🎨 Создать в боте", "🎨 Botda yaratish",
 }
 
 NAV_CALLBACKS = {

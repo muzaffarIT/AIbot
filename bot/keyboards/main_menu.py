@@ -3,56 +3,63 @@ from backend.core.config import settings
 
 
 def main_inline_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
-    """Main menu inline keyboard — bilingual (ru/uz)."""
+    """Main menu — bilingual (ru/uz).
+
+    Mini-app first: the AI chat (models, image/video generation, history,
+    voice) lives in the mini app, so it gets the top, full-width slot. The
+    older in-bot generation flow stays available underneath as a fallback for
+    clients where the mini app misbehaves — but it is no longer the default
+    path, which kept it drifting out of sync with the app.
+    """
     miniapp_url = (settings.miniapp_url or "").rstrip("/")
     if lang == "uz":
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="🎨 Yaratish", callback_data="menu_create"),
-                    InlineKeyboardButton(text="💎 Tariflar", callback_data="menu_plans"),
+                    InlineKeyboardButton(
+                        text="✨ HARF AI'ni ochish",
+                        web_app=WebAppInfo(url=miniapp_url),
+                    ),
                 ],
                 [
-                    InlineKeyboardButton(text="📊 Ishlarim", callback_data="history_cmd"),
+                    InlineKeyboardButton(text="💎 Tariflar", callback_data="menu_plans"),
                     InlineKeyboardButton(text="💰 Balans", callback_data="menu_balance"),
                 ],
                 [
+                    InlineKeyboardButton(text="📊 Ishlarim", callback_data="history_cmd"),
                     InlineKeyboardButton(text="👥 Hamkorlik", callback_data="menu_referral"),
+                ],
+                [
+                    InlineKeyboardButton(text="🎨 Botda yaratish", callback_data="menu_create"),
+                ],
+                [
                     InlineKeyboardButton(text="❓ Yordam", callback_data="menu_help"),
-                ],
-                [
                     InlineKeyboardButton(text="🌍 Til: O'zbek 🇺🇿", callback_data="menu_language"),
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="🌐 Kabinetni ochish",
-                        web_app=WebAppInfo(url=miniapp_url),
-                    ),
                 ],
             ]
         )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🎨 Создать", callback_data="menu_create"),
-                InlineKeyboardButton(text="💎 Тарифы", callback_data="menu_plans"),
+                InlineKeyboardButton(
+                    text="✨ Открыть HARF AI",
+                    web_app=WebAppInfo(url=miniapp_url),
+                ),
             ],
             [
-                InlineKeyboardButton(text="📊 Мои работы", callback_data="history_cmd"),
+                InlineKeyboardButton(text="💎 Тарифы", callback_data="menu_plans"),
                 InlineKeyboardButton(text="💰 Баланс", callback_data="menu_balance"),
             ],
             [
+                InlineKeyboardButton(text="📊 Мои работы", callback_data="history_cmd"),
                 InlineKeyboardButton(text="👥 Партнёрам", callback_data="menu_referral"),
+            ],
+            [
+                InlineKeyboardButton(text="🎨 Создать в боте", callback_data="menu_create"),
+            ],
+            [
                 InlineKeyboardButton(text="❓ Помощь", callback_data="menu_help"),
-            ],
-            [
                 InlineKeyboardButton(text="🌍 Язык: Русский 🇷🇺", callback_data="menu_language"),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🌐 Открыть кабинет",
-                    web_app=WebAppInfo(url=miniapp_url),
-                ),
             ],
         ]
     )
