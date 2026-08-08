@@ -39,6 +39,11 @@ class User(Base):
 
     # Notifications
     last_notification_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Per-user opt-out for marketing/daily broadcasts (bonus reminders, tips,
+    # win-back). Operational messages (payment confirmations) still go through.
+    notifications_enabled: Mapped[bool] = mapped_column(default=True, nullable=False)
+    # Telegram blocked the bot for this user — skip them in any broadcast loop.
+    is_blocked: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     onboarding_completed: Mapped[bool] = mapped_column(default=False, nullable=False)
 
