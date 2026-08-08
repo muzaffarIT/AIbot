@@ -97,11 +97,11 @@ class Settings(BaseSettings):
             if x.strip().isdigit()
         ]
 
-    welcome_credits: int = 5
+    welcome_credits: int = 20
     daily_credits: int = 1
     max_free_gens_per_day: int = 5
-    referral_bonus_referrer: int = 5
-    referral_bonus_new_user: int = 5
+    referral_bonus_referrer: int = 10
+    referral_bonus_new_user: int = 15
     support_username: str = "khaetov_000"
 
     click_merchant_id: str | None = None

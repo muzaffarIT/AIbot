@@ -31,6 +31,7 @@ def main_inline_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
                 ],
                 [
                     InlineKeyboardButton(text="🎨 Botda yaratish", callback_data="menu_create"),
+                    InlineKeyboardButton(text="✨ Namunalar", callback_data="menu_showcase"),
                 ],
                 [
                     InlineKeyboardButton(text="🔔 Bildirishnomalar", callback_data="menu_notifications"),
@@ -57,6 +58,7 @@ def main_inline_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="🎨 Создать в боте", callback_data="menu_create"),
+                InlineKeyboardButton(text="✨ Примеры", callback_data="menu_showcase"),
             ],
             [
                 InlineKeyboardButton(text="🔔 Уведомления", callback_data="menu_notifications"),
