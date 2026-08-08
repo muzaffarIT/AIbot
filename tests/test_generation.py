@@ -1,6 +1,6 @@
 import unittest
 
-from tests.test_support import create_client
+from tests.test_support import create_client, make_tma_header
 from backend.core.config import settings
 from worker.celery_app import celery_app
 
@@ -18,6 +18,9 @@ class GenerationFlowTests(unittest.TestCase):
                     "first_name": "Mock",
                     "language_code": "ru",
                 },
+                headers=make_tma_header(
+                    telegram_user_id, first_name="Mock", username="generator",
+                ),
             )
             plan = client.get("/api/plans/").json()[0]
             order = client.post(
@@ -54,9 +57,11 @@ class GenerationFlowTests(unittest.TestCase):
 
             balance_response = client.get(f"/api/balances/telegram/{telegram_user_id}")
             self.assertEqual(balance_response.status_code, 200)
+            # Plan credits (150) + first-purchase achievement "buyer" (+10)
+            # − generation cost (5) + first_gen achievement (+2) = 157.
             self.assertEqual(
                 balance_response.json()["credits_balance"],
-                plan["credits_amount"] - 5 + 2, # +2 from first_gen achievement
+                plan["credits_amount"] + 10 - 5 + 2,
             )
 
             jobs_response = client.get(f"/api/jobs/telegram/{telegram_user_id}")
@@ -75,6 +80,9 @@ class GenerationFlowTests(unittest.TestCase):
                     "first_name": "NoMoney",
                     "language_code": "ru",
                 },
+                headers=make_tma_header(
+                    telegram_user_id, first_name="NoMoney", username="empty_wallet",
+                ),
             )
 
             response = client.post(
@@ -107,6 +115,9 @@ class GenerationFlowTests(unittest.TestCase):
                         "first_name": "Queued",
                         "language_code": "ru",
                     },
+                    headers=make_tma_header(
+                        telegram_user_id, first_name="Queued", username="queued_user",
+                    ),
                 )
                 plan = client.get("/api/plans/").json()[0]
                 order = client.post(

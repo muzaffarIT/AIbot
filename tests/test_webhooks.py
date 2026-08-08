@@ -1,6 +1,6 @@
 import unittest
 
-from tests.test_support import create_client
+from tests.test_support import create_client, make_tma_header
 
 
 class PaymentWebhookTests(unittest.TestCase):
@@ -16,6 +16,9 @@ class PaymentWebhookTests(unittest.TestCase):
                     "first_name": "Cards",
                     "language_code": "ru",
                 },
+                headers=make_tma_header(
+                    telegram_user_id, first_name="Cards", username="cards_user",
+                ),
             )
             plan = client.get("/api/plans/").json()[0]
             order = client.post(

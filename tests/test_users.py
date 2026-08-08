@@ -1,6 +1,6 @@
 import unittest
 
-from tests.test_support import create_client
+from tests.test_support import create_client, make_tma_header
 
 
 class UserPaymentFlowTests(unittest.TestCase):
@@ -17,6 +17,12 @@ class UserPaymentFlowTests(unittest.TestCase):
                     "last_name": "User",
                     "language_code": "ru",
                 },
+                headers=make_tma_header(
+                    telegram_user_id,
+                    first_name="Test",
+                    last_name="User",
+                    username="maker",
+                ),
             )
             self.assertEqual(ensure_response.status_code, 200)
             ensured_user = ensure_response.json()
