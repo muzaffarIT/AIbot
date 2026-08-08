@@ -47,12 +47,52 @@ async def _send_referral_info(telegram_id: int, message, bot: Bot) -> None:
         ref_count = user_service.get_referral_count(user.id)
         earnings = getattr(user, "referral_earnings", 0) or 0
 
-        text = i18n.t(lang, "referral.title",
-                      link=ref_link, count=ref_count, earnings=earnings)
+        # ── Partner tier progress (the Syntx-style "level up" mechanic) ──────
+        tier_block = ""
+        try:
+            from backend.services.partner_stats import count_paid_referrals
+            from backend.services.partner_tiers import PARTNER_TIERS, tier_for
+            paid = count_paid_referrals(db, telegram_id)
+            current = tier_for(paid)
+            # Next tier up the ladder, if any
+            next_tier = None
+            for t in PARTNER_TIERS:
+                if t.min_referrals > paid:
+                    next_tier = t
+                    break
+            if lang == "uz":
+                tier_block = (
+                    f"\n🏆 <b>Daraja: {current.emoji} {current.name_uz}</b> "
+                    f"(<b>{current.percent}%</b> komissiya)\n"
+                    f"💳 To'lov qilgan referallar: <b>{paid}</b>\n"
+                )
+                if next_tier:
+                    need = next_tier.min_referrals - paid
+                    tier_block += (
+                        f"⏭ Keyingi daraja: <b>{next_tier.emoji} {next_tier.name_uz}</b> "
+                        f"({next_tier.percent}%) — yana <b>{need}</b> ta to'lov qilgan referal\n"
+                    )
+            else:
+                tier_block = (
+                    f"\n🏆 <b>Ваш уровень: {current.emoji} {current.name_ru}</b> "
+                    f"(комиссия <b>{current.percent}%</b>)\n"
+                    f"💳 Платящих рефералов: <b>{paid}</b>\n"
+                )
+                if next_tier:
+                    need = next_tier.min_referrals - paid
+                    tier_block += (
+                        f"⏭ Следующая ступень: <b>{next_tier.emoji} {next_tier.name_ru}</b> "
+                        f"({next_tier.percent}%) — ещё <b>{need}</b> платящих реферала\n"
+                    )
+        except Exception as e:
+            logger.warning(f"[Referral] tier block failed: {e}")
 
-        share_text = (f"HARF AI — sun'iy intellekt yordamida rasm va video yarating! +10 kredit sovg'a 🎁"
+        text = i18n.t(lang, "referral.title",
+                      link=ref_link, count=ref_count, earnings=earnings) + tier_block
+
+        share_text = (f"HARF AI — sun'iy intellekt yordamida rasm va video yarating! +15 kredit sovg'a 🎁"
                       if lang == "uz" else
-                      f"HARF AI — создавай картинки и видео с помощью ИИ! +10 кредитов в подарок 🎁")
+                      f"HARF AI — создавай картинки и видео с помощью ИИ! +15 кредитов в подарок 🎁")
         share_url = f"https://t.me/share/url?url={ref_link}&text={share_text}"
 
         await message.answer(

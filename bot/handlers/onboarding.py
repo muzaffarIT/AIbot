@@ -68,5 +68,25 @@ async def onboarding_step_4(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=main_reply_keyboard(lang)
         )
         await callback.answer()
+
+        # ── Show a "wow" example right after onboarding ──────────────────
+        # The single biggest new-user drop-off in AI bots is "I don't know
+        # what to write". Showing a finished example with a ready-to-use
+        # prompt (Suzma's Reels trick, in-bot) collapses that barrier and
+        # pushes the user to their first generation immediately.
+        try:
+            from bot.handlers.showcase import send_showcase
+            from bot.keyboards.main_menu import main_inline_keyboard
+            # Lead with the menu so they have navigation, then the showcase
+            # example on top as the call-to-action.
+            await callback.message.answer(
+                i18n.t(lang, "showcase.intro") if lang != "uz"
+                else i18n.t(lang, "showcase.intro"),
+                reply_markup=main_inline_keyboard(lang),
+                parse_mode="HTML",
+            )
+            await send_showcase(callback.message, callback.from_user.id)
+        except Exception as e:
+            logger.warning(f"[Onboarding] showcase step failed (non-fatal): {e}")
     finally:
         db.close()
