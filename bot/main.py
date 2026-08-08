@@ -32,6 +32,7 @@ from bot.handlers.broadcast import router as broadcast_router
 from bot.handlers.voice_chat import router as voice_chat_router
 from bot.handlers.cabinet import router as cabinet_router
 from bot.handlers.language import router as language_router
+from bot.handlers.notifications import router as notifications_router
 from bot.middlewares.rate_limit import GenerationRateLimitMiddleware
 
 load_dotenv()
@@ -81,6 +82,7 @@ async def main() -> None:
     dp.include_router(daily_router)        # 10. daily
     dp.include_router(referral_router)     # 11. referral
     dp.include_router(achievements_router) # 12. achievements
+    dp.include_router(notifications_router)  # 12a. notification opt-in/out
     dp.include_router(voice_chat_router)   # 12b. voice → STT → AI chat (F.voice)
     dp.include_router(veo_router)          # 13. veo (with F.photo)
     dp.include_router(kling_router)        # 14. kling router

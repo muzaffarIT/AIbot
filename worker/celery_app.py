@@ -33,7 +33,15 @@ celery_app.conf.beat_schedule = {
     },
     "daily-bonus-reminder": {
         "task": "worker.tasks.notification_tasks.daily_reminder_task",
-        "schedule": crontab(minute=0, hour=0),
+        # 10:00 Tashkent — morning is the highest-open-rate window; at 00:00
+        # nobody reads and the reminder is wasted.
+        "schedule": crontab(minute=0, hour=10),
+    },
+    # Daily educational tip / soft promo, rotates by weekday. 19:00 local —
+    # users are relaxed and more likely to actually generate something.
+    "daily-tip": {
+        "task": "worker.tasks.notification_tasks.daily_tip_task",
+        "schedule": crontab(minute=0, hour=19),
     },
     "lifecycle-notification": {
         "task": "worker.tasks.notification_tasks.lifecycle_notification_task",

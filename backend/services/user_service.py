@@ -79,45 +79,58 @@ class UserService:
         if not user:
             raise ValueError("User not found")
 
-        now = datetime.now(timezone.utc)
-        
-        # Check last claim
-        if user.last_daily_claim:
-            time_diff = now - user.last_daily_claim
-            if time_diff < timedelta(hours=24):
-                # Already claimed today (less than 24h)
-                # But actually we should check calendar day or 24h window?
-                # User says: "если > 48ч - сброс".
-                # Usually daily is once per 24h.
-                hours_left = 24 - (time_diff.total_seconds() / 3600)
-                minutes_left = (hours_left % 1) * 60
+        # Use Tashkent calendar day so "once per day" matches the user's
+        # lived day (the bot's audience is UZ). UTC would split a user's
+        # day at 05:00 local and let them double-claim across it.
+        from datetime import datetime, timezone, timedelta, date
+        tashkent = timezone(timedelta(hours=5))
+        now = datetime.now(tashkent)
+        today = now.date()
+
+        # ── Calendar-day guard: one bonus per local day ───────────────────
+        if user.last_daily_claim is not None:
+            # last_daily_claim may be tz-naive in old rows — make it comparable
+            last = user.last_daily_claim
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=tashkent)
+            last_day = last.astimezone(tashkent).date()
+
+            if last_day == today:
+                # Already claimed today — show time remaining to the next day.
+                tomorrow = today + timedelta(days=1)
+                remaining = datetime.combine(tomorrow, datetime.min.time(), tzinfo=tashkent) - now
+                hours_left = max(0, int(remaining.total_seconds() // 3600))
+                minutes_left = max(0, int((remaining.total_seconds() % 3600) // 60))
                 return {
                     "success": False,
                     "error": "already_claimed",
-                    "hours": int(hours_left),
-                    "minutes": int(minutes_left),
-                    "streak": user.daily_streak
+                    "hours": hours_left,
+                    "minutes": minutes_left,
+                    "streak": user.daily_streak,
                 }
 
-            if time_diff > timedelta(hours=48):
-                # Streak reset
-                user.daily_streak = 1
-            else:
-                # Streak increment
+            # Streak bookkeeping (only when a new day actually started)
+            gap_days = (today - last_day).days
+            if gap_days == 1:
                 user.daily_streak += 1
+            else:
+                # missed a day (or more) — reset the streak
+                user.daily_streak = 1
         else:
-            # First claim
+            # First ever claim
             user.daily_streak = 1
 
         if user.daily_streak > user.max_streak:
             user.max_streak = user.daily_streak
 
         user.last_daily_claim = now
-        
-        # Bonus formula: 3 + streak*1, max 10
-        bonus_credits = min(10, 3 + user.daily_streak)
+
+        # Bonus formula: grows with the streak 1→2→3...→10, then flat at 10.
+        # Mirrors the UX users expect from daily-reward mechanics (games,
+        # Suzma/Syntx-style retention) and matches the in-bot copy.
+        bonus_credits = min(10, user.daily_streak)
         self.balance_service.add_credits(user.id, bonus_credits, "daily_bonus")
-        
+
         self.repo.db.commit()
         
         # Check achievements (streak)

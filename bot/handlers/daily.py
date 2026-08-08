@@ -45,23 +45,41 @@ async def _handle_daily_bonus(telegram_id: int, message: Message, bot: Bot) -> N
 
         lang = user.language_code or "ru"
         result = user_service.claim_daily_bonus(user.id)
-        
+
         if not result["success"]:
             if result.get("error") == "already_claimed":
                 text = i18n.t(lang, "daily.already_claimed",
                              hours=result["hours"], minutes=result["minutes"], streak=result["streak"])
-                await message.answer(text)
+                await message.answer(text, reply_markup=main_reply_keyboard(lang))
                 return
             return
 
-        # result: {"success": True, "credits": credits, "streak": streak, "balance": balance}
-        text = i18n.t(lang, "daily.claimed", 
-                      credits=result["credits"], 
-                      streak=result["streak"], 
-                      balance=result["balance"])
+        streak = result["streak"]
+        credits = result["credits"]
+        balance = result["balance"]
+
+        # Tomorrow's reward is the next step of the streak (capped at 10).
+        # Showing it drives day-2 retention — the whole point of a daily bonus.
+        tomorrow_credits = min(10, streak + 1)
+
+        if lang == "uz":
+            text = (
+                f"🎉 <b>Bonus olindi!</b>\n\n"
+                f"➕ Hisoblandi: <b>{credits} kredit</b>\n"
+                f"🔥 Ketma-ketlik: <b>{streak} kun</b>\n"
+                f"💰 Balans: <b>{balance} kredit</b>\n\n"
+                f"📅 Ertaga: <b>+{tomorrow_credits} kredit</b> — ketma-ketlikni uzatma! ⏰"
+            )
+        else:
+            text = (
+                f"🎉 <b>Бонус забран!</b>\n\n"
+                f"➕ Начислено: <b>{credits} кредитов</b>\n"
+                f"🔥 Серия: <b>{streak} дн.</b>\n"
+                f"💰 Баланс: <b>{balance} кредитов</b>\n\n"
+                f"📅 Завтра: <b>+{tomorrow_credits} кредитов</b> — не прерывай серию! ⏰"
+            )
 
         # Badge message for milestone streaks
-        streak = result["streak"]
         badge = (STREAK_BADGES_UZ if lang == "uz" else STREAK_BADGES).get(streak)
         if badge:
             text += f"\n\n" + i18n.t(lang, "daily.streak_badge", badge=badge)
@@ -80,7 +98,7 @@ async def _handle_daily_bonus(telegram_id: int, message: Message, bot: Bot) -> N
         from aiogram.exceptions import TelegramForbiddenError
         try:
             await message.answer(text, reply_markup=main_reply_keyboard(lang), parse_mode="HTML")
-            logger.info(f"[Daily] user={telegram_id} claimed streak={streak} credits={result['credits']}")
+            logger.info(f"[Daily] user={telegram_id} claimed streak={streak} credits={credits}")
         except TelegramForbiddenError:
             logger.warning(f"User blocked bot: {telegram_id}")
             return
