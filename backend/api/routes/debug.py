@@ -250,6 +250,15 @@ def notifications_status():
     # Actually try to resolve+connect to the broker, so we can tell apart
     # "URL is wrong" from "URL is right but network is blocked".
     diag = {"redis_url_seen": masked}
+    # What does the celery app actually think its broker is?
+    try:
+        from worker.celery_app import celery_app as _celery
+        diag["celery_broker"] = str(_celery.conf.broker_url or "").replace(
+            "://default:", "://default:***@"
+        )
+        diag["celery_result"] = str(_celery.conf.result_backend or "")
+    except Exception as e:
+        diag["celery_inspect_error"] = str(e)
     try:
         import socket as _socket
         from urllib.parse import urlparse as _u
