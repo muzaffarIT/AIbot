@@ -1,0 +1,43 @@
+# Daily broadcasts via GitHub Actions cron.
+#
+# Why: celery-beat (the embedded `-B` scheduler) is unreliable in a single
+# Railway container that restarts on every deploy — it silently stops firing
+# the schedule. Triggering the same tasks over HTTP from a fixed external
+# schedule is robust, free, and decoupled from the worker process.
+#
+# Schedule (UTC):
+#   05:00 UTC  = 10:00 Tashkent  → morning bonus reminder
+#   14:00 UTC  = 19:00 Tashkent  → rotating daily tip / promo
+# GitHub Actions cron runs in UTC, so the times above are already correct.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   BACKEND_URL   e.g. https://backendapp-production-c193.up.railway.app
+#   DEBUG_TOKEN   the SECRET_KEY used by the backend's /debug endpoints
+
+name: daily-broadcasts
+
+on:
+  schedule:
+    - cron: "0 5 * * *"   # 10:00 Tashkent — bonus reminder
+    - cron: "0 14 * * *"  # 19:00 Tashkent — daily tip
+  workflow_dispatch: {}    # allow manual runs from the Actions tab
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send morning bonus reminder
+        if: github.event.schedule == '0 5 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -sS -X POST \
+            -H "X-Debug-Token: ${{ secrets.DEBUG_TOKEN }}" \
+            -m 60 \
+            "${{ secrets.BACKEND_URL }}/api/debug/trigger-reminders" || true
+
+      - name: Send evening daily tip
+        if: github.event.schedule == '0 14 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -sS -X POST \
+            -H "X-Debug-Token: ${{ secrets.DEBUG_TOKEN }}" \
+            -m 60 \
+            "${{ secrets.BACKEND_URL }}/api/debug/trigger-daily-tip" || true
