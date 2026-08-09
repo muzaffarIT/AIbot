@@ -151,3 +151,95 @@ async def kie_ping():
     results["base_url"] = base
     results["mock_mode"] = settings.ai_mock_mode
     return results
+
+
+# ── Notification triggers + diagnostics ──────────────────────────────────────
+# Why these exist: celery-beat on Railway is fragile (embedded beat in a
+# restarting container silently stops firing). These endpoints let an
+# external scheduler — cron-job.org, GitHub Actions, UptimeRobot — call the
+# daily broadcasts over HTTP on a fixed schedule, decoupling delivery from
+# the in-process beat. They also double as a manual "send now" / health
+# check for the admin.
+#
+# Auth: X-Debug-Token header (== SECRET_KEY), same as every /debug route.
+
+def _notification_target_counts(db) -> dict:
+    """How many users each broadcast would currently reach — for diagnostics."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import func
+
+    total = db.query(func.count(User.id)).scalar() or 0
+    opted_in = db.query(func.count(User.id)).filter(
+        User.notifications_enabled == True,  # noqa: E712
+        User.is_blocked == False,            # noqa: E712
+    ).scalar() or 0
+
+    tashkent = timezone(timedelta(hours=5))
+    today_start = datetime.combine(
+        datetime.now(tashkent).date(), datetime.min.time(), tzinfo=tashkent
+    )
+    # Eligible for the bonus reminder specifically = opted-in AND not claimed today
+    from sqlalchemy import or_
+    reminder_eligible = db.query(func.count(User.id)).filter(
+        User.notifications_enabled == True,  # noqa: E712
+        User.is_blocked == False,            # noqa: E712
+        or_(
+            User.last_daily_claim == None,  # noqa: E711
+            User.last_daily_claim < today_start,
+        ),
+    ).scalar() or 0
+
+    return {
+        "total_users": total,
+        "broadcastable_users": opted_in,
+        "reminder_eligible_now": reminder_eligible,
+    }
+
+
+@router.post("/trigger-reminders", dependencies=[Depends(_require_debug_token)])
+def trigger_reminders():
+    """Fire the daily bonus reminder task immediately via the queue."""
+    from worker.tasks.notification_tasks import daily_reminder_task
+    result = daily_reminder_task.delay()
+    db = SessionLocal()
+    try:
+        counts = _notification_target_counts(db)
+    finally:
+        db.close()
+    return {
+        "triggered": "daily_reminder_task",
+        "task_id": getattr(result, "id", None),
+        "targets": counts,
+    }
+
+
+@router.post("/trigger-daily-tip", dependencies=[Depends(_require_debug_token)])
+def trigger_daily_tip():
+    """Fire the rotating daily-tip broadcast immediately via the queue."""
+    from worker.tasks.notification_tasks import daily_tip_task
+    result = daily_tip_task.delay()
+    db = SessionLocal()
+    try:
+        counts = _notification_target_counts(db)
+    finally:
+        db.close()
+    return {
+        "triggered": "daily_tip_task",
+        "task_id": getattr(result, "id", None),
+        "targets": counts,
+    }
+
+
+@router.get("/notifications-status", dependencies=[Depends(_require_debug_token)])
+def notifications_status():
+    """Health check: shows how many users each broadcast would reach right now.
+
+    Use this to confirm the queue is wired up and the audience size is sane,
+    without actually sending anything.
+    """
+    db = SessionLocal()
+    try:
+        counts = _notification_target_counts(db)
+    finally:
+        db.close()
+    return {"ok": True, "targets": counts}
