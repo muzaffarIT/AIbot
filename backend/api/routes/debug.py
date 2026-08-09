@@ -237,9 +237,14 @@ def notifications_status():
     Use this to confirm the queue is wired up and the audience size is sane,
     without actually sending anything.
     """
+    import os as _os
     db = SessionLocal()
     try:
         counts = _notification_target_counts(db)
     finally:
         db.close()
-    return {"ok": True, "targets": counts}
+    # Surface the broker URL the backend would actually use (password masked)
+    # so we can tell whether REDIS_URL is being picked up by the container.
+    raw = _os.environ.get("REDIS_URL", "")
+    masked = raw.replace("://default:", "://default:***@") if "://default:" in raw else raw
+    return {"ok": True, "targets": counts, "redis_url_seen": masked}
