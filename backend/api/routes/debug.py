@@ -247,4 +247,29 @@ def notifications_status():
     # so we can tell whether REDIS_URL is being picked up by the container.
     raw = _os.environ.get("REDIS_URL", "")
     masked = raw.replace("://default:", "://default:***@") if "://default:" in raw else raw
-    return {"ok": True, "targets": counts, "redis_url_seen": masked}
+    # Actually try to resolve+connect to the broker, so we can tell apart
+    # "URL is wrong" from "URL is right but network is blocked".
+    diag = {"redis_url_seen": masked}
+    try:
+        import socket as _socket
+        from urllib.parse import urlparse as _u
+        parsed = _u(raw if "://" in raw else "redis://" + raw)
+        host = parsed.hostname or "redis.railway.internal"
+        port = parsed.port or 6379
+        try:
+            ip = _socket.gethostbyname(host)
+            diag["resolved"] = f"{host} -> {ip}"
+        except Exception as e:
+            diag["resolved"] = f"{host} -> DNS FAIL: {e}"
+        s = _socket.socket()
+        s.settimeout(3)
+        try:
+            s.connect((host, port))
+            diag["tcp_connect"] = f"{host}:{port} OK"
+        except Exception as e:
+            diag["tcp_connect"] = f"{host}:{port} FAIL: {e}"
+        finally:
+            s.close()
+    except Exception as e:
+        diag["net_diag_error"] = str(e)
+    return {"ok": True, "targets": counts, "diag": diag}
