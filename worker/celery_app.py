@@ -9,7 +9,16 @@ load_dotenv()
 from backend.core.config import settings
 from backend.db.init_db import init_db
 
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# Read REDIS_URL from the validated pydantic settings (same source the rest of
+# the app uses), falling back to env then localhost. Reading os.getenv directly
+# at module-import time was racing load_dotenv() in some import orders, leaving
+# the broker pointed at localhost — which is why .delay() from the backend hit
+# "Connection refused" even though the worker reached the real Redis fine.
+redis_url = (
+    getattr(settings, "redis_url", None)
+    or os.getenv("REDIS_URL")
+    or "redis://localhost:6379/0"
+)
 
 celery_app = Celery(
     "worker",
