@@ -199,8 +199,14 @@ def _notification_target_counts(db) -> dict:
 @router.post("/trigger-reminders", dependencies=[Depends(_require_debug_token)])
 def trigger_reminders():
     """Fire the daily bonus reminder task immediately via the queue."""
-    from worker.tasks.notification_tasks import daily_reminder_task
-    result = daily_reminder_task.delay()
+    # Use send_task on the worker's celery_app explicitly. The tasks are
+    # decorated with @shared_task, which binds to whatever celery app is
+    # current at import time — in the backend process that's the default
+    # app (amqp://guest@localhost), so daily_reminder_task.delay() would
+    # try AMQP and hit Connection refused. send_task routes through the
+    # real app whose broker is Redis.
+    from worker.celery_app import celery_app
+    result = celery_app.send_task("worker.tasks.notification_tasks.daily_reminder_task")
     db = SessionLocal()
     try:
         counts = _notification_target_counts(db)
@@ -216,8 +222,10 @@ def trigger_reminders():
 @router.post("/trigger-daily-tip", dependencies=[Depends(_require_debug_token)])
 def trigger_daily_tip():
     """Fire the rotating daily-tip broadcast immediately via the queue."""
-    from worker.tasks.notification_tasks import daily_tip_task
-    result = daily_tip_task.delay()
+    # See trigger_reminders: send_task on the real celery_app, not
+    # shared_task.delay() (which binds to the default amqp app in backend).
+    from worker.celery_app import celery_app
+    result = celery_app.send_task("worker.tasks.notification_tasks.daily_tip_task")
     db = SessionLocal()
     try:
         counts = _notification_target_counts(db)

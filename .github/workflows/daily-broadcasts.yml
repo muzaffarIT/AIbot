@@ -28,16 +28,36 @@ jobs:
     steps:
       - name: Send morning bonus reminder
         if: github.event.schedule == '0 5 * * *' || github.event_name == 'workflow_dispatch'
+        # -f fail on HTTP 5xx, -w print status. No `|| true` — if the backend
+        # errors, the step should fail so it's visible in the Actions tab.
         run: |
-          curl -sS -X POST \
+          set -e
+          resp=$(curl -sS -X POST \
             -H "X-Debug-Token: ${{ secrets.DEBUG_TOKEN }}" \
-            -m 60 \
-            "${{ secrets.BACKEND_URL }}/api/debug/trigger-reminders" || true
+            -m 60 -w "\n%{http_code}" \
+            "${{ secrets.BACKEND_URL }}/api/debug/trigger-reminders")
+          code=$(echo "$resp" | tail -1)
+          body=$(echo "$resp" | sed '$d')
+          echo "HTTP $code"
+          echo "Body: $body"
+          if [ "$code" != "200" ]; then
+            echo "::error::Reminder trigger failed with HTTP $code"
+            exit 1
+          fi
 
       - name: Send evening daily tip
         if: github.event.schedule == '0 14 * * *' || github.event_name == 'workflow_dispatch'
         run: |
-          curl -sS -X POST \
+          set -e
+          resp=$(curl -sS -X POST \
             -H "X-Debug-Token: ${{ secrets.DEBUG_TOKEN }}" \
-            -m 60 \
-            "${{ secrets.BACKEND_URL }}/api/debug/trigger-daily-tip" || true
+            -m 60 -w "\n%{http_code}" \
+            "${{ secrets.BACKEND_URL }}/api/debug/trigger-daily-tip")
+          code=$(echo "$resp" | tail -1)
+          body=$(echo "$resp" | sed '$d')
+          echo "HTTP $code"
+          echo "Body: $body"
+          if [ "$code" != "200" ]; then
+            echo "::error::Daily tip trigger failed with HTTP $code"
+            exit 1
+          fi
